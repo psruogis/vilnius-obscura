@@ -10,6 +10,8 @@ import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
 import { Character, TOWNSMAN, TRAVELLER } from './player/character';
 import { Ambience } from './audio/ambience';
+import { Post } from './render/post';
+import { SunShadows } from './render/shadows';
 import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
@@ -20,18 +22,19 @@ import { createOverlay, createStats, showUnsupported, unsupportedReason } from '
 // Light presets. 'golden' (default) follows Zaleski's view: warm, low sun raking across the portico.
 // The portico faces NNE, so only a summer morning sun lights it: 24 Jun 1800, 05:50 local mean time,
 // sun ~15° up in the ENE, the market just opening. 'day' is a September afternoon.
+// Sun-to-sky ratio is kept high (as in real sunlight) so shadows read; the grade and AO carry the shade.
 const LIGHTS = {
-  golden: { time: Date.UTC(1800, 5, 24, 4, 10), sun: '#ffc68a', sunI: 3.8, exposure: 0.73, turbidity: 4.6, fog: '#dccdb8', env: 0.34, hemi: ['#c9d1da', '#b3906a', 0.42] },
-  day: { time: Date.UTC(1800, 8, 20, 14, 19), sun: '#fff0d8', sunI: 3.4, exposure: 0.72, turbidity: 3.2, fog: '#c9d3db', env: 0.38, hemi: ['#c3d5e8', '#a88f6c', 0.45] },
+  golden: { time: Date.UTC(1800, 5, 24, 4, 10), sun: '#ffc68a', sunI: 9, exposure: 0.55, turbidity: 4.6, fog: '#dccdb8', env: 0.3, hemi: ['#c9d1da', '#b3906a', 0.18] },
+  day: { time: Date.UTC(1800, 8, 20, 14, 19), sun: '#fff0d8', sunI: 8, exposure: 0.55, turbidity: 3.2, fog: '#c9d3db', env: 0.32, hemi: ['#c3d5e8', '#a88f6c', 0.2] },
 } as const;
 const LIGHT = LIGHTS[new URLSearchParams(location.search).get('light') === 'day' ? 'day' : 'golden'];
 const SCENE_TIME = new Date(LIGHT.time);
-const SHADOW_EXTENT = 70; // half-size of the sun's shadow box around the walker, m
 
-async function main(): Promise<void> {
+async function main(force = false): Promise<void> {
   const unsupported = unsupportedReason();
-  if (unsupported && !new URLSearchParams(location.search).has('force')) {
-    showUnsupported(unsupported);
+  if (unsupported && !force && !new URLSearchParams(location.search).has('force')) {
+    // A friendly card, with a way through for people who have a keyboard after all.
+    showUnsupported(unsupported, unsupported === 'webgl' ? null : () => main(true).catch(fail));
     return;
   }
   const app = document.getElementById('app')!;
@@ -66,15 +69,8 @@ async function main(): Promise<void> {
   pmrem.dispose();
   scene.fog = new THREE.Fog(LIGHT.fog, 180, 1100);
 
-  const sun = new THREE.DirectionalLight(LIGHT.sun, LIGHT.sunI);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  const sc = sun.shadow.camera;
-  sc.left = -SHADOW_EXTENT; sc.right = SHADOW_EXTENT; sc.top = SHADOW_EXTENT; sc.bottom = -SHADOW_EXTENT;
-  sc.near = 1; sc.far = 600;
-  sun.shadow.bias = -0.0004;
-  sun.shadow.normalBias = 0.04;
-  scene.add(sun, sun.target);
+  // Sun: cascaded shadows, sharp near the walker and still present on distant buildings.
+  const shadows = new SunShadows(scene, camera, sunDir, LIGHT.sun, LIGHT.sunI);
   // Warm bounce from sunlit cobbles and façades into the shade.
   scene.add(new THREE.HemisphereLight(LIGHT.hemi[0], LIGHT.hemi[1], LIGHT.hemi[2]));
 
@@ -103,6 +99,7 @@ async function main(): Promise<void> {
     buildMarket(data, townHallData, terrain, createMarketMaterials(aniso)).then(mk => {
       market = mk;
       scene.add(mk.group);
+      shadows.apply(mk.group);
       for (const [ax, az, bx, bz] of mk.segments) walls.addSegment(ax, az, bx, bz);
     }).catch(err => console.warn('market', err));
   }
@@ -117,7 +114,7 @@ async function main(): Promise<void> {
   // The character model streams in; the placeholder capsule stands in until then.
   let character: Character | null = null;
   const spec = new URLSearchParams(location.search).get('char') === 'townsman' ? TOWNSMAN : TRAVELLER;
-  Character.load(spec).then(c => { character = c; walker.setBody(c.object); }).catch(err => console.warn('character', err));
+  Character.load(spec).then(c => { character = c; walker.setBody(c.object); shadows.apply(c.object); }).catch(err => console.warn('character', err));
 
   // Sound: market murmur centred on the square north of the Town Hall, bells from St Casimir's
   const bellsAt = stCasimirData ? new THREE.Vector3(
@@ -133,24 +130,17 @@ async function main(): Promise<void> {
   const stats = createStats(renderer);
   window.addEventListener('keydown', e => { if (e.code === 'Backquote') stats.toggle(); });
 
+  // Everything built so far receives the cascades; late arrivals (figure, market) are added when they load.
+  shadows.apply(scene);
+  const post = new Post(renderer, scene, camera);
+
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    post.setSize(window.innerWidth, window.innerHeight);
+    shadows.resize();
   });
-
-  // Keep the shadow box centred on the walker, snapped to shadow texels to avoid shimmer.
-  const texel = (2 * SHADOW_EXTENT) / sun.shadow.mapSize.x;
-  const centre = new THREE.Vector3();
-  function updateSun(): void {
-    centre.set(
-      Math.round(walker.position.x / texel) * texel,
-      walker.position.y,
-      Math.round(walker.position.z / texel) * texel,
-    );
-    sun.target.position.copy(centre);
-    sun.position.copy(centre).addScaledVector(sunDir, 300);
-  }
 
   const timer = new THREE.Timer();
   renderer.setAnimationLoop((time: number) => {
@@ -160,8 +150,8 @@ async function main(): Promise<void> {
     character?.update(dt, walker.speed);
     ambience?.update(dt, walker.position, walker.speed);
     market?.update(dt);
-    updateSun();
-    renderer.render(scene, camera);
+    shadows.update();
+    post.render(dt);
     stats.update(dt);
   });
 
@@ -171,9 +161,10 @@ async function main(): Promise<void> {
       data, walker, camera, renderer, scene,
       get character() { return character; },
       get ambience() { return ambience; },
+      post, shadows,
       // Saves the current frame to .screens/<name>.jpg via the dev server.
       snapshot: async (name: string) => {
-        renderer.render(scene, camera);
+        post.render(0);
         const body = renderer.domElement.toDataURL('image/jpeg', 0.85);
         return (await fetch(`/__snapshot?name=${encodeURIComponent(name)}`, { method: 'POST', body })).text();
       },
@@ -186,7 +177,8 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch(err => {
+function fail(err: unknown): void {
   console.error(err);
   document.body.insertAdjacentHTML('beforeend', `<pre style="color:#f88;padding:16px">${String(err)}</pre>`);
-});
+}
+main().catch(fail);

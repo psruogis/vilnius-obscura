@@ -70,16 +70,18 @@ export function createOverlay(onStart: () => void): Overlay {
 
 /** Phones and old GPUs get a friendly card instead of a broken 3D scene. */
 export function unsupportedReason(): string | null {
+  // Touch-only devices. (Screen size alone misfires on desktops showing the walk in a narrow pane.)
   const coarse = window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(pointer: fine)').matches;
-  if (coarse || Math.min(window.innerWidth, window.innerHeight) < 500) return 'phone';
+  if (coarse) return 'phone';
   const gl = document.createElement('canvas').getContext('webgl2');
   if (!gl) return 'webgl';
   return null;
 }
 
-export function showUnsupported(reason: string): void {
+export function showUnsupported(reason: string, onTryAnyway: (() => void) | null): void {
   const el = document.createElement('div');
   el.className = 'overlay';
+  el.style.cursor = 'default';
   el.innerHTML = `
     <div class="panel">
       <h1>Vilnius Town Hall</h1>
@@ -87,7 +89,9 @@ export function showUnsupported(reason: string): void {
       <p style="margin-top:22px">${reason === 'phone'
         ? 'This walk needs a keyboard and a mouse. Open it on a desktop or laptop.'
         : 'This walk needs WebGL 2, which this browser or device does not support.'}</p>
+      ${onTryAnyway ? '<button class="cta" type="button" data-try>Try anyway</button>' : ''}
     </div>`;
+  el.querySelector('[data-try]')?.addEventListener('click', () => { el.remove(); onTryAnyway?.(); });
   document.body.appendChild(el);
 }
 

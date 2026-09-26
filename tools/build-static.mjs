@@ -31,6 +31,7 @@ function build(dir) {
       let js = stripTypeScriptTypes(fs.readFileSync(src, 'utf8'), { mode: 'transform', sourceUrl: rel });
       js = js.replaceAll('import.meta.env.DEV', 'false');
       js = js.replace(/(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])(\.{1,2}\/[^'"]+)\2/g, (_, pre, q, spec) => `${pre}${q}${withExt(spec)}${q}`);
+      js = js.replace(/assets\/char\/([\w-]+)\.glb/g, 'assets/char/$1.gltf.json'); // see the model conversion below
       fs.writeFileSync(out.replace(/\.ts$/, '.js'), js);
     } else {
       fs.copyFileSync(src, out);
@@ -46,8 +47,34 @@ const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
   .replace('src="/src/main.ts"', 'src="src/main.js"');
 fs.writeFileSync(path.join(DIST, 'index.html'), html);
 
+// claude.ai artifact page: content only (the host adds doctype, head and body), stylesheet inlined.
+// A single deliberate dark look, so the page paints its own background and pins color-scheme.
+const css = fs.readFileSync(path.join(ROOT, 'src', 'style.css'), 'utf8');
+fs.writeFileSync(path.join(DIST, 'artifact.html'), `<title>Vilnius Town Hall Walk</title>
+<style>
+:root { color-scheme: dark; }
+${css}</style>
+<script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>
+<div id="app"></div>
+<script type="module" src="src/main.js"></script>
+`);
+
 // Public files (vendor libraries, textures, models, sounds, area data)
 fs.cpSync(path.join(ROOT, 'public'), DIST, { recursive: true });
+// Models: GLB -> self-contained glTF JSON (buffers as data URIs). Some hosts, claude.ai artifacts among
+// them, serve only web media types; GLTFLoader reads either form.
+const charDir = path.join(DIST, 'assets', 'char');
+for (const f of fs.existsSync(charDir) ? fs.readdirSync(charDir) : []) {
+  if (!f.endsWith('.glb')) continue;
+  const glb = fs.readFileSync(path.join(charDir, f));
+  const jsonLen = glb.readUInt32LE(12);
+  const gltf = JSON.parse(glb.subarray(20, 20 + jsonLen).toString('utf8'));
+  const binStart = 20 + jsonLen + 8;
+  const binLen = glb.readUInt32LE(20 + jsonLen);
+  gltf.buffers[0].uri = `data:application/octet-stream;base64,${glb.subarray(binStart, binStart + binLen).toString('base64')}`;
+  fs.writeFileSync(path.join(charDir, f.replace(/\.glb$/, '.gltf.json')), JSON.stringify(gltf));
+  fs.rmSync(path.join(charDir, f));
+}
 for (const f of ['CREDITS.md', 'README.md']) if (fs.existsSync(path.join(ROOT, f))) fs.copyFileSync(path.join(ROOT, f), path.join(DIST, f));
 
 // Size report
