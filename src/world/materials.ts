@@ -2,8 +2,20 @@ import * as THREE from 'three';
 
 const loader = new THREE.TextureLoader();
 
+// One image load (and one GPU upload) per file: materials get clones that share the image source but
+// keep their own tiling. Clones made before the image arrives are flagged for upload when it does.
+const cache = new Map<string, { base: THREE.Texture; loaded: boolean; clones: THREE.Texture[] }>();
+
 function tex(url: string, srgb: boolean, anisotropy: number): THREE.Texture {
-  const t = loader.load(url);
+  let entry = cache.get(url);
+  if (!entry) {
+    const e = { base: null as unknown as THREE.Texture, loaded: false, clones: [] as THREE.Texture[] };
+    e.base = loader.load(url, () => { e.loaded = true; for (const c of e.clones) c.needsUpdate = true; });
+    cache.set(url, (entry = e));
+  }
+  const t = entry.base.clone();
+  entry.clones.push(t);
+  if (entry.loaded) t.needsUpdate = true;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   t.anisotropy = anisotropy;

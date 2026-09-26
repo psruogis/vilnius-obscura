@@ -76,7 +76,7 @@ export async function buildMarket(data: AreaData, th: Building, terrain: Terrain
         const gi = (i + k) % goods.length;
         put(goods[gi], new THREE.SphereGeometry(0.16 + 0.04 * (k % 2), 8, 6).scale(1.4, 0.7, 1.2).translate(1.15, 0.97, -0.9 + k * 0.45), p, yaw);
       }
-      put(goods[i % goods.length], mbox(0.5, 0.35, 0.4, -0.9, 0.18, 0.6), p, yaw);
+      put(wood, mbox(0.5, 0.35, 0.4, -0.9, 0.18, 0.6), p, yaw); // a crate under the counter
       standAt.push({ p: new THREE.Vector3(-0.3, 0, -0.2).applyAxisAngle(Y, yaw).add(p), yaw: yaw + Math.PI / 2 }); // the stallholder
     } else if (s.kind === 'cart') {
       // Two big wheels, a plank bed, shafts resting on the ground
