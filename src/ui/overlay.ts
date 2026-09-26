@@ -11,6 +11,7 @@ const CREDITS_HTML = `
     <li>Street layout and some height tags: © OpenStreetMap contributors, ODbL 1.0</li>
     <li>Historic plans of Vilnius, 1842 and 1866: National Library of Poland (Polona), public domain</li>
     <li>Textures: Poly Haven, CC0</li>
+    <li>Walking figure: Quaternius (via Poly Pizza), CC0</li>
     <li>three.js (MIT), suncalc (BSD-2-Clause), straight-skeleton (MIT)</li>
   </ul>
   <p class="dim">No Google Maps, Street View, Earth or 3D Tiles imagery was used.</p>

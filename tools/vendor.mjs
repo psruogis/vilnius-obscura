@@ -14,6 +14,8 @@ const FILES = [
   ['three', VERSIONS.three, 'build/three.core.js'],
   ['three', VERSIONS.three, 'examples/jsm/objects/Sky.js'],
   ['three', VERSIONS.three, 'examples/jsm/utils/BufferGeometryUtils.js'],
+  ['three', VERSIONS.three, 'examples/jsm/loaders/GLTFLoader.js'],
+  ['three', VERSIONS.three, 'examples/jsm/utils/SkeletonUtils.js'],
   ['three', VERSIONS.three, 'LICENSE'],
   ['suncalc', VERSIONS.suncalc, '+esm', 'suncalc.mjs'],
   ['suncalc', VERSIONS.suncalc, 'LICENSE', 'LICENSE'],

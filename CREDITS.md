@@ -8,6 +8,7 @@
 | Building heights and terrain | National LiDAR survey 2025 © Nacionalinė žemės tarnyba prie Aplinkos ministerijos (via the Vilnius University Potree mirror) | CC BY 4.0 |
 | Historic street and plot layout | Plans of Vilnius, 1842 and 1866, National Library of Poland (Polona) | Public domain |
 | Textures (cobblestone_floor_08, clay_roof_tiles, plastered_wall_04, weathered_planks) | Poly Haven | CC0 |
+| Walking figure ("Hooded Adventurer", recoloured and reshaped; "Adventurer" as an alternative) | Quaternius, via Poly Pizza (poly.pizza/m/y9KWOVG21R, poly.pizza/m/5EGWBMpuXq), downloaded 2026-09-26 | CC0 (Public Domain), as listed on Poly Pizza |
 | three.js 0.186.1 | three.js authors | MIT |
 | suncalc 1.9.0 | Vladimir Agafonkin | BSD-2-Clause |
 | straight-skeleton (CGAL Wasm build, data tool only) | its authors | MIT |

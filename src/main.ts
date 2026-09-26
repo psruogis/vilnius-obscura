@@ -7,6 +7,7 @@ import { buildBarriers } from './world/props';
 import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
 import { buildPromenade } from './world/promenade';
+import { Character, TOWNSMAN, TRAVELLER } from './player/character';
 import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
@@ -93,6 +94,10 @@ async function main(): Promise<void> {
   const walker = new Walker(input, walls, { cx: thx, cz: thz, radius: data.meta.walkRadius }, (x, z) => terrain.heightAt(x, z));
   walker.place(thx + 4, thz - 42, Math.PI);
   scene.add(walker.object);
+  // The character model streams in; the placeholder capsule stands in until then.
+  let character: Character | null = null;
+  const spec = new URLSearchParams(location.search).get('char') === 'townsman' ? TOWNSMAN : TRAVELLER;
+  Character.load(spec).then(c => { character = c; walker.setBody(c.object); }).catch(err => console.warn('character', err));
 
   document.addEventListener('pointerlockchange', () => overlay.setVisible(!input.locked));
   // Ready once every texture queued above has arrived.
@@ -124,6 +129,7 @@ async function main(): Promise<void> {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     walker.update(dt, camera);
+    character?.update(dt, walker.speed);
     updateSun();
     renderer.render(scene, camera);
     stats.update(dt);
@@ -133,6 +139,7 @@ async function main(): Promise<void> {
     // Test hooks for screenshots and debugging.
     (window as unknown as Record<string, unknown>).__walk = {
       data, walker, camera, renderer, scene,
+      get character() { return character; },
       // Saves the current frame to .screens/<name>.jpg via the dev server.
       snapshot: async (name: string) => {
         renderer.render(scene, camera);

@@ -15,7 +15,7 @@ const PITCH_MIN = THREE.MathUtils.degToRad(-12);
 const PITCH_MAX = THREE.MathUtils.degToRad(55);
 const LOOK_SENS = 0.0022;
 
-/** The walker (placeholder capsule for now) and its third-person follow camera. */
+/** The walker (a placeholder capsule until the character model loads) and its third-person follow camera. */
 export class Walker {
   readonly object = new THREE.Group();
   readonly position = new THREE.Vector3();
@@ -53,6 +53,17 @@ export class Walker {
     const nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.12), new THREE.MeshStandardMaterial({ color: '#a38f7c' }));
     nose.position.set(0, 1.5, -0.3);
     this.object.add(body, hood, nose);
+  }
+
+  /** Ground speed, m/s. */
+  get speed(): number {
+    return this.velocity.length();
+  }
+
+  /** Replaces the placeholder body with the character model. */
+  setBody(body: THREE.Object3D): void {
+    this.object.clear();
+    this.object.add(body);
   }
 
   place(x: number, z: number, yaw: number): void {
