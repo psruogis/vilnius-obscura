@@ -6,6 +6,9 @@
 //   node tools/shot.mjs [--port 5173] [--out .screens] [--prefix x_] [--query weather=clear]
 //                       [--views square,wall,vok,shops,hotel,street,puddles,roofs,aerial]
 //                       [--view name:ex,ez,h,tx,tz,ty]   (a free camera: eye x/z/height, target x/z/height)
+//                       [--js-view 'name:<js>']   (camera from page JS; `w` is window.__walk; the expression
+//                                                  returns {eye: [x, y, z], target: [x, y, z]} in world coordinates)
+//                       [--pre '<js>']            (page JS run once after loading, e.g. to pause something)
 //                       [--scale 1.5] [--size 1600x900] [--wait 14] [--bench]
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -51,6 +54,11 @@ for (let i = 0; i < args.length; i++) if (args[i] === '--view') {
   const [name, nums] = args[i + 1].split(':');
   const [ex, ez, h, tx, tz, ty] = nums.split(',').map(Number);
   views.push({ name, free: [ex, ez, h], target: [tx, tz, ty] });
+}
+
+for (let i = 0; i < args.length; i++) if (args[i] === '--js-view') {
+  const k = args[i + 1].indexOf(':');
+  views.push({ name: args[i + 1].slice(0, k), js: args[i + 1].slice(k + 1) });
 }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'walkshot-'));
@@ -118,6 +126,7 @@ const ready = await evaluate(`(async () => {
 })()`, 200000);
 if (!ready.ok) { console.error('page did not load:', ready.text, errors.join('\n')); process.exit(1); }
 console.log(`loaded in ${ready.t}s (${ready.gl})`);
+if (opt('pre')) console.log('pre:', JSON.stringify(await evaluate(`(async () => { const w = window.__walk; return await (async () => (${opt('pre')}))(); })()`)));
 fs.mkdirSync(OUT, { recursive: true });
 
 for (const v of views) {
@@ -132,7 +141,17 @@ for (const v of views) {
       let cx = 0, cz = 0; for (const [x, z] of hot.rings[0]) { cx += x; cz += z; } cx /= hot.rings[0].length; cz /= hot.rings[0].length;
       v.free = [cx + 38, cz - 30, 3]; v.target = [cx, cz, 8];
     }
-    if (v.walk) {
+    if (v.js) {
+      const c = await (async () => eval(v.js))();
+      const [ex, , ez] = c.eye;
+      w.place(ex, ez, yawTo(ex, ez, c.target[0], c.target[2]), 0);
+      await wait(1500);
+      const c2 = await (async () => eval(v.js))();   // re-evaluate: things may have moved
+      w.walker.object.visible = false;
+      w.camera.position.set(...c2.eye);
+      w.camera.lookAt(...c2.target);
+      w.camera.updateMatrixWorld();
+    } else if (v.walk) {
       w.place(v.walk[0], v.walk[1], yawTo(v.walk[0], v.walk[1], v.look[0], v.look[1]), v.pitch);
       await wait(2500);
     } else {
@@ -156,17 +175,26 @@ for (const v of views) {
 }
 
 if (flag('bench')) {
-  // frame time over 4 s at the fixed pixel ratio, from the default start view
+  // GPU-synchronised render cost: 20 frames from the default start view, each followed by a 1-pixel
+  // readback so the time includes the GPU work (vsync and rAF throttling don't matter)
   const b = await evaluate(`(async () => {
     const w = window.__walk; const [x, z] = w.data.meta.townHall;
+    w.walker.object.visible = true;
     w.place(x + 4, z - 42, Math.PI, 0.05);
-    await new Promise(r => setTimeout(r, 1500));
-    let n = 0; const t0 = performance.now();
-    await new Promise(r => { const f = () => { n++; if (performance.now() - t0 < 4000) requestAnimationFrame(f); else r(); }; requestAnimationFrame(f); });
+    await new Promise(r => setTimeout(r, 2000));
+    const gl = w.renderer.getContext(), px = new Uint8Array(4);
+    const frame = () => { w.post.render(0); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); };
+    for (let i = 0; i < 4; i++) frame();
+    w.renderer.info.autoReset = false; w.renderer.info.reset();
+    const N = 20, t0 = performance.now();
+    for (let i = 0; i < N; i++) frame();
+    const ms = (performance.now() - t0) / N;
     const info = w.renderer.info;
-    return { fps: (n / ((performance.now() - t0) / 1000)).toFixed(1), calls: info.render.calls, tris: info.render.triangles, programs: info.programs?.length };
+    const r = { ms: ms.toFixed(1), calls: Math.round(info.render.calls / N), tris: Math.round(info.render.triangles / N), programs: info.programs?.length, geometries: info.memory.geometries, textures: info.memory.textures };
+    info.autoReset = true;
+    return r;
   })()`);
-  console.log(`bench @${SCALE}x ${W}x${H}: ${b.fps} fps, ${b.calls} draw calls, ${b.tris} triangles, ${b.programs} programs (headless; compare runs, not absolutes)`);
+  console.log(`bench @${SCALE}x ${W}x${H}: ${b.ms} ms/frame GPU-synced, ${b.calls} draw calls, ${b.tris} triangles, ${b.programs} programs, ${b.textures} textures (compare runs on the same machine, not absolutes)`);
 }
 
 const uniq = [...new Set(errors)];
