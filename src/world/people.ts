@@ -4,6 +4,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { WallGrid } from './collision';
 import type { Terrain } from './terrain';
+import { twoBoneIK } from '../player/ik';
 
 /**
  * Townsfolk filling the square and streets as in the period views: strollers who walk between points
@@ -75,6 +76,50 @@ function hatGeometry(kind: number, c: string): THREE.BufferGeometry {
   return mergeGeometries(parts.map(p => colored(p, c)), false)!;
 }
 
+/** A proper umbrella: eight ribs, the fabric sagging between them, ferrule, shaft and crook handle (y up, 0 = hand). */
+function umbrellaGeometry(fabric: string, shaftLen: number): THREE.BufferGeometry {
+  const R = 0.52, Hd = 0.2, RINGS = 7, SEG = 48, pos: number[] = [];
+  const pt = (t: number, th: number) => {
+    const sag = 1 - Math.abs(Math.cos(4 * th));            // 0 on a rib, 1 midway between ribs
+    const r = R * Math.sin(t * Math.PI / 2) * (1 - 0.07 * sag * t);
+    const y = Hd * Math.cos(t * Math.PI / 2) + 0.045 * sag * t * t - 0.02 * t;
+    return new THREE.Vector3(Math.cos(th) * r, shaftLen + y, Math.sin(th) * r);
+  };
+  for (let j = 0; j < RINGS; j++) for (let k = 0; k < SEG; k++) {
+    const t0 = j / RINGS, t1 = (j + 1) / RINGS, a0 = (k / SEG) * Math.PI * 2, a1 = ((k + 1) / SEG) * Math.PI * 2;
+    const A = pt(t0, a0), B = pt(t0, a1), C = pt(t1, a1), D = pt(t1, a0);
+    pos.push(A.x, A.y, A.z, D.x, D.y, D.z, C.x, C.y, C.z, A.x, A.y, A.z, C.x, C.y, C.z, B.x, B.y, B.z);
+  }
+  const canopy = new THREE.BufferGeometry();
+  canopy.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  canopy.computeVertexNormals();
+  const parts = [colored(canopy, fabric)];
+  // ribs just under the fabric, and stretchers down to the runner on the shaft
+  for (let k = 0; k < 8; k++) {
+    const th = (k / 8) * Math.PI * 2;
+    for (let j = 0; j < 6; j++) {
+      const p0 = pt(j / 6, th), p1 = pt((j + 1) / 6, th);
+      p0.y -= 0.008; p1.y -= 0.008;
+      const len = p0.distanceTo(p1);
+      const g = new THREE.CylinderGeometry(0.004, 0.004, len, 3);
+      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), p1.clone().sub(p0).normalize()));
+      g.translate((p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2);
+      parts.push(colored(g, '#2a2622'));
+    }
+    const m = pt(0.55, th); m.y -= 0.01;
+    const runner = new THREE.Vector3(0, shaftLen - 0.28, 0);
+    const g = new THREE.CylinderGeometry(0.003, 0.003, m.distanceTo(runner), 3);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), m.clone().sub(runner).normalize()));
+    g.translate((m.x + runner.x) / 2, (m.y + runner.y) / 2, (m.z + runner.z) / 2);
+    parts.push(colored(g, '#2a2622'));
+  }
+  parts.push(colored(new THREE.CylinderGeometry(0.008, 0.008, shaftLen + 0.3, 6).translate(0, (shaftLen + 0.3) / 2 - 0.1, 0), '#3a3028'));
+  parts.push(colored(new THREE.ConeGeometry(0.012, 0.09, 6).translate(0, shaftLen + Hd + 0.045, 0), '#8a7a5a'));          // ferrule
+  parts.push(colored(new THREE.CylinderGeometry(0.016, 0.016, 0.06, 6).translate(0, shaftLen - 0.28, 0), '#2a2622'));    // runner
+  parts.push(colored(new THREE.TorusGeometry(0.04, 0.011, 5, 10, Math.PI).rotateZ(Math.PI).translate(0.04, -0.1, 0), '#4a3424')); // crook
+  return mergeGeometries(parts, false)!;
+}
+
 async function loadBase(url: string, idleName: string, walkName: string, palettes: Record<string, string>[], height: number): Promise<Base> {
   const gltf = await new GLTFLoader().loadAsync(url);
   const scene = gltf.scene;
@@ -117,6 +162,7 @@ interface Person {
   mode: 'stand' | 'walk' | 'pause';
   target: THREE.Vector2; speed: number; timer: number; yaw: number; wIdle: number;
   job?: LampJob;
+  hold?: { upper: THREE.Object3D; lower: THREE.Object3D; hand: THREE.Object3D; grip: THREE.Vector3; side: number };
 }
 
 /** A lamplighter's round: go to the nearest lamp that needs him (and that he can see), work it, move on. */
@@ -197,11 +243,14 @@ export async function buildCrowd(opts: {
     };
     const head = bone('Head'), hips = bone('Hips'), torso = bone('Torso');
     const palm = bone('PalmR') ?? bone('Palm.R');
-    const umbrellaHand = !lamplighter && opts.umbrellas && palm && rnd() < 0.4 ? palm.getWorldPosition(new THREE.Vector3()) : null;
+    const umbrellaHand = !lamplighter && opts.umbrellas && palm && rnd() < 0.4;
+    let holdGrip: THREE.Vector3 | null = null;
     const umbrellaTop = top;
     const hp = new THREE.Vector3(), tp = new THREE.Vector3();
     if (head) head.getWorldPosition(hp);
     if (hips) hips.getWorldPosition(tp);
+    // which side of the body the right hand is on (the models face +Z, so usually -x)
+    const sx = palm ? Math.sign(palm.getWorldPosition(new THREE.Vector3()).x - hp.x) || -1 : -1;
     const P = pal as Record<string, string>;
     if (!base.female) {
       const hatKind = lamplighter ? 2 : rnd() < 0.42 ? 0 : rnd() < 0.62 ? 1 : 2;
@@ -229,20 +278,20 @@ export async function buildCrowd(opts: {
         colored(new THREE.TorusGeometry(0.06, 0.008, 4, 8, Math.PI).translate(0, 4.2, 0), '#2a2622'),
         colored(new THREE.SphereGeometry(0.03, 6, 4).translate(0.03, 4.13, 0), '#ffcf7a'),
       ], false)!, opts.accessories);
-      pole.position.set(0.25, 0, 0.18);
+      pole.position.set(sx * 0.25, 0, 0.2);
       root.add(pole);
+      holdGrip = new THREE.Vector3(sx * 0.25, H * 0.62, 0.2);
     } else if (opts.umbrellas && umbrellaHand) {
-      // umbrella held in the right hand: shaft from the hand up over the head, canopy just above the hat
-      const hand = umbrellaHand, headTop = umbrellaTop;
-      const tip = new THREE.Vector3(hp.x * 0.3 + hand.x * 0.7, headTop + 0.22, hp.z * 0.3 + hand.z * 0.7 + 0.05);
-      const axis = tip.clone().sub(hand), len = axis.length();
-      const geo = mergeGeometries([
-        colored(new THREE.CylinderGeometry(0.009, 0.009, len + 0.1, 5).translate(0, (len + 0.1) / 2 - 0.08, 0), '#2a2420'),
-        colored(new THREE.TorusGeometry(0.035, 0.008, 4, 8, Math.PI).rotateZ(Math.PI).translate(0.035, -0.08, 0), '#2a2420'),   // crook handle
-        colored(lathe([[0, 0.3], [0.2, 0.24], [0.4, 0.1], [0.47, 0.02], [0.46, 0]], 8).translate(0, len - 0.02, 0), '#141414'),
-      ], false)!;
-      const m = new THREE.Matrix4().compose(hand, new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize()), new THREE.Vector3(1, 1, 1));
-      attachM(palm ?? bone('LowerArmR'), geo, m);
+      // umbrella held upright in front of the right shoulder; the arm is posed onto the shaft each frame (IK)
+      const grip = new THREE.Vector3(sx * 0.2 * H / 1.7, H * 0.66, 0.26 * H / 1.7);
+      const shaftLen = umbrellaTop + 0.18 - grip.y;
+      const fabric = ['#141414', '#1a1a1c', '#1c2220', '#241c18', '#161a22'][Math.floor(rnd() * 5)];
+      const u = new THREE.Mesh(umbrellaGeometry(fabric, shaftLen), opts.accessories);
+      u.position.copy(grip);
+      u.rotation.set(-0.06, 0, 0.05 * sx);   // tipped a little back and in, over the head
+      u.castShadow = true;
+      root.add(u);
+      holdGrip = grip;
     }
     group.add(root);
     const mixer = new THREE.AnimationMixer(skel);
@@ -253,6 +302,8 @@ export async function buildCrowd(opts: {
     idle.setEffectiveWeight(walking ? 0 : 1); walk.setEffectiveWeight(walking ? 1 : 0);
     idle.timeScale = 0.8 + rnd() * 0.4;
     const person: Person = { root, mesh, mixer, idle, walk, mode, target: new THREE.Vector2(x, z), speed: 1.05 + rnd() * 0.35, timer: rnd() * 6, yaw, wIdle: walking ? 0 : 1 };
+    const ua = bone('UpperArmR'), la = bone('LowerArmR');
+    if (holdGrip && ua && la && palm) person.hold = { upper: ua, lower: la, hand: palm, grip: holdGrip, side: sx };
     people.push(person);
     return person;
   };
@@ -290,7 +341,7 @@ export async function buildCrowd(opts: {
     return false;
   };
 
-  const tmp = new THREE.Vector2();
+  const tmp = new THREE.Vector2(), ikT = new THREE.Vector3(), ikP = new THREE.Vector3();
   return {
     group, count: people.length,
     addLamplighter(o) {
@@ -354,7 +405,16 @@ export async function buildCrowd(opts: {
         p.wIdle += (wantIdle - p.wIdle) * (1 - Math.exp(-6 * dt));
         p.idle.setEffectiveWeight(p.wIdle);
         p.walk.setEffectiveWeight(1 - p.wIdle);
-        if (!far) p.mixer.update(dt);
+        if (!far) {
+          p.mixer.update(dt);
+          if (p.hold && dist < 60) {
+            // right hand on the umbrella shaft (or the lamplighter's pole)
+            p.root.updateMatrixWorld(true);
+            p.root.localToWorld(ikT.copy(p.hold.grip));
+            p.root.localToWorld(ikP.set(p.hold.side * 0.6, -0.5, -0.6)).sub(p.root.position);   // elbow out, down, back
+            twoBoneIK(p.hold.upper, p.hold.lower, p.hold.hand, ikT, ikP);
+          }
+        }
       }
     },
   };

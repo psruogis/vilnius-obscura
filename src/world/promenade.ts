@@ -29,7 +29,7 @@ const APEX_GAP = 0.16;        // half-angle of the north entrance, radians
 
 export interface Promenade { group: THREE.Group; segments: [number, number, number, number][]; update(dt: number): void; lamps: LampSpot[] }
 
-export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMaterials): Promenade {
+export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMaterials, withBooth = false): Promenade {
   const f = townHallFrame(th);
   const { PORTICO_X0, PORTICO_X1, PORTICO_DEPTH } = TOWN_HALL_SIZE;
   // Promenade frame (s along the axis from the portico steps, t across, + towards the east side),
@@ -156,23 +156,26 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
 
   // --- Market booth west of the portico (the c.1800 watercolour) -------------------------------
   // Long and low, a tiled hip roof, its open side (counter and posts) facing the promenade.
-  const bw = 4.6, bl = 15, eave = 2.7;
-  const bc = new THREE.Vector3().copy(f.origin)
-    .addScaledVector(f.dirX, -8.5).addScaledVector(f.dirZ, -22);
-  bc.y = terrain.heightAt(bc.x, bc.z);
-  const byaw = yawAlong; // long side parallel to the promenade
-  const booth: THREE.BufferGeometry[] = [];
-  booth.push(mbox(bl, eave + 0.6, 0.18, 0, (eave + 0.6) / 2 - 0.6, -bw / 2));        // back wall (west)
-  booth.push(mbox(0.18, eave + 0.6, bw, -bl / 2, (eave + 0.6) / 2 - 0.6, 0));        // end walls
-  booth.push(mbox(0.18, eave + 0.6, bw, bl / 2, (eave + 0.6) / 2 - 0.6, 0));
-  booth.push(mbox(bl, 1.5, 0.16, 0, 0.75 - 0.6, bw / 2));                              // counter (east)
-  for (let x = -bl / 2; x <= bl / 2 + 1e-6; x += bl / 6) booth.push(mbox(0.2, eave, 0.2, x, eave / 2, bw / 2));
-  booth.push(mbox(bl, 0.25, 0.22, 0, eave - 0.12, bw / 2));                            // lintel
-  booth.forEach((g, k) => (k < 3 ? stone : wood).push(place(g, bc.clone(), byaw))); // walls limewashed, the rest timber
-  roof.push(place(hipRoof(bl + 0.8, bw + 0.8, eave, 32), bc.clone(), byaw));
-  const corners = [[-bl / 2, -bw / 2], [bl / 2, -bw / 2], [bl / 2, bw / 2], [-bl / 2, bw / 2]]
-    .map(([x, z]) => new THREE.Vector3(x, 0, z).applyAxisAngle(Y, byaw).add(bc));
-  for (let k = 0; k < 4; k++) segments.push([corners[k].x, corners[k].z, corners[(k + 1) % 4].x, corners[(k + 1) % 4].z]);
+  // (c.1800 only: by 1900 the square has no market booths)
+  if (withBooth) {
+    const bw = 4.6, bl = 15, eave = 2.7;
+    const bc = new THREE.Vector3().copy(f.origin)
+      .addScaledVector(f.dirX, -8.5).addScaledVector(f.dirZ, -22);
+    bc.y = terrain.heightAt(bc.x, bc.z);
+    const byaw = yawAlong; // long side parallel to the promenade
+    const booth: THREE.BufferGeometry[] = [];
+    booth.push(mbox(bl, eave + 0.6, 0.18, 0, (eave + 0.6) / 2 - 0.6, -bw / 2));        // back wall (west)
+    booth.push(mbox(0.18, eave + 0.6, bw, -bl / 2, (eave + 0.6) / 2 - 0.6, 0));        // end walls
+    booth.push(mbox(0.18, eave + 0.6, bw, bl / 2, (eave + 0.6) / 2 - 0.6, 0));
+    booth.push(mbox(bl, 1.5, 0.16, 0, 0.75 - 0.6, bw / 2));                              // counter (east)
+    for (let x = -bl / 2; x <= bl / 2 + 1e-6; x += bl / 6) booth.push(mbox(0.2, eave, 0.2, x, eave / 2, bw / 2));
+    booth.push(mbox(bl, 0.25, 0.22, 0, eave - 0.12, bw / 2));                            // lintel
+    booth.forEach((g, k) => (k < 3 ? stone : wood).push(place(g, bc.clone(), byaw))); // walls limewashed, the rest timber
+    roof.push(place(hipRoof(bl + 0.8, bw + 0.8, eave, 32), bc.clone(), byaw));
+    const corners = [[-bl / 2, -bw / 2], [bl / 2, -bw / 2], [bl / 2, bw / 2], [-bl / 2, bw / 2]]
+      .map(([x, z]) => new THREE.Vector3(x, 0, z).applyAxisAngle(Y, byaw).add(bc));
+    for (let k = 0; k < 4; k++) segments.push([corners[k].x, corners[k].z, corners[(k + 1) % 4].x, corners[(k + 1) % 4].z]);
+  }
 
   // --- Meshes ----------------------------------------------------------------------------------
   const group = new THREE.Group();

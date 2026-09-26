@@ -30,7 +30,8 @@ export class Ambience {
   private muted = false;
   private nextBells = 40 + Math.random() * 60;
   private nextHorses = 25 + Math.random() * 40;
-  private stepGain = 0;
+  private stepOnsets: number[] = [];
+  private lastStep = -1;
 
   constructor(camera: THREE.Camera, private readonly world: THREE.Scene, private readonly sites: AmbienceSites, private readonly raining = false) {
     camera.add(this.listener);
@@ -56,9 +57,29 @@ export class Ambience {
   status(): Record<string, unknown> {
     return {
       context: this.listener.context.state, loaded: [...this.buffers.keys()],
-      playing: { crowd: !!this.crowd?.isPlaying, scene: !!this.scene2?.isPlaying, sparrows: !!this.sparrows?.isPlaying, steps: !!this.steps?.isPlaying },
-      stepGain: +this.stepGain.toFixed(2), nextBells: Math.round(this.nextBells), nextHorses: Math.round(this.nextHorses),
+      playing: { crowd: !!this.crowd?.isPlaying, scene: !!this.scene2?.isPlaying, sparrows: !!this.sparrows?.isPlaying },
+      steps: this.stepOnsets.length, nextBells: Math.round(this.nextBells), nextHorses: Math.round(this.nextHorses),
     };
+  }
+
+  /** One footstep, cut from the recording (a different step each time), louder and brighter when jogging. */
+  step(speed: number): void {
+    const buf = this.buffers.get('steps');
+    if (!this.started || !buf || !this.stepOnsets.length) return;
+    const ctx = this.listener.context;
+    let k = Math.floor(Math.random() * this.stepOnsets.length);
+    if (k === this.lastStep) k = (k + 1) % this.stepOnsets.length;
+    this.lastStep = k;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.92 + Math.random() * 0.14 + Math.min(0.12, speed * 0.02);
+    const g = ctx.createGain();
+    g.gain.value = THREE.MathUtils.clamp(0.25 + speed * 0.1, 0.25, 0.7) * (this.raining ? 1.1 : 1);
+    src.connect(g).connect(this.listener.getInput());
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(g.gain.value, t + 0.22);
+    g.gain.linearRampToValueAtTime(0, t + 0.32);
+    src.start(t, Math.max(0, this.stepOnsets[k] - 0.015), 0.34);
   }
 
   toggleMute(): boolean {
@@ -93,7 +114,7 @@ export class Ambience {
       case 'crowd': this.crowd = this.loop('crowd', 0.35, 0.97); break;
       case 'scene': this.scene2 = this.loop('scene', 0.25, 1.02); break;
       case 'sparrows': this.sparrows = this.loop('sparrows', 0.12); break;
-      case 'steps': this.steps = this.loop('steps', 0); break;
+      case 'steps': this.stepOnsets = findOnsets(this.buffers.get('steps')!); break;
       case 'rain': this.rainLoop = this.loop('rain', 0.55); break;
       case 'bells': this.bells = this.positional('bells', this.bellAnchor, 40); break;
       case 'horses': this.horses = this.positional('horses', this.horseAnchor, 12); break;
@@ -109,14 +130,6 @@ export class Ambience {
     this.crowd?.setVolume(THREE.MathUtils.lerp(0.38, 0.1, k) * hush);
     this.scene2?.setVolume(THREE.MathUtils.lerp(0.26, 0.06, k) * hush);
     this.sparrows?.setVolume(THREE.MathUtils.lerp(0.1, 0.18, k));
-
-    // Footsteps: the step sequence loops while walking, paced to speed
-    const want = speed > 0.25 ? THREE.MathUtils.clamp(0.35 + speed * 0.08, 0.4, 0.75) : 0;
-    this.stepGain += (want - this.stepGain) * (1 - Math.exp(-(want > this.stepGain ? 12 : 6) * dt));
-    if (this.steps) {
-      this.steps.setVolume(this.stepGain);
-      if (speed > 0.25) this.steps.setPlaybackRate(THREE.MathUtils.clamp(speed / 1.6, 0.8, 1.9));
-    }
 
     // St Casimir's bells every few minutes, about 30 s at a time
     this.nextBells -= dt;
@@ -135,4 +148,21 @@ export class Ambience {
       this.nextHorses = 70 + Math.random() * 80;
     }
   }
+}
+
+/** Start times of the individual steps in a footstep recording (peaks of the loudness envelope). */
+function findOnsets(buf: AudioBuffer): number[] {
+  const d = buf.getChannelData(0), rate = buf.sampleRate, win = Math.floor(rate * 0.01);
+  const env: number[] = [];
+  for (let i = 0; i + win < d.length; i += win) { let e = 0; for (let j = 0; j < win; j++) e += d[i + j] * d[i + j]; env.push(Math.sqrt(e / win)); }
+  const max = Math.max(...env), out: number[] = [];
+  let last = -1e9;
+  for (let i = 1; i < env.length - 1; i++) {
+    if (env[i] > max * 0.3 && env[i] >= env[i - 1] && env[i] >= env[i + 1] && (i - last) * 0.01 > 0.28) {
+      // step back to where the sound starts rising
+      let j = i; while (j > 0 && env[j - 1] < env[j] && env[j - 1] > max * 0.05) j--;
+      out.push(j * 0.01); last = i;
+    }
+  }
+  return out;
 }

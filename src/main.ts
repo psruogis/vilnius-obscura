@@ -221,7 +221,10 @@ async function main(force = false): Promise<void> {
   // The character model streams in; the placeholder capsule stands in until then.
   let character: Character | null = null;
   const spec = new URLSearchParams(location.search).get('char') === 'townsman' ? TOWNSMAN : TRAVELLER;
-  Character.load(spec).then(c => { character = c; walker.setBody(c.object); shadows.apply(c.object); }).catch(err => console.warn('character', err));
+  Character.load(spec).then(c => {
+    character = c; walker.setBody(c.object); shadows.apply(c.object);
+    c.onStep = (_foot, sp) => ambience?.step(sp);
+  }).catch(err => console.warn('character', err));
 
   // Sound: market murmur centred on the square north of the Town Hall, bells from St Casimir's
   const bellsAt = stCasimirData ? new THREE.Vector3(
@@ -257,7 +260,7 @@ async function main(force = false): Promise<void> {
     walker.update(dt, camera);
     RAIN_TIME.value += dt;
     rain?.update(dt, camera.position);
-    character?.update(dt, walker.speed);
+    character?.update(dt, { speed: walker.speed, angularVelocity: walker.angularVelocity, forwardAccel: walker.forwardAccel, facing: walker.facing, lookYaw: walker.yaw, lookPitch: walker.pitch });
     ambience?.update(dt, walker.position, walker.speed);
     market?.update(dt);
     crowd?.update(dt, walker.position);
@@ -285,7 +288,7 @@ async function main(force = false): Promise<void> {
       },
       place: (x: number, z: number, yaw: number, pitch?: number) => {
         walker.place(x, z, yaw);
-        if (pitch !== undefined) walker.pitch = pitch;
+        if (pitch !== undefined) walker.setPitch(pitch);
         overlay.setVisible(false);
       },
     };
