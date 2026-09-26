@@ -22,3 +22,15 @@ body { font-family: Georgia, 'Times New Roman', serif; color: var(--ink); }
   font: 12px/1.4 ui-monospace, Menlo, monospace; color: #cfe; white-space: pre; pointer-events: none;
 }
 .stats.hidden { display: none; }
+
+.overlay .panel { max-width: 640px; padding: 0 24px; }
+.overlay .hint { margin-top: 18px; }
+.overlay .links a, .overlay .links a:visited { color: var(--ink-dim); font-size: 14px; }
+.overlay .bar { width: 240px; height: 3px; margin: 24px auto 0; background: rgba(244, 239, 230, 0.2); }
+.overlay .bar .fill { height: 100%; width: 0; background: var(--ink); transition: width 0.2s ease; }
+.overlay .credits { text-align: left; cursor: default; }
+.overlay .credits h2 { font-weight: normal; margin: 0 0 12px; }
+.overlay .credits ul { padding-left: 18px; color: var(--ink-dim); font-size: 14px; line-height: 1.55; }
+.overlay .credits .dim { font-size: 13px; }
+.overlay .credits .cta { cursor: pointer; }
+.overlay [hidden] { display: none !important; }

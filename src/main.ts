@@ -8,14 +8,21 @@ import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
 import { Walker } from './player/walker';
-import { createOverlay, createStats } from './ui/overlay';
+import { createOverlay, createStats, showUnsupported, unsupportedReason } from './ui/overlay';
 
 // A late-September afternoon, in Vilnius local mean time (UT + 1h41m): 16:00 LMT.
 const SCENE_TIME = new Date(Date.UTC(1800, 8, 20, 14, 19));
 const SHADOW_EXTENT = 70; // half-size of the sun's shadow box around the walker, m
 
 async function main(): Promise<void> {
+  const unsupported = unsupportedReason();
+  if (unsupported && !new URLSearchParams(location.search).has('force')) {
+    showUnsupported(unsupported);
+    return;
+  }
   const app = document.getElementById('app')!;
+  const overlay = createOverlay(() => input.requestLock());
+  THREE.DefaultLoadingManager.onProgress = (_url, loaded, total) => overlay.setProgress(loaded / total);
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -74,8 +81,9 @@ async function main(): Promise<void> {
   walker.place(thx + 4, thz - 42, Math.PI);
   scene.add(walker.object);
 
-  const overlay = createOverlay(() => input.requestLock());
   document.addEventListener('pointerlockchange', () => overlay.setVisible(!input.locked));
+  // Ready once every texture queued above has arrived.
+  THREE.DefaultLoadingManager.onLoad = () => overlay.ready();
   const stats = createStats(renderer);
   window.addEventListener('keydown', e => { if (e.code === 'Backquote') stats.toggle(); });
 
