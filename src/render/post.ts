@@ -176,10 +176,17 @@ export class Post {
   private acc = 0; private frames = 0;
   private scale = Math.min(window.devicePixelRatio, 1.5);
 
+  /** Pins the pixel ratio (screenshots, benchmarks); null returns to dynamic resolution. */
+  fixedScale: number | null = null;
+  setFixedScale(s: number | null): void {
+    this.fixedScale = s;
+    if (s !== null && s !== this.scale) { this.scale = s; this.renderer.setPixelRatio(s); this.setSize(window.innerWidth, window.innerHeight); }
+  }
+
   render(dt: number): void {
     if (this.enabled) this.composer.render(dt);
     else this.renderer.render(this.scene, this.camera);
-    if (dt <= 0) return;
+    if (dt <= 0 || this.fixedScale !== null) return;
     this.acc += dt; this.frames++;
     if (this.acc < 1.5) return;
     const fps = this.frames / this.acc;
