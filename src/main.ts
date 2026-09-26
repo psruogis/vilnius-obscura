@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { loadArea } from './world/area';
 import { buildWalls, buildRoofs } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createWoodMaterial } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createWoodMaterial } from './world/materials';
 import { buildBarriers } from './world/props';
 import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
 import { buildPromenade } from './world/promenade';
+import { buildMarket, type Market } from './world/market';
 import { Character, TOWNSMAN, TRAVELLER } from './player/character';
 import { Ambience } from './audio/ambience';
 import { WallGrid } from './world/collision';
@@ -96,6 +97,15 @@ async function main(): Promise<void> {
     scene.add(promenade.group);
     for (const [ax, az, bx, bz] of promenade.segments) walls.addSegment(ax, az, bx, bz);
   }
+  // Market stalls, carts and townsfolk stream in after the first frame
+  let market: Market | null = null;
+  if (townHallData) {
+    buildMarket(data, townHallData, terrain, createMarketMaterials(aniso)).then(mk => {
+      market = mk;
+      scene.add(mk.group);
+      for (const [ax, az, bx, bz] of mk.segments) walls.addSegment(ax, az, bx, bz);
+    }).catch(err => console.warn('market', err));
+  }
   const barriers = buildBarriers(data, terrain, thx, thz, data.meta.walkRadius, createWoodMaterial(aniso));
   if (barriers) scene.add(barriers);
 
@@ -149,6 +159,7 @@ async function main(): Promise<void> {
     walker.update(dt, camera);
     character?.update(dt, walker.speed);
     ambience?.update(dt, walker.position, walker.speed);
+    market?.update(dt);
     updateSun();
     renderer.render(scene, camera);
     stats.update(dt);

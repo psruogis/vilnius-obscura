@@ -155,6 +155,16 @@ export function createPromenadeMaterials(anisotropy: number) {
 }
 export type PromenadeMaterials = ReturnType<typeof createPromenadeMaterials>;
 
+/** Market stalls, carts and their goods. */
+export function createMarketMaterials(anisotropy: number) {
+  const plain = (color: string) => new THREE.MeshStandardMaterial({ color, roughness: 0.95 });
+  return {
+    wood: createWoodMaterial(anisotropy),
+    canvas: new THREE.MeshStandardMaterial({ color: '#d9ceb6', roughness: 1, side: THREE.DoubleSide }),
+    goods: [plain('#6f8a45'), plain('#9a3b2a'), plain('#c9b48a'), plain('#b7894a'), plain('#a08a64')], // cabbages, apples, turnips, onions, sacks
+  };
+}
+
 /** Hand-made clay tile roofs. */
 export function createRoofMaterial(anisotropy: number): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ ...pbrSet('clay_roof_tiles', anisotropy), vertexColors: true, roughness: 1 });

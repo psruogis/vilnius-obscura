@@ -8,6 +8,7 @@
 | Building heights and terrain | National LiDAR survey 2025 © Nacionalinė žemės tarnyba prie Aplinkos ministerijos (via the Vilnius University Potree mirror) | CC BY 4.0 |
 | Historic street and plot layout | Plans of Vilnius, 1842 and 1866, National Library of Poland (Polona) | Public domain |
 | Textures (cobblestone_floor_08, clay_roof_tiles, plastered_wall_04, weathered_planks) | Poly Haven | CC0 |
+| Townsfolk ("Man in Long Sleeves", "Woman in Dress", recoloured; the tie as a white cravat) | Quaternius Animated Men/Women, via Poly Pizza, downloaded 2026-09-26 | CC0 (Public Domain), as listed on Poly Pizza |
 | Walking figure ("Hooded Adventurer", recoloured and reshaped; "Adventurer" as an alternative) | Quaternius, via Poly Pizza (poly.pizza/m/y9KWOVG21R, poly.pizza/m/5EGWBMpuXq), downloaded 2026-09-26 | CC0 (Public Domain), as listed on Poly Pizza |
 | Sounds (Freesound HQ previews, downloaded 2026-09-26): "Crowded street at medieval market" (bolkmar, #424790), "Market Scene" (craigsmith, #486191), "House sparrow" (straget, #404663), "Italian bells mid distant" (mikewest, #411489), "Footsteps Mountain Boots Rock Walk Sequence" (Nox_Sound, #558472), "Horses Approach and By" (craigsmith, #479730) | freesound.org | CC0 |
 | three.js 0.186.1 | three.js authors | MIT |
