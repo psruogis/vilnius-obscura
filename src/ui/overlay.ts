@@ -12,6 +12,7 @@ const CREDITS_HTML = `
     <li>Historic plans of Vilnius, 1842 and 1866: National Library of Poland (Polona), public domain</li>
     <li>Textures: Poly Haven, CC0</li>
     <li>Walking figure: Quaternius (via Poly Pizza), CC0</li>
+    <li>Sounds (Freesound, CC0): bolkmar, craigsmith, straget, mikewest, Nox_Sound</li>
     <li>three.js (MIT), suncalc (BSD-2-Clause), straight-skeleton (MIT)</li>
   </ul>
   <p class="dim">No Google Maps, Street View, Earth or 3D Tiles imagery was used.</p>
@@ -33,7 +34,7 @@ export function createOverlay(onStart: () => void): Overlay {
       <p>Town Hall Square, around 1800</p>
       <div class="bar"><div class="fill"></div></div>
       <div class="cta" data-start hidden>Click to walk</div>
-      <p class="hint">W A S D to walk · Shift to jog · mouse to look · Esc to pause</p>
+      <p class="hint">W A S D to walk · Shift to jog · mouse to look · M to mute · Esc to pause</p>
       <p class="links"><a href="#" data-credits>Credits</a></p>
     </div>
     <div class="panel credits" hidden>${CREDITS_HTML}</div>`;

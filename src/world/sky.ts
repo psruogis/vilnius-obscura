@@ -18,11 +18,11 @@ export function sunDirection(date: Date, out = new THREE.Vector3()): THREE.Vecto
   return out.set(Math.sin(gridBearing) * c, Math.sin(altitude), -Math.cos(gridBearing) * c).normalize();
 }
 
-export function createSky(sunDir: THREE.Vector3, scale = 4500): Sky {
+export function createSky(sunDir: THREE.Vector3, scale = 4500, turbidity = 3.2): Sky {
   const sky = new Sky();
   sky.scale.setScalar(scale);
   const u = sky.material.uniforms;
-  u['turbidity'].value = 3.2;
+  u['turbidity'].value = turbidity;
   u['rayleigh'].value = 1.4;
   u['mieCoefficient'].value = 0.004;
   u['mieDirectionalG'].value = 0.82;
