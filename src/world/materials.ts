@@ -166,7 +166,7 @@ const FACADE_FRAGMENT = /* glsl */ `
 
     float storeyIdx = h < groundF ? 0.0 : 1.0 + floor((h - groundF) / upperF);
     float fy = h < groundF ? h : mod(h - groundF, upperF);
-    float upperStoreys = floor(max(eave - groundF - 0.6, 0.0) / upperF); // complete upper floors
+    float upperStoreys = floor(max(eave - groundF - 0.6, 0.0) / upperF + 0.05); // complete upper floors (tolerant of float error)
     if (storeyIdx > upperStoreys + 0.5) return col;                       // attic band: blank
     if (h > eave - 0.7) return col;
     float course = storeyIdx > 0.5 ? (1.0 - smoothstep(0.0, 0.12, fy)) : 0.0;
