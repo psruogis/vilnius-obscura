@@ -18,9 +18,11 @@ const SEED = path.join(ROOT, 'shadows-of-vilnius-seed');
 const OUT = path.join(ROOT, 'public', 'data', 'area.json');
 const LIDAR = path.join(ROOT, 'tools', 'lidar', 'heights.json');
 const GROUND_GRID = path.join(ROOT, 'tools', 'lidar', 'ground_grid.json');
-// Vokiečių street c.1800 reconstruction (tools/reconstruction/, see its README).
-const RECON_REMOVE = path.join(ROOT, 'tools', 'reconstruction', 'remove_modern.json');
-const RECON_PLOTS = path.join(ROOT, 'tools', 'reconstruction', 'vokieciu_historic.geojson');
+// Historic-layout reconstructions (tools/reconstruction/, see the READMEs there):
+// every *remove_modern.json lists post-war footprints to drop, every *_historic.geojson adds plots.
+const RECON_DIR = path.join(ROOT, 'tools', 'reconstruction');
+const reconFiles = suffix => (fs.existsSync(RECON_DIR) ? fs.readdirSync(RECON_DIR) : [])
+  .filter(f => f.endsWith(suffix)).sort().map(f => path.join(RECON_DIR, f));
 
 
 const E0 = 583000, N0 = 6061000;
@@ -136,7 +138,7 @@ function normGrid(g) {
 // --- GRPK footprints ----------------------------------------------------
 const grpk = JSON.parse(fs.readFileSync(path.join(SEED, 'grpk', 'grpk_pastat_oldtown_epsg3346.geojson'), 'utf8'));
 const buildings = [];
-const removeIds = new Set(fs.existsSync(RECON_REMOVE) ? JSON.parse(fs.readFileSync(RECON_REMOVE, 'utf8')).remove || [] : []);
+const removeIds = new Set(reconFiles('remove_modern.json').flatMap(f => JSON.parse(fs.readFileSync(f, 'utf8')).remove || []));
 const stats = { lidar: 0, osmHeight: 0, osmLevels: 0, default: 0, capped: 0 };
 
 for (const f of grpk.features) {
@@ -183,8 +185,9 @@ for (const f of grpk.features) {
 }
 
 // Reconstructed c.1800 plots replace the post-war layout on Vokiečių street.
-if (fs.existsSync(RECON_PLOTS)) {
-  const recon = JSON.parse(fs.readFileSync(RECON_PLOTS, 'utf8'));
+for (const reconFile of reconFiles('_historic.geojson')) {
+  const recon = JSON.parse(fs.readFileSync(reconFile, 'utf8'));
+  const tag = path.basename(reconFile, '.geojson');
   for (const f of recon.features) {
     const kind = f.properties?.kind;
     if (kind !== 'plot' && kind !== 'block') continue;
@@ -195,7 +198,7 @@ if (fs.existsSync(RECON_PLOTS)) {
       const storeys = Number(f.properties.storeys) || 0;
       const eave = storeys ? STOREY_GROUND + (storeys - 1) * STOREY_UPPER + 0.6 : RECON_EAVE;
       buildings.push({
-        id: `recon-${f.properties.id ?? buildings.length}-${i}`, role: 'recon', area: Math.round(ringArea(rings[0])),
+        id: `${tag}-${f.properties.id ?? buildings.length}-${i}`, role: 'recon', area: Math.round(ringArea(rings[0])),
         dist: Math.round(dist(c, TOWN_HALL)), walk: dist(c, TOWN_HALL) <= WALK_RADIUS + 40,
         eave: round(eave), heightSource: storeys ? 'recon-storeys' : 'recon-default', capped: false, ground: 0,
         rings: rings.map(r => r.map(local)), source: f.properties.source || null, grade: f.properties.grade || 'C',
