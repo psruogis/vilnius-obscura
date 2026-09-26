@@ -13,6 +13,7 @@ const FILES = {
   bells: 'assets/snd/bells.mp3',
   horses: 'assets/snd/horses.mp3',
   steps: 'assets/snd/steps_stone.mp3',
+  rain: 'assets/snd/rain.mp3',
 } as const;
 type Key = keyof typeof FILES;
 
@@ -21,7 +22,7 @@ export interface AmbienceSites { square: THREE.Vector3; bells: THREE.Vector3 | n
 export class Ambience {
   private readonly listener = new THREE.AudioListener();
   private readonly buffers = new Map<Key, AudioBuffer>();
-  private crowd?: THREE.Audio; private scene2?: THREE.Audio; private sparrows?: THREE.Audio; private steps?: THREE.Audio;
+  private crowd?: THREE.Audio; private scene2?: THREE.Audio; private sparrows?: THREE.Audio; private steps?: THREE.Audio; private rainLoop?: THREE.Audio;
   private bells?: THREE.PositionalAudio; private horses?: THREE.PositionalAudio;
   private readonly bellAnchor = new THREE.Object3D();
   private readonly horseAnchor = new THREE.Object3D();
@@ -31,12 +32,14 @@ export class Ambience {
   private nextHorses = 25 + Math.random() * 40;
   private stepGain = 0;
 
-  constructor(camera: THREE.Camera, private readonly world: THREE.Scene, private readonly sites: AmbienceSites) {
+  constructor(camera: THREE.Camera, private readonly world: THREE.Scene, private readonly sites: AmbienceSites, private readonly raining = false) {
     camera.add(this.listener);
     world.add(this.bellAnchor, this.horseAnchor);
     if (sites.bells) this.bellAnchor.position.copy(sites.bells).setY(sites.bells.y + 30);
     const loader = new THREE.AudioLoader(new THREE.LoadingManager()); // don't hold up the loading bar
     for (const [k, url] of Object.entries(FILES) as [Key, string][]) {
+      if (k === 'rain' && !raining) continue;
+      if (k === 'sparrows' && raining) continue; // birds fall quiet in the rain
       loader.load(url, buf => { this.buffers.set(k, buf); if (this.started) this.wire(k); }, undefined, () => console.warn('audio', url));
     }
   }
@@ -91,6 +94,7 @@ export class Ambience {
       case 'scene': this.scene2 = this.loop('scene', 0.25, 1.02); break;
       case 'sparrows': this.sparrows = this.loop('sparrows', 0.12); break;
       case 'steps': this.steps = this.loop('steps', 0); break;
+      case 'rain': this.rainLoop = this.loop('rain', 0.55); break;
       case 'bells': this.bells = this.positional('bells', this.bellAnchor, 40); break;
       case 'horses': this.horses = this.positional('horses', this.horseAnchor, 12); break;
     }
@@ -101,8 +105,9 @@ export class Ambience {
     // Market bed: full on the square, fading into the side streets
     const d = Math.hypot(walker.x - this.sites.square.x, walker.z - this.sites.square.z);
     const k = THREE.MathUtils.clamp((d - 35) / 70, 0, 1);
-    this.crowd?.setVolume(THREE.MathUtils.lerp(0.38, 0.1, k));
-    this.scene2?.setVolume(THREE.MathUtils.lerp(0.26, 0.06, k));
+    const hush = this.raining ? 0.45 : 1; // fewer people out in the rain
+    this.crowd?.setVolume(THREE.MathUtils.lerp(0.38, 0.1, k) * hush);
+    this.scene2?.setVolume(THREE.MathUtils.lerp(0.26, 0.06, k) * hush);
     this.sparrows?.setVolume(THREE.MathUtils.lerp(0.1, 0.18, k));
 
     // Footsteps: the step sequence loops while walking, paced to speed

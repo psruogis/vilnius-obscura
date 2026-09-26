@@ -60,12 +60,13 @@ const PaintShader = {
     uRadius: { value: 3 },
     uMix: { value: 0.5 },
     uCanvas: { value: 0.035 },
+    uVarnish: { value: 0.55 },
   },
   vertexShader: GradeShader.vertexShader,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform vec2 uTexel;
-    uniform float uRadius, uMix, uCanvas;
+    uniform float uRadius, uMix, uCanvas, uVarnish;
     varying vec2 vUv;
     float h21(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
     void main() {
@@ -95,7 +96,7 @@ const PaintShader = {
       float weave = (h21(floor(px * 0.5)) - 0.5) * 0.7 + (h21(floor(px * 0.125) + 17.0) - 0.5) * 0.3; // irregular canvas tooth, no regular pattern
       c *= 1.0 + uCanvas * weave;
       // aged varnish: warm, slightly yellowed highlights, softened blacks
-      c = mix(c, c * vec3(1.05, 1.0, 0.86), 0.55);
+      c = mix(c, c * vec3(1.05, 1.0, 0.86), uVarnish);
       c = c * 0.93 + vec3(0.035, 0.028, 0.018);
       gl_FragColor = vec4(c, 1.0);
     }`,
@@ -109,7 +110,7 @@ export class Post {
   readonly paint: ShaderPass;
   enabled = true;
 
-  constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera) {
+  constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera, overlay?: THREE.Scene) {
     const w = window.innerWidth, h = window.innerHeight;
     // One depth buffer shared by both ping-pong targets: the AO pass reads the main render's depth and
     // rebuilds normals from it, instead of drawing the whole scene again.
@@ -133,9 +134,26 @@ export class Post {
     this.composer.addPass(new OutputPass());
     this.paint = new ShaderPass(PaintShader);
     this.composer.addPass(this.paint);
+    if (overlay) {
+      // Drawn after the paint filter (which would smooth thin rain streaks away), tested against the scene depth
+      const over = new RenderPass(overlay, camera);
+      over.clear = false;
+      over.clearDepth = false;
+      this.composer.addPass(over);
+    }
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.grade);
     this.composer.addPass(new SMAAPass());
+    // Full-screen passes must not touch the shared depth buffer: the rain is depth-tested against the scene.
+    const calm = (m: unknown) => { const mm = m as THREE.Material; if (mm && mm.isMaterial) { mm.depthTest = false; mm.depthWrite = false; } };
+    for (const pass of this.composer.passes) {
+      if (pass instanceof RenderPass) continue;
+      for (const v of Object.values(pass as unknown as Record<string, unknown>)) {
+        calm(v);
+        const q = v as { material?: unknown } | null;
+        if (q && typeof q === 'object' && 'material' in q) calm(q.material);
+      }
+    }
     renderer.setPixelRatio(this.scale);
     this.setSize(w, h);
 

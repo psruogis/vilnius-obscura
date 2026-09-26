@@ -26,8 +26,9 @@ const WEATHER = /* glsl */ `
     // Patchy limewash: broad, soft variation
     c *= 0.84 + 0.24 * hw_fbm(vec2(u * 0.22, h * 0.3) + seed * 17.0);
     // where the limewash has flaked: darker, rougher plaster beneath
-    float flake = smoothstep(0.7, 0.74, hw_fbm(vec2(u * 0.7, h * 0.7) + seed * 23.0)) * (0.4 + 0.6 * (1.0 - smoothstep(0.5, 4.5, h)));
-    c = mix(c, vec3(0.55, 0.47, 0.4), flake * 0.7);
+    // where the limewash has worn thin, mostly low down: slightly darker and greyer, soft-edged
+    float flake = smoothstep(0.66, 0.78, hw_fbm(vec2(u * 0.7, h * 0.7) + seed * 23.0)) * (1.0 - smoothstep(0.5, 3.5, h));
+    c = mix(c, c * vec3(0.82, 0.8, 0.77), flake * 0.6);
     // broad, soft staining (no stripes)
     c *= 1.0 - 0.14 * smoothstep(0.5, 0.8, hw_fbm(vec2(u * 0.35, h * 0.18) + seed * 9.0));
     // Rain streaks under each upper window sill
@@ -62,12 +63,14 @@ const WEATHER = /* glsl */ `
   }
 `;
 
-function windowAtlas(): { map: THREE.CanvasTexture; rough: THREE.CanvasTexture } {
+function windowAtlas(): { map: THREE.CanvasTexture; rough: THREE.CanvasTexture; glow: THREE.CanvasTexture } {
   // 2 x 2 variants. Each cell is stretched over a window about 1.05 m wide and 1.8 m tall.
   const S = 512, C = 256;
   const col = document.createElement('canvas'); col.width = col.height = S;
   const rgh = document.createElement('canvas'); rgh.width = rgh.height = S;
-  const g = col.getContext('2d')!, r = rgh.getContext('2d')!;
+  const glw = document.createElement('canvas'); glw.width = glw.height = S;
+  const g = col.getContext('2d')!, r = rgh.getContext('2d')!, q = glw.getContext('2d')!;
+  q.fillStyle = '#000'; q.fillRect(0, 0, S, S);
   const pxX = C / 1.05, pxY = C / 1.8; // pixels per metre in each direction
   for (let v = 0; v < 4; v++) {
     const ox = (v % 2) * C, oy = Math.floor(v / 2) * C;
@@ -82,10 +85,17 @@ function windowAtlas(): { map: THREE.CanvasTexture; rough: THREE.CanvasTexture }
       g.fillRect(ox, oy + C * 0.08, cw, C * 0.92); g.fillRect(ox + C - cw, oy + C * 0.08, cw, C * 0.92);
     }
     if (v === 2) { g.fillStyle = 'rgba(214, 206, 188, 0.55)'; g.fillRect(ox, oy + C * 0.3, C, C * 0.7); } // lace half-curtain
+    if (v === 3) {
+      // a lit room: warm light glowing through the curtains, brightest low in the middle
+      const rg = q.createRadialGradient(ox + C / 2, oy + C * 0.65, C * 0.05, ox + C / 2, oy + C * 0.6, C * 0.7);
+      rg.addColorStop(0, 'rgb(255,214,150)'); rg.addColorStop(1, 'rgb(90,55,25)');
+      q.fillStyle = rg; q.fillRect(ox, oy, C, C);
+    }
     r.fillStyle = 'rgb(18,18,18)'; r.fillRect(ox, oy, C, C); // glass: glossy
     // Frame and glazing bars: white-painted wood
     const frame = (x: number, y: number, w: number, h: number) => {
       g.fillStyle = '#e8e3d6'; g.fillRect(ox + x, oy + y, w, h);
+      q.fillStyle = '#000'; q.fillRect(ox + x, oy + y, w, h);
       r.fillStyle = 'rgb(150,150,150)'; r.fillRect(ox + x, oy + y, w, h);
     };
     const fX = 0.07 * pxX, fY = 0.07 * pxY, bX = 0.03 * pxX, bY = 0.03 * pxY, mX = 0.06 * pxX, tY = 0.06 * pxY;
@@ -103,7 +113,8 @@ function windowAtlas(): { map: THREE.CanvasTexture; rough: THREE.CanvasTexture }
   }
   const map = new THREE.CanvasTexture(col); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 8;
   const rough = new THREE.CanvasTexture(rgh); rough.anisotropy = 8;
-  return { map, rough };
+  const glow = new THREE.CanvasTexture(glw); glow.colorSpace = THREE.SRGBColorSpace;
+  return { map, rough, glow };
 }
 
 export function createHouseMaterials(anisotropy: number) {
@@ -145,8 +156,10 @@ export function createHouseMaterials(anisotropy: number) {
   trim.customProgramCacheKey = () => 'house-trim';
   age(trim, { strength: 0.8, seed: 3 });
 
-  const { map, rough } = windowAtlas();
-  const glass = new THREE.MeshStandardMaterial({ map, roughnessMap: rough, roughness: 1, metalness: 0, envMapIntensity: 1.8 });
+  const { map, rough, glow } = windowAtlas();
+  // emissiveIntensity is raised in the rain (a quarter of the windows show a lit room)
+  const glass = new THREE.MeshStandardMaterial({ map, roughnessMap: rough, roughness: 1, metalness: 0, envMapIntensity: 1.8,
+    emissive: new THREE.Color('#ffffff'), emissiveMap: glow, emissiveIntensity: 0 });
 
   const wood = new THREE.MeshStandardMaterial({
     vertexColors: true, roughness: 0.85,

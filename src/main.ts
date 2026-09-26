@@ -15,6 +15,7 @@ import { Character, TOWNSMAN, TRAVELLER } from './player/character';
 import { Ambience } from './audio/ambience';
 import { Post } from './render/post';
 import { SunShadows } from './render/shadows';
+import { installHeightFog, createOvercastSky, createRain, wet, WET, RAIN_TIME } from './render/weather';
 import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
@@ -29,8 +30,14 @@ import { createOverlay, createStats, showUnsupported, unsupportedReason } from '
 const LIGHTS = {
   golden: { time: Date.UTC(1800, 5, 24, 4, 10), sun: '#ffc68a', sunI: 9, exposure: 0.55, turbidity: 4.6, fog: '#dccdb8', env: 0.3, hemi: ['#c9d1da', '#b3906a', 0.18] },
   day: { time: Date.UTC(1800, 8, 20, 14, 19), sun: '#fff0d8', sunI: 8, exposure: 0.55, turbidity: 3.2, fog: '#c9d3db', env: 0.32, hemi: ['#c3d5e8', '#a88f6c', 0.2] },
+  // Summer rain: an overcast afternoon, soft diffuse light, the street filling with mist.
+  rain: { time: Date.UTC(1800, 5, 24, 13, 30), sun: '#d9dee2', sunI: 1.4, exposure: 0.95, turbidity: 10, fog: '#7f8a90', env: 1.0, hemi: ['#b4bdc4', '#6d675e', 0.3] },
 } as const;
-const LIGHT = LIGHTS[new URLSearchParams(location.search).get('light') === 'day' ? 'day' : 'golden'];
+// Weather: rain by default (?weather=clear for the sunny morning).
+const RAIN = new URLSearchParams(location.search).get('weather') !== 'clear';
+const LIGHT = RAIN ? LIGHTS.rain : LIGHTS[new URLSearchParams(location.search).get('light') === 'day' ? 'day' : 'golden'];
+if (RAIN) installHeightFog(0, 6, 1.6); // must run before any material compiles
+WET.value = RAIN ? 1 : 0;
 const SCENE_TIME = new Date(LIGHT.time);
 
 async function main(force = false): Promise<void> {
@@ -62,15 +69,19 @@ async function main(force = false): Promise<void> {
 
   // Sky and sun
   const sunDir = sunDirection(SCENE_TIME);
-  scene.add(createSky(sunDir, 4500, LIGHT.turbidity));
+  scene.add(RAIN ? createOvercastSky('#7f8a90', '#56616a') : createSky(sunDir, 4500, LIGHT.turbidity));
   // Sky light for everything in shade: a prefiltered environment map rendered from the same sky.
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
-  envScene.add(createSky(sunDir, 500, LIGHT.turbidity));
+  envScene.add(RAIN ? createOvercastSky('#9aa3a7', '#6c767d', 400) : createSky(sunDir, 500, LIGHT.turbidity));
   scene.environment = pmrem.fromScene(envScene, 0, 0.1, 1000).texture;
   scene.environmentIntensity = LIGHT.env;
   pmrem.dispose();
-  scene.fog = new THREE.Fog(LIGHT.fog, 70, 800); // the hazy, dusty distance of the period views
+  // Rain: exponential mist, thick at street level (installHeightFog); clear: the dusty haze of the period views
+  scene.fog = RAIN ? new THREE.FogExp2(LIGHT.fog, 0.0072) : new THREE.Fog(LIGHT.fog, 70, 800);
+  const rain = RAIN ? createRain(11000) : null;
+  const rainScene = new THREE.Scene();
+  if (rain) rainScene.add(rain.mesh);
 
   // Sun: cascaded shadows, sharp near the walker and still present on distant buildings.
   const shadows = new SunShadows(scene, camera, sunDir, LIGHT.sun, LIGHT.sunI);
@@ -80,16 +91,25 @@ async function main(force = false): Promise<void> {
   // Ground: LiDAR terrain with fieldstone cobbles
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const terrain = new Terrain(data);
-  scene.add(terrain.buildMesh(createGroundMaterial(aniso), thx, thz, 1000, 4, 3.4));
+  const groundMat = createGroundMaterial(aniso);
+  if (RAIN) wet(groundMat, 'ground');
+  scene.add(terrain.buildMesh(groundMat, thx, thz, 1000, 4, 3.4));
 
   // Buildings: plastered walls with period windows, and skeleton roofs in clay tile
-  const wallMesh = new THREE.Mesh(buildWalls(data), age(createFacadeMaterial(aniso), { strength: 0.8, seed: 4 }));
-  const roofMesh = new THREE.Mesh(buildRoofs(data), createRoofMaterial(aniso));
+  const wallMat = age(createFacadeMaterial(aniso), { strength: 0.8, seed: 4 });
+  if (RAIN) wet(wallMat, 'wall', 0, 'vFacade.y');
+  const wallMesh = new THREE.Mesh(buildWalls(data), wallMat);
+  const roofMesh = new THREE.Mesh(buildRoofs(data), RAIN ? wet(createRoofMaterial(aniso), 'roof') : createRoofMaterial(aniso));
   for (const m of [wallMesh, roofMesh]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
   // Houses near the walk: real façade geometry (openings, reveals, sills, cornices, chimneys)
   const houseMats = createHouseMaterials(aniso);
   houseMats.glass.envMap = scene.environment; // full-strength sky reflections in the glass (scene env is dimmed)
   houseMats.glass.envMapIntensity = 1.0;
+  if (RAIN) {
+    wet(houseMats.wall, 'wall', 0, 'vWall.y');
+    wet(houseMats.trim, 'wall', 0);
+    houseMats.glass.emissiveIntensity = 1.6; // a few rooms lit against the gloom
+  }
   const facades = buildFacades(data, terrain, houseMats);
   scene.add(facades.group);
   const townHallData = data.buildings.find(b => b.role === 'townhall');
@@ -97,6 +117,7 @@ async function main(force = false): Promise<void> {
     const m = createTownHallMaterials(aniso);
     for (const k of ['wall', 'stone', 'plinth'] as const) age(m[k], { ground: townHallData.groundY, strength: 0.9, seed: 1 });
     age(m.roof, { roof: true, strength: 0.9 });
+    if (RAIN) { for (const k of ['wall', 'stone', 'plinth'] as const) wet(m[k], 'wall', townHallData.groundY); wet(m.roof, 'roof'); }
     scene.add(buildTownHall(townHallData, m));
   }
   const stCasimirData = data.buildings.find(b => b.role === 'stcasimir');
@@ -104,6 +125,7 @@ async function main(force = false): Promise<void> {
     const m = createChurchMaterials(aniso);
     for (const k of ['wall', 'stone'] as const) age(m[k], { ground: stCasimirData.groundY, strength: 1, seed: 2 });
     age(m.roof, { roof: true, strength: 0.7 });
+    if (RAIN) { for (const k of ['wall', 'stone'] as const) wet(m[k], 'wall', stCasimirData.groundY); }
     scene.add(buildStCasimir(stCasimirData, m));
   }
   const walls = new WallGrid(data);
@@ -141,7 +163,7 @@ async function main(force = false): Promise<void> {
   const bellsAt = stCasimirData ? new THREE.Vector3(
     stCasimirData.rings[0].reduce((a, p) => a + p[0], 0) / stCasimirData.rings[0].length, stCasimirData.eaveY,
     stCasimirData.rings[0].reduce((a, p) => a + p[1], 0) / stCasimirData.rings[0].length) : null;
-  ambience = new Ambience(camera, scene, { square: new THREE.Vector3(thx, terrain.heightAt(thx, thz - 30), thz - 30), bells: bellsAt });
+  ambience = new Ambience(camera, scene, { square: new THREE.Vector3(thx, terrain.heightAt(thx, thz - 30), thz - 30), bells: bellsAt }, RAIN);
   scene.add(camera);
   window.addEventListener('keydown', e => { if (e.code === 'KeyM') ambience?.toggleMute(); });
 
@@ -153,7 +175,8 @@ async function main(force = false): Promise<void> {
 
   // Everything built so far receives the cascades; late arrivals (figure, market) are added when they load.
   shadows.apply(scene);
-  const post = new Post(renderer, scene, camera);
+  const post = new Post(renderer, scene, camera, rainScene);
+  if (RAIN) post.paint.uniforms.uVarnish.value = 0.2; // keep the rain light cool and grey
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -168,6 +191,8 @@ async function main(force = false): Promise<void> {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     walker.update(dt, camera);
+    RAIN_TIME.value += dt;
+    rain?.update(dt, camera.position);
     character?.update(dt, walker.speed);
     ambience?.update(dt, walker.position, walker.speed);
     market?.update(dt);
