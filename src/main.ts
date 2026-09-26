@@ -9,6 +9,8 @@ import { buildStCasimir } from './world/stcasimir';
 import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
 import { buildFacades } from './world/facades';
+import { buildCrowd, type Crowd } from './world/people';
+import { buildTraffic, type Traffic } from './world/carriages';
 import { createHouseMaterials } from './world/houseMaterials';
 import { age } from './world/ageing';
 import { Character, TOWNSMAN, TRAVELLER } from './player/character';
@@ -138,12 +140,36 @@ async function main(force = false): Promise<void> {
   }
   // Market stalls, carts and townsfolk stream in after the first frame
   let market: Market | null = null;
+  let crowd: Crowd | null = null, traffic: Traffic | null = null;
   if (townHallData) {
-    buildMarket(data, townHallData, terrain, createMarketMaterials(aniso)).then(mk => {
+    buildMarket(data, townHallData, terrain, createMarketMaterials(aniso)).then(async mk => {
       market = mk;
       scene.add(mk.group);
       shadows.apply(mk.group);
       for (const [ax, az, bx, bz] of mk.segments) walls.addSegment(ax, az, bx, bz);
+      // Open ground: a 1 m occupancy raster of the building outlines around the walk
+      const free = openGround(data, thx, thz, 180);
+      // Horse-drawn coaches and carts on a loop fitted round the square
+      buildTraffic({
+        th: townHallData, walls, terrain, free,
+        mats: {
+          wood: createWoodMaterial(aniso),
+          body: new THREE.MeshStandardMaterial({ color: '#34241c', roughness: 0.45, metalness: 0.05 }),
+          dark: new THREE.MeshStandardMaterial({ color: '#15130f', roughness: 0.3 }),
+          horse: new THREE.MeshStandardMaterial(),
+        },
+      }).then(tr => { traffic = tr; scene.add(tr.group); shadows.apply(tr.group); }).catch(err => console.warn('traffic', err));
+      // Townsfolk: knots of people talking, and strollers
+      const groups: THREE.Vector2[] = [];
+      for (let k = 0, tries = 0; k < 16 && tries < 400; tries++) {
+        const a = tries * 2.399, r = 12 + ((tries * 37) % 90);
+        const x = thx + Math.cos(a) * r, z = thz + Math.sin(a) * r;
+        if (free(x, z) && free(x + 1.5, z) && free(x - 1.5, z) && free(x, z + 1.5) && free(x, z - 1.5)) { groups.push(new THREE.Vector2(x, z)); k++; }
+      }
+      buildCrowd({
+        walls, terrain, free, centre: new THREE.Vector2(thx, thz), radius: data.meta.walkRadius + 25, groups, strollers: 46,
+        material: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }),
+      }).then(c => { crowd = c; scene.add(c.group); shadows.apply(c.group); }).catch(err => console.warn('crowd', err));
     }).catch(err => console.warn('market', err));
   }
   const barriers = buildBarriers(data, terrain, thx, thz, data.meta.walkRadius, createWoodMaterial(aniso));
@@ -196,6 +222,8 @@ async function main(force = false): Promise<void> {
     character?.update(dt, walker.speed);
     ambience?.update(dt, walker.position, walker.speed);
     market?.update(dt);
+    crowd?.update(dt, walker.position);
+    traffic?.update(dt, walker.position);
     promenadeRef?.update(dt);
     shadows.update();
     post.render(dt);
@@ -208,6 +236,7 @@ async function main(force = false): Promise<void> {
       data, walker, camera, renderer, scene,
       get character() { return character; },
       get ambience() { return ambience; },
+      get crowd() { return crowd; }, get traffic() { return traffic; },
       post, shadows, facadeStats: facades.stats,
       // Saves the current frame to .screens/<name>.jpg via the dev server.
       snapshot: async (name: string) => {
@@ -222,6 +251,26 @@ async function main(force = false): Promise<void> {
       },
     };
   }
+}
+
+/** Open ground test from a 1 m raster of the building outlines within `radius` of (cx, cz). */
+function openGround(data: Awaited<ReturnType<typeof loadArea>>, cx: number, cz: number, radius: number): (x: number, z: number) => boolean {
+  const N = Math.ceil(radius * 2), c = document.createElement('canvas');
+  c.width = c.height = N;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#fff';
+  for (const b of data.buildings) {
+    if (b.dist > radius + 60) continue;
+    g.beginPath();
+    for (const ring of b.rings) ring.forEach(([x, z], i) => (i ? g.lineTo : g.moveTo).call(g, x - cx + radius, z - cz + radius));
+    g.fill('evenodd');
+  }
+  const px = g.getImageData(0, 0, N, N).data;
+  return (x, z) => {
+    const i = Math.floor(x - cx + radius), j = Math.floor(z - cz + radius);
+    if (i < 0 || j < 0 || i >= N || j >= N) return false;
+    return px[(j * N + i) * 4] < 64;
+  };
 }
 
 function fail(err: unknown): void {
