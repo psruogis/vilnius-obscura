@@ -1,0 +1,649 @@
+[
+ {
+  "topic": "osm",
+  "research": {
+   "summary": "I reached the live Overpass API with curl. overpass-api.de returns HTTP 406 unless a User-Agent header is sent (curl -A fixes it). I pulled a full snapshot of bbox (54.672,25.278,54.690,25.305): 16.3 MB, 42,087 nodes, 7,138 ways and 453 relations, with osm_base 2026-09-26T13:41Z. I analysed it locally and cross-checked the key counts with direct Overpass count queries.\n\nBottom line: OSM gives a very good 2D base for Vilnius Old Town but only a partial 3D one.\n- **Buildings:** 2,065 footprints. 64% have addresses. 95 multipolygons carry 116 inner courtyard rings.\n- **Streets:** 3,034 highway ways, about 134 km inside the bbox. About 86% of that length has a surface tag.\n- **Passages and features:** 204 tunnel=building_passage gateways. Both rivers exist as centrelines and as water areas. Steps, walls, city walls, bridges, 3,364 trees and 254 benches are mapped.\n- **The 3D gap:** only 28% of buildings (39% of footprint area) have any height, levels or building:part data. Only 17.8% have roof:shape. Widths are almost never tagged (1.6%). Street lamps are nearly absent (37 nodes). There is no terrain.\n- **Simple 3D Buildings parts:** 584 building:part objects across 62 buildings, heavily concentrated on landmarks. The Cathedral has 82, the Town Hall 60, the Palace of the Grand Dukes 44, St Johns' bell tower 22, St Francis/Bernardine 15, St Johns' church 13, the Cathedral bell tower 8, Gediminas Tower 3 and the Gates of Dawn 1. St Anne's and St Casimir's have none. At least one height is badly wrong: St Johns' bell tower tops out at 48 m in OSM against 69 m on Wikipedia.\n- **Heritage and boundary:** heritage=* is not used. Lithuanian mappers use ref:lt:kpd, the Cultural Values Register (KVR) code. The Old Town place node carries ref:lt:kpd=16073, the KVR code for Vilniaus senamiestis (UNESCO no. 541). There is no Old Town or UNESCO boundary polygon in OSM, so that boundary has to come from KVR.\n- **Pilies / Šv. Mykolo junction:** it exists at shared node 59971618, lat 54.6831524, lon 25.2892466.\n- **Licence (ODbL):** rendered frames of the game are a Produced Work and need attribution. The filtered or modified OSM extract behind the shipped glTF chunks is a Derivative Database, which must be offered under ODbL (sections 4.4, 4.6 and 4.7b).\n\nScratch data for reuse:\n- /private/tmp/claude-501/-Users-pauliuss-snbx/90dd4c2e-1692-47f0-8f53-18b3e44e3556/scratchpad/osm/bbox_all.json (raw dump)\n- /private/tmp/claude-501/-Users-pauliuss-snbx/90dd4c2e-1692-47f0-8f53-18b3e44e3556/scratchpad/osm/geo.py (point-in-polygon, area and length helpers)",
+   "findings": [
+    {
+     "claim": "Overpass access works from Bash; data snapshot is current as of 2026-09-26",
+     "detail": "overpass-api.de answered HTTP 406 Not Acceptable until a User-Agent was sent (curl -A '...'). The full bbox dump (nwr(bbox); out meta qt) was 16.3 MB: 42,087 nodes (6,206 tagged), 7,138 ways, 453 relations, osm_base 2026-09-26T13:41:20Z. The server rate-limited and timed out after about 5 queries in quick succession. The overpass.kumi.systems and overpass.private.coffee mirrors answered, but their osm_base was 2026-06-01T08:52Z, about 4 months stale. Counts include ways that cross the bbox edge, and lengths and areas use only the nodes inside the bbox. The bbox also takes in a slice of the Neris north bank and the Naujamiestis edge.",
+     "sources": [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Buildings: 2,065 footprints (1,969 ways + 96 relations); good 2D coverage, weak 3D attributes",
+     "detail": "Footprint area in the bbox is 93.6 ha. Addresses: addr:street 64.5%, addr:housenumber 64.4%. Tag coverage across all 2,065 buildings: building:levels 449 (21.7%), height 143 (6.9%), roof:shape 367 (17.8%), roof:levels 234 (11.3%), roof:colour 337 (16.3%), building:colour 234 (11.3%), building:material 7 (0.3%), roof:material 8 (0.4%), min_height 3 (0.1%), roof:height 2, roof:direction 2, roof:orientation 24, start_date 4, name 162, wikidata 81 (3.9%), wikipedia 58. Any vertical info (height, levels or building:part) covers 582 buildings: 28.2% by count, 38.9% by area. roof:shape values: hipped 199, gabled 111, flat 26, double_saltbox 7, pyramidal 6, skillion 6. building:levels values: 3→137, 2→135, 4→78, 1→51, 5→39. In the core sub-box (54.6735–54.688 N, 25.280–25.296 E) there are 1,124 buildings with height 12.0%, levels 19.8%, roof:shape 23.7%, roof:colour 28.6% and vertical info 31.4% (39.1% by area). Last-edit year: 912 in 2023, 282 in 2024, 277 in 2025 and 182 in 2026, so the data is actively maintained (top editors DaanLT 848, Tomas Straupis 241). Almost no source tags are present.",
+     "sources": [
+      "Overpass: [out:json][timeout:60];(way[\"building\"](54.672,25.278,54.690,25.305);relation[\"building\"](54.672,25.278,54.690,25.305););out count; → ways 1969, relations 96"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Simple 3D Buildings: 584 building:part objects (583 ways + 1 relation) inside 62 host buildings, mostly landmarks",
+     "detail": "Tag coverage inside the parts: height 95.5%, min_height 49.8%, roof:shape 47.3%, roof:height 11.1%, building:colour 84.1%, roof:colour 82.9%, building:levels 3.1%. Part roof shapes: hipped 90, gabled 72, pyramidal 40, skillion 19, dome 19, gambrel 12, round 11, onion 5, cone 5; 308 parts have no roof:shape, so they would render as flat prisms. Parts were mostly created in 2017 (284), 2021 (101) and 2023 (113) by a few mappers (chachafish 268, DaanLT 98). The parts-to-host mapping was done with a local point-in-polygon test on part centroids. The Cathedral count (82) was confirmed with an Overpass map_to_area query.",
+     "sources": [
+      "Overpass: (way[\"building:part\"](bbox);relation[\"building:part\"](bbox););out count; → 583 ways, 1 relation",
+      "Overpass: way(4870323);map_to_area->.a;(way[\"building:part\"](area.a);...);out count; → 82"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Landmark 3D coverage: most have part models; St Anne's and St Casimir's have none",
+     "detail": "Parts per landmark, with max part height:\n- Cathedral (way 4870323, Q1281237): 82 parts, 26 m; building height=20; part roofs 20 pyramidal, 4 dome.\n- Cathedral Bell Tower (way 81304730, Q110493778): 8 parts, 59 m; building height=57.\n- Gediminas Tower (way 24569542, Q1497616): 3 parts, 20 m, no roof shapes.\n- St Anne's (way 387669997, Q937290, kpd 17308): 0 parts, no height, no roof. A bare footprint.\n- St Francis/Bernardine (way 29491058, Q2453455, kpd 17311): 15 parts, 27 m.\n- St Michael's (rel 1447676, Q1982296, kpd 17313): 35 parts, 33 m, 3 onion roofs.\n- St Johns' church (way 24570013, Q2994043, kpd 26848): 13 parts, 20 m.\n- St Johns' bell tower (way 531861485, no name or wikidata): 22 parts, 48 m, 8 domes. The separate node 2471812239 has height=45.\n- St Casimir's (way 29503660, Q1539380, kpd 27304): 0 parts, no height, no roof, so no dome or crown.\n- Gates of Dawn (way 112746030, Q937212, kpd 27324): 1 flat part, 14 m.\n- Town Hall (way 111866535, Q1257109): 60 parts, 17.5 m; building levels=3, roof pyramidal.\n- Palace of the Grand Dukes (way 52710382, Q1284847): 44 parts, 34 m; building height=10.\n- Others: Orthodox Cathedral of the Theotokos 36 parts; Presidential Palace 57; St Paraskeva 6; Divine Mercy 5; Basilian bell tower (way 1519526052, kpd 27317) 0.",
+     "sources": [
+      "Overpass full dump + local point-in-polygon analysis (geo.py)"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "OSM landmark heights are not reliable: St Johns' bell tower is about 21 m too short",
+     "detail": "OSM's tallest St Johns' bell tower part is 48 m, and the tower node says 45. English Wikipedia gives the belfry as 69 m, the tallest structure in Old Town. Landmark silhouettes therefore need checking against survey or LiDAR data before they can be treated as authentic.",
+     "sources": [
+      "https://en.wikipedia.org/wiki/Church_of_St._Johns,_Vilnius"
+     ],
+     "confidence": "secondary-source"
+    },
+    {
+     "claim": "Street network: 3,034 highway ways, about 134 km in the bbox; surface well tagged, width almost never",
+     "detail": "By type (count / km): service 1,099 / 34.6 (1,015 are service=driveway); footway 1,002 / 41.5; path 209 / 13.4; residential 172 / 13.4; steps 168 / 2.53; living_street 127 / 7.9; secondary 77 / 5.5; primary 60 / 3.9; unclassified 58 / 4.5; pedestrian 39 / 4.3.\n\nSurface share by length, all highways: paving_stones 34.1%, asphalt 30.4%, none 10.4%, sett 7.6%, paved 3.4%, fine_gravel 3.4%, unhewn_cobblestone 2.2%, cobblestone 0.3%.\n\nStreets only (1,638 ways, 74.6 km): asphalt 51.6%, paving_stones 18.7%, sett 11.8%, untagged 7.7%, paved 3.8%, unhewn_cobblestone 3.2%, cobblestone 0.5%.\n\nOther tags: width on 50 ways (1.6%; 43 streets, 2.6%), est_width 0, lanes 7.1%, sidewalk* about 15% of streets, lit 45.7% (1,075 lit=yes), smoothness 12.7%, incline 6%, sett:pattern 0. Separate sidewalks: 71 footway=sidewalk and 27 footway=crossing ways, 172 crossing nodes, 74 kerb-tagged nodes. Pilies g. is sett and pedestrian or living_street.",
+     "sources": [
+      "Overpass full dump, local analysis"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Pedestrian areas and squares exist as polygons, but area:highway is unused",
+     "detail": "area:highway is used 0 times. There are 26 highway=pedestrian areas (17 closed ways with area=yes, 9 multipolygon relations); the closed ways total about 22,500 m². Named ones: Katedros a. (rel 5361117, paving_stones, 18,273 m²), Rotušės a. (way 54055201, sett, 3,141 m²), S. Daukanto a. (way 24570283, 2,477 m²), Didysis kiemas (way 389916380, 2,362 m²), Mažasis kiemas (way 1217520280, 505 m²). place=square polygons: Tibeto skveras, Užupio skveras, Paupio aikštė and 1 unnamed. Street widths therefore have to come from the gaps between building footprints, not from tags.",
+     "sources": [
+      "Overpass full dump, local analysis"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Arched gateways: 204 tunnel=building_passage ways (about 2.3 km)",
+     "detail": "By highway type: service 143, footway 54, living_street 4, and 1 each of path, residential and steps. 43 carry maxheight; none carry width. There are also 69 tunnel=yes ways (45 service, 23 footway, 1 primary). Some of these may be further passages or underground garages; not checked.",
+     "sources": [
+      "Overpass: way[\"tunnel\"=\"building_passage\"](54.672,25.278,54.690,25.305);out count; → 204"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Courtyards: implicit in building geometry, explicitly tagged only at Vilnius University",
+     "detail": "95 building multipolygons have 116 inner rings, which are enclosed courtyards. There are 14 man_made=courtyard polygons, all named Vilnius University courtyards (Didysis, Arkadų, Bibliotekos, Observatorijos, Sarbievijaus, Spaustuvės, Bursų, A. Mickevičiaus, S. Daukanto, S. Stanevičiaus, K. Sirvydo, M. Daukšos, L. Gucevičiaus, Alumnato). The courtyard key is unused; service=yard appears 3 times. Most courtyards are open gaps between footprints and would have to be found geometrically.",
+     "sources": [
+      "Overpass full dump, local analysis"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Street furniture and micro-features: good for trees, benches and steps; street lamps nearly absent",
+     "detail": "- Street lamps: 37 highway=street_lamp nodes in total (3 with lamp_mount), against lit=yes on 1,075 ways. Lamp placement must be procedural or come from another source.\n- Trees: 3,364 natural=tree nodes; 2 have species/genus, 67 height, 0 circumference. Also 58 tree_row ways and 28 natural=wood areas.\n- Benches and small props: 254 bench nodes, 83 waste baskets, 17 fountains, 70 artworks, 18 statues, 35 plaques, 21 surveillance cameras, 30 bollards.\n- Steps: 168 ways, 2.53 km; step_count on 107, incline on 134, handrail on 127.\n- Walls and barriers: barrier=retaining_wall 6 ways (325 m, no heights); barrier=wall 304 and city_wall 10 (together 10.2 km, 25 with height); fence 180; hedge 62; 280 gate nodes; 69 entrance nodes.\n- City walls: 10 barrier=city_wall ways (2 with height=3 m) plus historic=citywalls site relation 20288139 'Vilniaus siena' (9 member ways).\n- Other: a funicular railway line (Gediminas Hill) is present.",
+     "sources": [
+      "Overpass: node[\"highway\"=\"street_lamp\"](54.672,25.278,54.690,25.305);out count; → 37",
+      "Overpass full dump, local analysis"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Bridges and rivers: both rivers are mapped as centrelines and as water areas; bridge decks exist as polygons",
+     "detail": "- Vilnia (Vilnelė): waterway=river way 8659069 (alt_name Vilnelė, about 2.41 km in the bbox), waterway relation 8376442 (Q661684), and river-area multipolygon 3316378 (natural=water, water=river) through Užupis and Bernardine park.\n- Neris: centreline ways 539854110 and 539854112, waterway relation 2824450 (Q207903), river area multipolygon 968968.\n- Other water: reservoirs way 28754048 (1,340 m²) and relation 11330070, landuse=basin way 400957258; 5 ditches and 1 stream, 1 culvert.\n- Bridges: 23 bridge=yes ways (7 footway, 6 path, 2 primary, 2 unclassified, 2 service, 2 steps, 1 secondary, 1 residential), including Užupio, Bernardinų, Fluxus, Monmartro, Karaliaus Mindaugo, Pilies and Paplaujos. 6 man_made=bridge deck polygons, with bridge:structure arch or beam, for Užupio (Q4187341), Bernardinų (Q4085067), Karaliaus Mindaugo, Pilies, Paplaujos and 1 unnamed. 4 building=bridge objects.\n- No water-level or bank-height data.",
+     "sources": [
+      "Overpass full dump, local analysis"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Heritage tagging uses ref:lt:kpd (Cultural Values Register code), not heritage=*; wikidata is widespread",
+     "detail": "heritage=* has 0 uses in the bbox and in a wider box (54.66–54.70, 25.25–25.33), and whc:ref and boundary=protected_area also return nothing. ref:lt:kpd appears on 41 elements in the bbox (28 buildings, 10 historic=*, 1 place), plus 3 ref:lt:kpdold. Taginfo counts 3,408 uses worldwide (2026-09-26) and lists no wiki page. The values are KVR unique object codes, resolvable at https://kvr.kpd.lt/heritage/Pages/KVRDetail.aspx?lang=lt&MC=<code>; for example, 16073 is Vilniaus senamiestis. wikidata appears on 570 elements (81 buildings), wikipedia on 166. Most ordinary historic houses carry no heritage link at all.",
+     "sources": [
+      "https://taginfo.openstreetmap.org/api/4/key/stats?key=ref:lt:kpd",
+      "https://kvr.kpd.lt/heritage/Pages/KVRDetail.aspx?lang=lt&MC=16073",
+      "https://kpd.lrv.lt/lt/veiklos-sritys/teritoriju-planavimas/specialieji-planai-teritoriju-planavimas/informacija/"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "There is no Old Town or UNESCO boundary polygon in OSM",
+     "detail": "What OSM does have:\n- Place node 273185391 'Senamiestis' (place=suburb, ref:lt:kpd=16073, wikidata Q445649) at 54.68285, 25.28562.\n- Užupis place=quarter node 32872718 (Q945499).\n- Relation 968951 'Senamiesčio seniūnija' (admin_level=10). This is an administrative eldership, not the heritage boundary.\n\nThe authentic boundary of Vilniaus senamiestis (KVR 16073), UNESCO Historic Centre of Vilnius no. 541, has to come from KVR/KPD GIS data, whose licence was not checked.",
+     "sources": [
+      "Overpass boundary search query (see queries)",
+      "https://vilnius.lt/savivaldybe/miesto-pletra/teritoriju-planavimo-viesumas/pradedamas-rengti-unesco-pasaulio-paveldo-sarase-esancios-vertybes-vilniaus-istorinio-centro-nr-541-vilniaus-senamiescio-unikalus-kodas-kulturos-vertybiu-registre-16073-ir-jo-apsaugos-zonos-tvar"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "No usable terrain in OSM",
+     "detail": "Only 9 nodes carry ele: Gedimino kalnas peak 141, Gedimino kapo kalnas 163.7, Stalo kalnas 164.6, Bekešo kalnas 152.2, among others. There are 8 natural=cliff ways and incline on 183 ways. Terrain, including Gediminas Hill, the Vilnia valley and street slopes, needs an external DEM or LiDAR source.",
+     "sources": [
+      "Overpass full dump, local analysis"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "The Pilies g. / Šv. Mykolo g. junction exists: node 59971618 at 54.6831524 N, 25.2892466 E",
+     "detail": "The shared node joins Pilies g. ways 107612933 (highway=pedestrian, sett, 239 m) and 1130670046 (living_street, sett, 107 m) with Šv. Mykolo g. way 8020995 (living_street, sett, 58 m). Šv. Mykolo g. continues east to the Bernardine/St Anne area, with segments 510202499, 333503335, 8020996 and others, partly asphalt. Two independent Overpass servers returned the same node.",
+     "sources": [
+      "Overpass junction query (see queries), overpass.kumi.systems and overpass.private.coffee"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "ODbL: rendered output is a Produced Work, but the game's filtered or modified OSM extract is a Derivative Database that must be offered under ODbL",
+     "detail": "ODbL 1.0 definitions: a Produced Work is 'a work (such as an image, audiovisual material...)' made from the data, and a Derivative Database includes any extraction or re-arrangement. Sections 4.4b and 4.4c: extracting a Substantial part is a Derivative Database, and publicly using a Produced Work made from it triggers share-alike for that database. Section 4.6: you must offer the entire Derivative Database or 'the method of making the alterations (such as an algorithm)', free if distributed online. Section 4.7b: any DRM or obfuscation is allowed only with a parallel unrestricted copy.\n\nThe OSMF Produced Work guideline (2014) says the underlying database must also be published and does not cover 3D or games. The 2009–2010 ODbL use-case review, a community page based on legal counsel's answers, covers a game in a proprietary encrypted format: 'OK as long as the games company also provides an offer of the open derivative DB free from technical measures'. It also says a selective import counts as a Derivative Database.\n\nThe Substantial guideline sets the insubstantial threshold at under 100 features or an area of about 1,000 inhabitants. This bbox has more than 2,000 buildings, so it is Substantial.\n\nTrivial Transformations guideline: format or coordinate conversion, filtering and simplification are 'trivial', and for those it is enough to say where the equivalent OSM data can be obtained. Any corrected or added data (heights, parts) is not trivial.\n\nMixing sources: the Collective Database guideline (2016) keeps a non-OSM property free of share-alike if it 'uses either all OSM data or no OSM data for that property'. For example, all building heights could come from LiDAR, linked to OSM footprints. Horizontal Map Layers guideline: mixing OSM and non-OSM data within one feature type triggers share-alike.\n\nThe game's own art (textures, hand-modelled meshes not derived from OSM, code) can stay proprietary. This is interpretation, not legal advice.",
+     "sources": [
+      "https://opendatacommons.org/licenses/odbl/1-0/",
+      "https://osmfoundation.org/wiki/Licence/Community_Guidelines/Produced_Work_-_Guideline",
+      "https://wiki.openstreetmap.org/wiki/Open_Data_License/Use_Cases",
+      "https://osmfoundation.org/wiki/Licence/Community_Guidelines/Substantial_-_Guideline",
+      "https://osmfoundation.org/wiki/Licence/Community_Guidelines/Trivial_Transformations_-_Guideline",
+      "https://osmfoundation.org/wiki/Licence/Community_Guidelines/Collective_Database_Guideline_Guideline",
+      "https://osmfoundation.org/wiki/Licence/Community_Guidelines/Horizontal_Map_Layers_-_Guideline",
+      "https://osmfoundation.org/wiki/Licence/Licence_and_Legal_FAQ"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Required attribution wording and placement for a game",
+     "detail": "OSMF Attribution Guidelines (adopted 2021-06-25): credit 'OpenStreetMap' ('© OpenStreetMap contributors' is acceptable) and make clear the data is ODbL, for example by linking the text to https://www.openstreetmap.org/copyright. A qualifier such as 'Map data from OpenStreetMap' is allowed. For games, simulations and virtual worlds, attribution may go on a startup splash screen, in the game view, during gameplay, on the credits page or in a menu; splash text must be legible long enough to read. Interactive-map attribution may collapse after 5 s or on interaction if it stays reachable through an info button. ODbL 4.3 also offers an example notice: 'Contains information from OpenStreetMap, which is made available here under the Open Database License (ODbL)', with both names hyperlinked. For a browser game, a practical form is a persistent small credit in the pause/settings menu plus the splash screen, linked to /copyright, with a link to the downloadable ODbL extract or pipeline script.",
+     "sources": [
+      "https://osmfoundation.org/wiki/Licence/Attribution_Guidelines",
+      "https://opendatacommons.org/licenses/odbl/1-0/"
+     ],
+     "confidence": "confirmed-primary"
+    }
+   ],
+   "risks": [
+    "Height and roof data are missing for about 72% of buildings (61% of footprint area), so an 'only real data' city cannot come from OSM alone. Heights will need another official source (LiDAR, cadastre or building registry). Adding those heights to OSM footprints can trigger ODbL share-alike unless every height for that property comes from the non-OSM source.",
+    "OSM heights are wrong in places: St Johns' bell tower is 48 m in OSM against 69 m on Wikipedia. Landmark silhouettes should be checked against LiDAR or photos before being called authentic.",
+    "Simple 3D Buildings parts are coarse (prisms plus basic roof shapes) and 308 of 584 parts have no roof:shape. They are fine as blockout guides but not as console-quality landmark meshes. St Anne's, St Casimir's and the Basilian bell tower have no 3D data at all.",
+    "Street lamps (37 nodes), tree species (2 of 3,364), street widths (1.6%) and wall heights are essentially unmapped. The rain-at-night lighting and parkour layout will rely on procedural inference, which weakens the 'authentic' claim and should be flagged as such in the game.",
+    "A browser game sends glTF chunks to every client, which arguably conveys geometry derived from OSM. The team must publish the ODbL extract or transformation pipeline (sections 4.4, 4.6). Any asset encryption or obfuscation triggers 4.7b parallel distribution. None of this is settled for 3D meshes, so it is interpretation, not legal advice.",
+    "The public Overpass API rate-limits and times out after a handful of queries, and mirrors can be months stale (kumi was at 2026-06-01). The build pipeline should use a pinned, dated extract (Geofabrik or planet) for reproducibility and attribution.",
+    "The requested bbox includes non-Old-Town edges (a slice north of the Neris, the Naujamiestis edge), so the whole-bbox percentages mix Old Town with other districts. Core-box figures were also given. Counts include ways that cross the bbox edge.",
+    "No Old Town or UNESCO boundary exists in OSM. Using the admin eldership relation 968951 as the playable boundary would be wrong."
+   ],
+   "open_questions": [
+    "Where will the authentic Old Town boundary come from (KVR/KPD GIS for code 16073, or the UNESCO no. 541 map), and under what licence?",
+    "Which official Lithuanian source will supply building heights and roof forms (e.g. national LiDAR, the GRPK/georeferenced cadastre, the Registrų centras building registry with floor counts), and is its licence compatible with a public, possibly commercial game? Will all heights come from that source, to stay inside the Collective Database guideline?",
+    "Will the team push corrections (heights, missing landmark parts, St Johns' bell tower) back into OSM? That simplifies ODbL compliance to 'point to OSM plus publish the pipeline script'.",
+    "Will shipped assets be obfuscated or encrypted? If so, an unrestricted ODbL copy must be offered in parallel (4.7b).",
+    "Is the owner willing to accept procedurally inferred props (lamps, sett patterns, widths) clearly labelled as inferred, given that OSM has almost no lamp or width data?",
+    "The 69 tunnel=yes service/footway ways were not checked: are some of them additional courtyard passages or underground garages?"
+   ],
+   "queries_or_commands": [
+    "All queries were sent as: curl -s -A 'ShadowsOfVilniusResearch/0.1' --data-urlencode 'data=<QUERY>' https://overpass-api.de/api/interpreter  (without -A the server returns HTTP 406; mirrors: https://overpass.kumi.systems/api/interpreter, https://overpass.private.coffee/api/interpreter — stale, osm_base 2026-06-01)",
+    "[out:json][timeout:60];(way[\"building\"](54.672,25.278,54.690,25.305);relation[\"building\"](54.672,25.278,54.690,25.305););out count;",
+    "[out:json][timeout:240];nwr(54.672,25.278,54.690,25.305);out meta qt;   (full dump, saved to /private/tmp/claude-501/-Users-pauliuss-snbx/90dd4c2e-1692-47f0-8f53-18b3e44e3556/scratchpad/osm/bbox_all.json, analysed with python3 + geo.py in the same folder)",
+    "[out:json][timeout:60];(way[\"building:part\"](54.672,25.278,54.690,25.305);relation[\"building:part\"](54.672,25.278,54.690,25.305););out count;",
+    "[out:json][timeout:60];way(4870323);map_to_area->.a;(way[\"building:part\"](area.a);relation[\"building:part\"](area.a););out count;   (swap the way id for other landmarks: 81304730 Cathedral bell tower, 24569542 Gediminas Tower, 387669997 St Anne, 29491058 St Francis/Bernardine, 24570013 St Johns, 531861485 St Johns bell tower, 29503660 St Casimir, 112746030 Gates of Dawn, 111866535 Town Hall, 52710382 Palace of the Grand Dukes)",
+    "[out:json][timeout:60];way[\"tunnel\"=\"building_passage\"](54.672,25.278,54.690,25.305);out count;",
+    "[out:json][timeout:60];node[\"highway\"=\"street_lamp\"](54.672,25.278,54.690,25.305);out count;",
+    "[out:json][timeout:90];(nwr[\"heritage\"](54.66,25.25,54.70,25.33);nwr[\"whc:ref\"](54.66,25.25,54.70,25.33);nwr[\"boundary\"=\"protected_area\"](54.66,25.25,54.70,25.33);nwr[\"protect_class\"](54.66,25.25,54.70,25.33);nwr[\"name\"~\"enamiest|Old Town|Užupis|Uzupis\"](54.66,25.25,54.70,25.33);nwr[\"place\"~\"quarter|neighbourhood|suburb\"](54.66,25.25,54.70,25.33););out tags center;",
+    "[out:json][timeout:60];way[\"highway\"][\"name\"=\"Pilies g.\"](54.672,25.278,54.690,25.305)->.p;way[\"highway\"][\"name\"=\"Šv. Mykolo g.\"](54.672,25.278,54.690,25.305)->.m;node(w.p)->.pn;node(w.m)->.mn;node.pn.mn;out;   → node 59971618 @ 54.6831524,25.2892466",
+    "Suggested (not run individually; the same numbers were computed locally from the dump): [out:json];way[\"building\"][\"height\"](54.672,25.278,54.690,25.305);out count;  — repeat with [\"building:levels\"], [\"roof:shape\"], [\"roof:colour\"]; way[\"highway\"][\"surface\"~\"^(sett|cobblestone|unhewn_cobblestone|paving_stones)$\"](bbox);out count;  nwr[\"ref:lt:kpd\"](bbox);out tags center;",
+    "curl -s 'https://taginfo.openstreetmap.org/api/4/key/stats?key=ref:lt:kpd'   (3,408 uses worldwide)"
+   ]
+  },
+  "verification": null
+ },
+ {
+  "topic": "imagery-historical",
+  "research": {
+   "summary": "None of the proprietary 3D sources can be used to build or ship the game city. Google Photorealistic 3D Tiles, and any Google Earth output, cannot be cached, baked, extracted, traced or used as a modelling reference. Since 8 July 2025, Photorealistic 3D Tiles are also switched off entirely (HTTP 403) for projects billed to an EEA address, which includes a Lithuanian billing account. Routing the same Google tiles through Cesium ion carries the same restrictions, and those tiles cannot be clipped for offline use. Cesium ion's own content (OSM Buildings, World Terrain) can be exported legally as perpetual \"Value-Added Clips\", but for Vilnius that gives nothing better than processing OSM and national data yourself.\n\nThe open, authentic non-vector sources are:\n- **Mapillary street imagery.** Coverage is dense on every Old Town street named in the task. It is CC BY-SA, and the API exposes 2048px and original-size images, SfM point clouds, meshes and camera parameters. That makes it a good façade-measurement reference; any texture derived from its pixels would have to be released under CC BY-SA.\n- **Wikimedia Commons.** At least 12,213 files under Vilnius Old Town (a lower bound). About 72% are share-alike licensed and about 12% are public domain or CC0. There are large public-domain historic image sets (Bułhak photographs, Album Wileńskie, Smuglewicz drawings).\n- **Historic plans.** Public-domain scans on Commons run from 1648 to 1875, several at 8,000 to 20,000 px. The 1737 Fürstenhoff plan is only 2048 px there.\n- **Vilniaus DNR (ID Vilnius).** The best find: plans for 1808, 1845, 1911, 1938 and 1977, already georeferenced in EPSG:3346, plus vector reconstructions with per-building polygons (1808 buildings carry material and accuracy fields). They are exposed only as render-only ArcGIS services with no stated licence, so the data has to be requested from ID Vilnius.\n\nKartaView has essentially no Old Town coverage. Panoramax is sparse. Most landmark scans on Sketchfab (St Anne's, Gediminas Hill and Tower, Cathedral, Old Town model) are view-only, all rights reserved. There are no usable scans of the Gate of Dawn, Town Hall, Bell Tower or Palace.\n\nFor a pre-1800 setting, several landmarks are anachronistic in their present form:\n- Cathedral: neoclassical rebuild 1779/1783–1801.\n- Town Hall: neoclassical rebuild 1785–1799, which also lost its tower.\n- Palace of the Grand Dukes: demolished 1801, rebuilt 2002–2018.\n- City walls: demolished 1799–1805.\n- St Anne's belfry: 1870s.\n- Gate of Dawn chapel: rebuilt 1828–30.\n- Gediminas Tower: rebuilt 1933.\n- Great Synagogue: stood 1633–1940s, demolished by 1957, so it is absent from the modern city.\n\nLithuania has no commercial freedom of panorama (Copyright Law Art. 28(2)). Modern works still in copyright, such as the Palace reconstruction and the 1996 Gediminas monument, may need rights clearance for a commercial game.",
+   "findings": [
+    {
+     "claim": "Google Maps Platform ToS §3.2.3 forbids scraping, caching, and creating content (including 3D models) from Google Maps Content",
+     "detail": "The ToS page shows 'Last modified August 26, 2026'. §3.2.3 'Restrictions Against Misusing the Services' contains: (a) 'No Scraping': 'Customer will not export, extract, or otherwise scrape Google Maps Content for use outside the Services', including pre-fetch, store, rehost or bulk download of tiles. (b) 'No Caching': 'except as expressly permitted under the Maps Service Specific Terms'. (c) 'No Creating Content From Google Maps Content', with examples including 'create 3D building models from 45° Imagery' and 'build terrain models based on elevation values'. (d) 'No Re-Creating Google Products or Features'. (e) 'No Use With Non-Google Maps'. Other relevant clauses: §3.2.1 'General Restrictions' (no copying, modifying, derivative works; no selling or distributing the Services) and §3.2.2(b) 'Attribution' (attribution must not be modified, obscured or deleted). Under these terms nothing from Google can be baked into glTF chunks or lightmaps, nor shipped in the game.",
+     "sources": [
+      "https://cloud.google.com/maps-platform/terms"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "The current Service Specific Terms contain no Map Tiles API section, so there is no caching exception for Photorealistic 3D Tiles",
+     "detail": "The non-EEA Service Specific Terms (Last modified June 10, 2026) list sections for Address Validation, Air Quality, Google Earth, Places, Solar, Weather and others. None covers the Map Tiles API. The only general exception is '3. Google ID Caching' (place_id, pano_ID, video_ID). The §3.2.3(b) No Caching ban therefore applies to 3D Tiles content in full.",
+     "sources": [
+      "https://cloud.google.com/maps-platform/terms/maps-service-terms"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Map Tiles API Policies ban offline use, geodata extraction and any 3D object derived from Photorealistic 3D Tiles",
+     "detail": "Page last updated 2026-09-24.\n- 'Pre-fetching, caching, or storage of content': 'you must not pre-fetch, index, store, or cache any Content except under the limited conditions stated in the terms'.\n- The API is for map visualization only. Non-visualization uses are listed as not allowed: 'Image analysis', 'Machine interpretation', 'Object detection or identification', 'Geodata extraction or resale', 'Offline uses'. Clients must honour Cache-Control max-age, stale-while-revalidate, must-revalidate and private.\n- 'Geodata overlays with Photorealistic 3D Tiles': 'You may overlay your own 3D objects on Photorealistic 3D Tiles as long as the 3D objects aren't extracted, traced, or otherwise derived by hand or machine from Photorealistic 3D Tiles.' This rules out using the tiles as a modelling reference.\n- 'Display logo and data attributions in hybrid visualizations': if your own models are mixed with Google tiles, the UI must state which parts are Google.\n- 'Display the Google Maps logo with third-party renderers': the renderer's logo must not overlap the Google logo. Logo height is 16–19 dp.\n- Promotional videos are limited to 30 s or less, must be marked 'for promotional purposes only', and may not be resold.\n\nInterpretation (unverified): using the mesh for collision or a navmesh is arguably 'machine interpretation'.",
+     "sources": [
+      "https://developers.google.com/maps/documentation/tile/policies"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Photorealistic 3D Tiles are not available to projects billed to an EEA address (for example Lithuania)",
+     "detail": "The EEA Map Tiles page (last updated 2026-09-24) says adjustments apply to projects created after 8 July 2025 with an EEA billing address, or to older projects that leave the 'Unmodified State'. It states: 'Photorealistic 3D tiles are not available' and 'Satellite image tiles in 2D Tiles are not available'. Such requests return HTTP 403. The suggested alternative is 3D Maps in the Maps JavaScript API, which is a Google map component, not a three.js asset.\n\nThe EEA ToS (Last modified August 26, 2026) drops three clauses: No Re-Creating, No Use With Non-Google Maps, and No Use in Embedded Vehicle Systems. It keeps No Scraping, No Caching and No Creating Content. Its No Creating Content example (i) now also covers tracing 'from Street View imagery'.",
+     "sources": [
+      "https://developers.google.com/maps/comms/eea/map-tiles",
+      "https://developers.google.com/maps/comms/eea/faq",
+      "https://cloud.google.com/terms/maps-platform/eea",
+      "https://cloud.google.com/terms/maps-platform/eea/maps-service-terms"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Google forbids reconstructing 3D models from Google Earth, Earth Pro or Earth Studio output",
+     "detail": "Google's Geo brand guidelines say: 'You may not use output, or use third party tools to capture output, from Google Earth, Google Earth Pro, or Earth Studio to reconstruct 3D models or create similar content'. Using Google Earth screenshots or captures as a Vilnius modelling reference is therefore also excluded.",
+     "sources": [
+      "https://about.google/brand-resource-center/products-and-services/geo-guidelines/"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Vilnius coverage in Photorealistic 3D Tiles and its visual quality are unverified",
+     "detail": "Google's coverage tool renders a Maps Datasets feature layer (dataset bcf6598c-7603-4698-9493-9e927d8d3d38) and has no downloadable list, so Vilnius could not be checked. Secondary sources cite '2,500+ cities across 49 countries'. The 3D Tiles docs require a renderer that shows copyright attribution. They name CesiumJS 1.91+ and Cesium for Unreal 1.12+; the NASA-AMMOS 3DTilesRendererJS Google plugin is not named in the docs. One root tileset request allows at least 3 hours of tile requests. Even with coverage, the meshes have daylight baked in, which would clash with a night-and-rain look.",
+     "sources": [
+      "https://developers.google.com/maps/documentation/javascript/3d/coverage",
+      "https://developers.google.com/maps/documentation/tile/3d-tiles",
+      "https://mapsplatform.google.com/resources/blog/create-immersive-3d-map-experiences-photorealistic-3d-tiles/"
+     ],
+     "confidence": "unverified"
+    },
+    {
+     "claim": "Cesium ion terms: no offline use, prominent attribution, and no commercial integration without a separate licence; Clips are the only perpetual export route",
+     "detail": "Cesium ion ToS: major update August 20, 2025; minor update August 27, 2025.\n- §2.2 'Permitted Use' allows displaying Cesium Data Output externally, but only during the Term.\n- §2.2.2 'Offline Use' forbids copying, storing or redistributing Cesium Data Output offline, except Clips.\n- §2.2.3 'Attribution' requires the 'Cesium ion' logo 'prominently displayed on the main application window'.\n- §2.2.4(xiii): no use in or for training AI.\n- §2.3 'Clips' gives a 'perpetual… license to use, reproduce, distribute… sell' Value-Added Clips, meaning a clip built into a larger work.\n- The introduction says the licence 'does not permit you to include ion in your own solution that you make commercially available to other organizations'.\n\nPricing:\n- Community: free, 'Personal and non-commercial use'.\n- Commercial: $149/month individual, $524/month team.\n- Premium: $499/month individual, $874/month team.\n- Google 3D Tiles quota: 1,000 / 5,000 / 10,000 root tiles per month.\n- Clips: 10 / 25 / 50 per month.\n- Footnote: 'Contact us if you plan to integrate Cesium ion into solutions used outside your organization.'",
+     "sources": [
+      "https://cesium.com/legal/terms-of-service/",
+      "https://cesium.com/platform/cesium-ion/pricing/",
+      "https://cesium.com/legal/cesium-global-3d-content-tos/"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Google tiles via Cesium ion carry the same Google restrictions and cannot be clipped",
+     "detail": "Appendix B-2 (Major updates August 20, 2025) binds users to the Map Tiles API Policies and repeats No Scraping (including (vi) 'include any Google Maps Content in any electronic or printed documents'), No Caching, No creating content, No Re-Creating, and No Use with Non-Google Maps. It also bans apps directed at children under COPPA. Cesium's clipping blog says Google Photorealistic 3D Tiles are not available for clipping, while Cesium World Terrain, World Bathymetry, OSM Buildings and Sentinel-2 are. Unverified: whether the EEA 403 block reaches EEA users of Cesium, which holds a US Google contract.",
+     "sources": [
+      "https://cesium.com/legal/terms-for-google/",
+      "https://cesium.com/blog/2024/05/08/cesium-ion-clipping/"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Cesium OSM Buildings is only simple OSM extrusions and adds nothing for an authentic Vilnius",
+     "detail": "The dataset has over 350 million buildings, is updated quarterly and requires the attribution '© OpenStreetMap contributors'. Where OSM has no height, cesium#estimatedHeight assumes 3 m per level with at least 1 level. There are no façades or detailed roofs. It can be exported as a glTF Value-Added Clip, but building your own geometry from OSM under ODbL gives the same data with more control. Cesium World Terrain resolution for Lithuania is unverified; national LiDAR will almost certainly be better.",
+     "sources": [
+      "https://cesium.com/platform/cesium-ion/content/cesium-osm-buildings/"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Mapillary coverage of Old Town streets is dense",
+     "detail": "Checked visually in the Mapillary web app at zoom 15–17 around 54.681 N, 25.289 E. Continuous, overlapping sequences cover Pilies, Didžioji, the Aušros Vartų / Gate of Dawn area, Literatų, Bokšto, Bernardinų, Maironio, the Užupis streets and the university courtyards. A sample image on Pilies g. (54.68319, 25.28928), by user 'kedas', is dated 1 Oct 2019. Image counts and panorama share were not measured.",
+     "sources": [
+      "https://www.mapillary.com/app/?lat=54.6815&lng=25.2890&z=15.3"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Mapillary imagery is CC BY-SA and its API supplies geometry, but textures made from it inherit share-alike",
+     "detail": "Mapillary Terms (Effective February 15, 2024), §3: 'Your use of any User Content provided by other users is subject to the Creative Commons Share Alike (CC BY-SA) license, unless we indicate otherwise' (a CC BY-NC-SA subset is possible). §12 'Use of the Mapillary Services for Commercial Purposes' limits commercial use to '(i) improvement, training, and development of products, services, maps… applications, software… datasets' and '(ii) services for clients'. Users must never re-identify or unblur faces or plates. The Graph API offers thumb_2048_url, thumb_original_url, camera_parameters, computed_rotation, sfm_cluster (point cloud) and mesh. Entity APIs are limited to 60,000 requests per minute per app.\n\nInterpretation (unverified, not legal advice): measuring or modelling façades from photos copies facts, not the photographer's expression. Pixel-derived textures, however, are adapted material that must be CC BY-SA 4.0 with per-image attribution. Consumer-camera shots with daylight baked in are poor PBR texture sources.",
+     "sources": [
+      "https://www.mapillary.com/terms",
+      "https://help.mapillary.com/hc/en-us/articles/115001770409-CC-BY-SA-license-for-open-data",
+      "https://www.mapillary.com/developer/api-documentation"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "KartaView has essentially no coverage on the target Old Town streets",
+     "detail": "Queried api.openstreetcam.org/2.0/photo with radius 2000. The nearest photo to each street was:\n- Pilies g.: ≈181 m\n- Literatų g.: ≈411 m\n- Didžioji g.: ≈501 m\n- Užupio g.: ≈664 m\n- Aušros Vartų g.: ≈863 m\n\nOnly a handful of sequences, dated 2017-08 to 2022-08, lie within 2 km. Caveat: the endpoint appears to return one photo per sequence. Licence is CC BY-SA 4.0 per the OSM wiki; KartaView has been owned by Grab since Dec 2019.",
+     "sources": [
+      "https://api.openstreetcam.org/2.0/photo/?lat=54.6840&lng=25.2893&radius=2000&itemsPerPage=100",
+      "https://wiki.openstreetmap.org/wiki/KartaView"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Panoramax adds a little extra CC BY-SA street imagery",
+     "detail": "A bounding-box search (25.280–25.300 E, 54.674–54.690 N) returned 90 images, all CC-BY-SA-4.0. They are mostly from 2024-08 (39) and 2026-06 (28), with the rest from 2013–2025. Providers include Robot8A, mapcomplete and p4n-pics. Coverage is sparse compared with Mapillary.",
+     "sources": [
+      "https://api.panoramax.xyz/api/search?bbox=25.280,54.674,25.300,54.690&limit=100"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Wikimedia Commons is rich for Old Town landmarks, but its licences are mostly share-alike",
+     "detail": "Recursive file counts (deepcat search, lower bounds):\n- Vilnius Old Town: 12,213\n- Palace of the Grand Dukes of Lithuania: 1,367\n- Vilnius Cathedral: 1,288\n- Gediminas Tower: 801\n- Church of St. Anne in Vilnius: 407\n- Gate of Dawn: 393\n- Užupis: 284\n- Vilnius Cathedral Bell Tower: 255\n\nDirect files per street category: Aušros Vartų Street 180, Didžioji Street 137, Pilies Street 131, Literatų Street 49, Užupio Street 13.\n\nLicence mix in a sample of 1,365 files from 8 categories:\n- CC BY-SA 4.0: 544\n- CC BY-SA 3.0: 308\n- CC BY-SA 2.0: 130\n- CC BY 2.0: 119\n- Public domain: 111\n- CC0: 54\n- CC BY 3.0: 41\n- CC BY 4.0: 33\n\nThat is about 72% share-alike and about 12% PD or CC0. Median resolution is about 10.5 MP, and 48% of files are 12 MP or more.",
+     "sources": [
+      "https://commons.wikimedia.org/wiki/Category:Vilnius_Old_Town",
+      "https://commons.wikimedia.org/w/api.php"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Commons holds large public-domain historic image sets useful for an earlier-era look",
+     "detail": "- Category:Photographs by Jan Bułhak: 778 files. Bułhak died in 1950, so under life+70 his work is public domain from 2021 (death date from secondary sources).\n- Category:Album Wileńskie (Wilczyński lithographs): 201 files.\n- Category:Vilnius in art: 690 files.\n- Category:Franciszek Smuglewicz (1780s–90s views): 80 files.\n- Category:Napoleon Orda: 25 files.\n\nCategory:History of Vilnius has 2,463 direct files.",
+     "sources": [
+      "https://commons.wikimedia.org/wiki/Category:Photographs_by_Jan_Bu%C5%82hak",
+      "https://commons.wikimedia.org/wiki/Category:Album_Wile%C5%84skie",
+      "https://commons.wikimedia.org/wiki/Category:Vilnius_in_art"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Lithuania has no commercial freedom of panorama, so modern works in a commercial game need care",
+     "detail": "Copyright Law No. VIII-1185, as amended to XII-1183 of 2014: Art. 28(1)(1) allows reproducing works of architecture or sculpture sited permanently in public places. Art. 28(2) switches that off 'when a work of architecture or a sculpture is the main subject of representation in the reproduction, and when this is done for direct or indirect commercial advantage'. The term is life + 70 years.\n\nWorks likely still in copyright:\n- Palace of the Grand Dukes reconstruction (1993 design competition won by Rimas Grigas; built 2002–2018).\n- Gediminas monument (1996, Vytautas Kašuba).\n- Cathedral roof statues re-made in 1997 by Stanislovas Kuzma.\n- Possibly Jan Borowski's 1933 rebuild of Gediminas Tower.\n\nWhether this law reaches a 3D model in a game is an unverified legal question.",
+     "sources": [
+      "https://commons.wikimedia.org/wiki/Commons:Copyright_rules_by_territory/Lithuania"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Most Sketchfab scans of Vilnius landmarks are view-only; only minor CC-licensed scans exist",
+     "detail": "Found via the Sketchfab v3 search API. View-only, all rights reserved, no licence:\n- Saulius.Zaura drone photogrammetry: 'Church of St. Anne. Vilnius. Lithuania' (1.54M faces, 2023, https://sketchfab.com/3d-models/148b845bb7db4e6fa330f0f58f3f9c0c); 'Churches of St.Anne & St.Francis and St.Bernard' (1.0M, 2023); 'Gediminas' Hill and Tower photogrammetry' (800k, 2023, https://sketchfab.com/3d-models/2d8584af742b4e02a467d47d8fef5593); 'Gediminas Castle digital reconstruction' (1.26M, 2024); 'Upper Castle reconstruction' (601k, 2024); St Peter & Paul; Dominican Holy Spirit; St Gertrude.\n- TerraModus 'Vilniaus senamiesčio 3D modelis' (880k, 2015, https://sketchfab.com/3d-models/9075d1689fff4d25b3eb3175514787f5).\n- 'Vilnius Cathedral' by jonyte (281k, 2019).\n- POLONIKA scans of the Holy Spirit church interiors.\n\nPaid store licence: 'Vilnius Cathedral' by gestLT (4.6k faces, Standard).\n\nDownloadable under open licences:\n- hillforts 'Vilniaus piliavietė' (CC BY-SA, 94.5k faces, LiDAR-derived, https://sketchfab.com/3d-models/e70a897e7bea4be483c438699fde4c51).\n- meshkamenas 'Vilnius Archway Old Town PhotoScan' (CC BY, iPhone LiDAR, https://sketchfab.com/3d-models/fb27447f80b9480fbdb2df45f265b692).\n\nNothing usable was found for the Gate of Dawn, Town Hall, Bell Tower or Palace. Sketchfab's Standard licence allows commercial games (no standalone redistribution); Editorial forbids commercial use. The view-only scans could only be used by licensing them from their creators.",
+     "sources": [
+      "https://api.sketchfab.com/v3/search?type=models&q=vilnius",
+      "https://sketchfab.com/licenses"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Vilniaus DNR (ID Vilnius) has georeferenced 1808/1845/1911/1938/1977 plans and per-building vector reconstructions, but only as render-only services",
+     "detail": "The portal launched on 1 March 2023. Services at opencity.idvilnius.lt/gis/rest/services/Kultura/, in EPSG:3346 (LKS94):\n- VilniausDNR_T1808: cached raster, 9 zoom levels down to 0.132 m/px.\n- VilniausDNR_T1845: cached raster down to 0.053 m/px.\n- VilniausDNR_vector: 61 layers, including building polygons Pastatai_1808, _1845, _1911, _1938, _1977 and _2023 (1808 fields: Tikslumas = accuracy, Medziaga = material, Maldos_namai = house of worship), plus Gatvės (streets), Hidrografija (hydrography) and Topografija (topography) per year.\n- MAB_istoriniai_zemelapiai: Query/Data enabled, 48 georeferenced plans from the 1840s to 1964.\n\nThe vector service is Map-only; queries return 'Requested operation is not supported'. copyrightText is empty. data.gov.lt lists a 'Vilniaus DNR' dataset (9 tables: streets, maps, photos and so on) with no licence found. This would be the best authentic source for a historical layout if ID Vilnius releases the data.",
+     "sources": [
+      "https://opencity.idvilnius.lt/gis/rest/services/Kultura/VilniausDNR_vector/MapServer?f=json",
+      "https://opencity.idvilnius.lt/gis/rest/services/Kultura/VilniausDNR_T1808/MapServer?f=json",
+      "https://opencity.idvilnius.lt/gis/rest/services/Kultura/MAB_istoriniai_zemelapiai/MapServer?f=json",
+      "https://zemelapiai.vplanas.lt/vilniausdnr/lt",
+      "https://idvilnius.lt/projects/vilniaus-dnr/",
+      "https://vilnius.lt/naujienos/besidomintiems-sostines-istorija-pristatytas-interneto-portalas-vilniaus-dnr-kviecia-pazinti-vilniu-per-zemelapius"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Public-domain scans of historic Vilnius plans on Commons, with resolution and holding institution",
+     "detail": "Category:Old maps of Vilnius has 133 files. Key plans:\n- Getkant 1648: 6313×8842, VU Library.\n- 1737 plan (the Fürstenhoff plan), 'Vilnia. Вільня (1737).jpg': only 2048×1454, credited to Vilniaus Vaizdų Archyvas. Secondary sources say the original is in the Berlin State Library map department, found in 1940, with dating and authorship debated.\n- 1776: 1500×1291.\n- Jan Kunicki 1805 Old Town plan: 8137×6230, LVIA F.1135 ap.23 b.65.\n- Late-18th-century plan published 1912: 9951×8029, Biblioteka Narodowa ZZK 6 016.\n- 1803: 1350×993, BnF.\n- 1837: 7042×8718, VU Library.\n- 1842: 16106×13339, Biblioteka Narodowa ZZK 3 501.\n- 1866: 20323×23173, Biblioteka Narodowa ZZK 8 170.\n- 1875: 8663×10450, VU Library.\n- Many 1790s–1810s district plans at 7,000–10,000 px.\n\nThe 1808 plan (9 Oct 1808, 4 sheets) at MAB eLibrary (F322-1730, 20.6 MB PDF) carries an 'InC' (In Copyright) rights statement on the scan. The VU Library cartography collection lists 1,029 items; its licences were not checked. None of the Commons scans is georeferenced, but Vilniaus DNR already georeferenced 1808 and 1845.",
+     "sources": [
+      "https://commons.wikimedia.org/wiki/Category:Old_maps_of_Vilnius",
+      "https://commons.wikimedia.org/wiki/File:Vilnia._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F_(1737).jpg",
+      "https://commons.wikimedia.org/wiki/File:Vilnia._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F_(1842).jpg",
+      "https://elibrary.mab.lt/handle/1/28538",
+      "https://www.lituanistika.lt/content/17537",
+      "https://kolekcijos.biblioteka.vu.lt/kartografija"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "Vilnius Cathedral's present neoclassical form dates from 1779/1783–1801; its roof statues are 1997 replicas",
+     "detail": "The south tower collapsed in 1769. Rebuilding to Laurynas Gucevičius's neoclassical design ran from 1779 to 1783 (sources differ; 1783 is often given as the start), and the interior was finished in 1801. Kazimierz Jelski's roof statues (1786–1792) were removed in 1950 and restored in 1997. Before 1769 the building was Baroque/Renaissance, with two front towers added after the 1610 fire. The Baroque St Casimir Chapel (1623–1636) survives.",
+     "sources": [
+      "https://en.wikipedia.org/wiki/Vilnius_Cathedral"
+     ],
+     "confidence": "secondary-source"
+    },
+    {
+     "claim": "Palace of the Grand Dukes: demolished 1801, rebuilt 2002–2018",
+     "detail": "Sold off for its bricks from 1799 and almost completely demolished in 1801. Ground was broken in summer 2002. It opened partially in 2009, Block A was finished on 23 May 2013 and opened to the public on 6 July 2013, and Block B plus the whole museum opened on 6 July 2018. It is a modern reconstruction of the 16th–17th-century palace and did not exist in 1801–2002.",
+     "sources": [
+      "https://en.wikipedia.org/wiki/Palace_of_the_Grand_Dukes_of_Lithuania"
+     ],
+     "confidence": "secondary-source"
+    },
+    {
+     "claim": "Vilnius Town Hall: tower rebuilt 1749–1769, then the whole building rebuilt as neoclassical 1785–1799",
+     "detail": "The Gothic town hall is first mentioned in 1503. After the 1748–1749 fires, J. K. Glaubitz rebuilt the tower as an octagonal three-tier masonry tower, finished in 1769. The present tower-less neoclassical building by Laurynas Gucevičius was built in 1785–1799 on the old walls and cellars (English Wikipedia gives 1799 as completion). A pre-1785 setting needs the Gothic/Baroque town hall with its tower.",
+     "sources": [
+      "https://lt.wikipedia.org/wiki/Vilniaus_rotu%C5%A1%C4%97",
+      "https://en.wikipedia.org/wiki/Town_Hall,_Vilnius"
+     ],
+     "confidence": "secondary-source"
+    },
+    {
+     "claim": "Cathedral Bell Tower: medieval base, tiers from 1522 and the 18th century, present finish early 19th century",
+     "detail": "The base is a Lower Castle defensive tower; a bell tower was built on top in 1522. English Wikipedia says the upper parts were added in the 18th century and the neoclassical finish in the 19th century. Go Vilnius says it 'acquired its current appearance in the beginning of the 19th century'. It is 52 m tall, 57 m with the cross, and a 17th-century clock with two bells is mentioned. The exact date of the top stage is unverified.",
+     "sources": [
+      "https://en.wikipedia.org/wiki/Cathedral_Square,_Vilnius",
+      "https://www.govilnius.lt/visit-vilnius/places/vilnius-cathedral-bell-tower",
+      "https://www.bpmuziejus.lt/bell-tower/"
+     ],
+     "confidence": "secondary-source"
+    },
+    {
+     "claim": "Gediminas Tower's present form comes from Jan Borowski's 1933 rebuild",
+     "detail": "The first brick castle was completed in 1409 under Vytautas. The three-storey tower was rebuilt in 1933 by Jan Borowski. The hilltop was also affected by slope stabilisation works; the exact dates of those are unverified.",
+     "sources": [
+      "https://en.wikipedia.org/wiki/Gediminas%27s_Tower"
+     ],
+     "confidence": "secondary-source"
+    },
+    {
+     "claim": "Other era flags: city walls, Gate of Dawn chapel, St Anne's belfry, Great Synagogue, Presidential Palace",
+     "detail": "- City wall: built 1503–1522 and demolished 1799–1805. The Gate of Dawn was the only gate left.\n- Gate of Dawn chapel: wooden chapel 1668–1672, burned 1711, brick chapel c. 1713–1715, stucco altar 1785–87, rebuilt 1828–1830 with the present neoclassical look and gallery.\n- St Anne's: the church (1495–1500) is essentially unchanged, but the neo-Gothic belfry beside it dates from the 1870s (Chagin).\n- Great Synagogue: completed 1633, blasted in 1947 and cleared by 1957, so it is absent from modern data.\n- Presidential Palace: rebuilt 1824–1834 (Stasov).\n- The major fires of 1737 and 1748–49 led to the Vilnian Baroque rebuilding (Glaubitz, 1740s–1760s), so the 1737 Fürstenhoff plan predates much of the Baroque skyline.",
+     "sources": [
+      "https://en.wikipedia.org/wiki/Wall_of_Vilnius",
+      "https://en.wikipedia.org/wiki/Gate_of_Dawn",
+      "https://en.wikipedia.org/wiki/Church_of_St._Anne,_Vilnius",
+      "https://en.wikipedia.org/wiki/Great_Synagogue_of_Vilna",
+      "https://en.wikipedia.org/wiki/Presidential_Palace,_Vilnius",
+      "https://en.wikipedia.org/wiki/Vilnian_Baroque"
+     ],
+     "confidence": "secondary-source"
+    },
+    {
+     "claim": "ID Vilnius publishes a 2025 night orthophoto and orthophoto series back to 1997 (reference use only; licence unclear)",
+     "detail": "Rastrai/Naktinis_orto: flown in the evenings of 2025-09-29 to 2025-10-01 over the central city including the Old Town, with a thermal-style companion layer (Naktinis_orto_thermal). copyrightText reads '© Vilniaus miesto savivaldybė, 2025 © UAB ID Vilnius, 2025' and tile export is disabled. It is useful as a real street-lighting reference for a night setting. Also available: orthophotos 1997, 2005–2024 and declassified satellite images 1965–1982. Reuse licence is unverified.",
+     "sources": [
+      "https://opencity.idvilnius.lt/gis/rest/services/Rastrai/Naktinis_orto/MapServer?f=json",
+      "https://opencity.idvilnius.lt/gis/rest/services/Ortofoto?f=json"
+     ],
+     "confidence": "confirmed-primary"
+    },
+    {
+     "claim": "The municipal photogrammetric 3D mesh of Vilnius exists, but its download and licence status is unknown",
+     "detail": "3d.vilnius.lt has a realistic 3D model from 2020 made by Vilniaus planas / ID Vilnius from '72 flights… 30,000 high-resolution' images, according to LRT. The municipality has said COLLADA, 3DS and OBJ downloads were planned. The GitHub repo vilnius/3dVilnius is only a WebApp Builder shell with no licence. This is a candidate authentic mesh or reference if ID Vilnius grants rights.",
+     "sources": [
+      "https://www.lrt.lt/en/news-in-english/19/1184219/public-3d-map-of-vilnius-helps-planners-and-the-public",
+      "https://3d.vilnius.lt/",
+      "https://idvilnius.lt/en/projects/3d-models-of-vilnius-city/",
+      "https://github.com/vilnius/3dVilnius"
+     ],
+     "confidence": "secondary-source"
+    }
+   ],
+   "risks": [
+    "If the project is billed to an EEA (for example Lithuanian) account, Photorealistic 3D Tiles return HTTP 403. Even outside the EEA they can only be streamed live as a Google-attributed backdrop. They cannot be baked, lit into lightmaps, cached, chunked or modelled from, and using the mesh for collision is arguably banned 'machine interpretation'.",
+    "Using Google tiles or Google Earth in any way as a modelling reference breaks explicit clauses: Map Tiles 'Geodata overlays' and the Geo guidelines ban on reconstructing 3D models. Contributors must be told, because it could contaminate the whole asset set.",
+    "Cesium ion: the Community plan is non-commercial only. A public game counts as 'solutions used outside your organization', which needs an integration licence. Cesium Data Output must stop being displayed when the subscription term ends, except Value-Added Clips. Google content via Cesium cannot be clipped.",
+    "CC BY-SA share-alike: textures or decals derived from Mapillary, Panoramax, KartaView or most Commons photos (about 72% are share-alike) must be released under CC BY-SA 4.0 with per-image attribution. How far share-alike reaches into a combined game build is an unsettled legal question.",
+    "Lithuanian Copyright Law Art. 28(2) (no commercial freedom of panorama) may require clearance for modern works: the Palace reconstruction (2002–2018), the Gediminas monument (1996), the 1997 roof statues and possibly the 1933 tower rebuild.",
+    "The Vilniaus DNR vectors and rasters, the night orthophoto and the municipal 3D mesh have no stated reuse licence, and the vector service blocks queries. Scraping rendered tiles would be both a legal and an ethical problem, so a formal request to ID Vilnius is needed.",
+    "The MAB scan of the 1808 plan is marked 'InC' even though the map itself is public domain by age. Use the georeferenced Vilniaus DNR copy (licence pending) or another public-domain scan.",
+    "Era mixing: modern data (OSM, orthophotos, Mapillary) shows the post-1800 city: neoclassical Cathedral and Town Hall, no city walls, a reconstructed Palace, the 1870s St Anne's belfry. A 17th–18th-century setting needs deliberate per-building substitutions from historical sources.",
+    "The 1737 Fürstenhoff plan is only available at 2048 px on Commons. A high-resolution scan from the Berlin State Library is not confirmed, and its dating and authorship are debated.",
+    "Mapillary Terms §12 narrows commercial use of the 'Mapillary Services', which could be read as constraining a commercial game's use of the API even though the imagery is CC BY-SA. Reading and following the no-unblurring rule applies either way.",
+    "The KartaView radius API seems to return one photo per sequence, so its coverage numbers are indicative only. The Mapillary coverage finding is visual, not counted."
+   ],
+   "open_questions": [
+    "Which era is the game set in: present day, 1737, around 1808, or 17th century? This decides whether Vilniaus DNR 1808/1845 and the Commons plans replace modern layout data for the landmarks listed above.",
+    "Is the Google billing entity in the EEA? Will the game be commercial (ads, purchases, paid access)? These answers settle Cesium plan tier, Google availability and freedom-of-panorama exposure.",
+    "Will ID Vilnius license the Vilniaus DNR vector reconstructions (Pastatai_1808 and so on), the georeferenced 1808/1845 rasters, the 2020 photogrammetric mesh and the 2025 night orthophoto, and under which licence (CC BY 4.0?)?",
+    "Does Google's Photorealistic 3D Tiles coverage include Vilnius Old Town, and at what quality? This matters only if a non-EEA live-streamed backdrop is still wanted. It needs checking in the coverage tool with a browser.",
+    "Is a high-resolution scan of the 1737 Fürstenhoff plan available from the Staatsbibliothek zu Berlin, and under what rights statement?",
+    "Would Saulius.Zaura (or TerraModus) license the view-only drone photogrammetry of St Anne's, Gediminas Hill and the Cathedral area for use as reference or assets?",
+    "Should share-alike textures be avoided entirely, using Mapillary and Commons only as measurement or reference, with textures authored from scratch or CC0 sources?",
+    "Does routing Google tiles through Cesium ion get round the EEA block, and would that even be allowed under Cesium's Appendix B-2?"
+   ],
+   "queries_or_commands": [
+    "curl https://cloud.google.com/maps-platform/terms and /terms/maps-service-terms (+ EEA variants) -> grep 3.2.3, Map Tiles",
+    "curl https://developers.google.com/maps/documentation/tile/policies ; /maps/comms/eea/map-tiles ; /maps/comms/eea/faq",
+    "curl https://about.google/brand-resource-center/products-and-services/geo-guidelines/",
+    "curl https://cesium.com/legal/terms-of-service/ ; /legal/terms-for-google/ ; /legal/cesium-global-3d-content-tos/ ; /platform/cesium-ion/pricing/",
+    "https://api.openstreetcam.org/2.0/photo/?lat=..&lng=..&radius=2000&itemsPerPage=100 (5 street points)",
+    "Browser: https://www.mapillary.com/app/?lat=54.6815&lng=25.2890&z=15.3 (declined optional cookies)",
+    "https://api.panoramax.xyz/api/search?bbox=25.280,54.674,25.300,54.690&limit=100",
+    "Commons API: prop=categoryinfo batch; generator=categorymembers with extmetadata LicenseShortName; list=search srsearch=deepcat:\"...\"",
+    "Commons raw: Commons:Copyright_rules_by_territory/Lithuania",
+    "https://api.sketchfab.com/v3/search?type=models&q=<terms> and /v3/models/<uid>",
+    "https://opencity.idvilnius.lt/gis/rest/services/Kultura?f=json ; .../VilniausDNR_vector/MapServer?f=json ; .../MAB_istoriniai_zemelapiai/MapServer?f=json ; Rastrai/Naktinis_orto",
+    "Wikipedia API extracts: Vilnius Cathedral, Palace of the Grand Dukes, Town Hall (en/lt), Gediminas's Tower, Church of St. Anne, Gate of Dawn, Wall of Vilnius, Great Synagogue of Vilna"
+   ]
+  },
+  "verification": {
+   "checks": [
+    {
+     "claim": "Google Maps Platform ToS §3.2.3 (Last modified Aug 26, 2026) forbids scraping, caching and creating content from Google Maps Content, with examples including '3D building models from 45° Imagery' and 'terrain models based on elevation values'; the non-EEA Service Specific Terms (June 10, 2026) have no Map Tiles section, so no caching exception applies.",
+     "verdict": "confirmed",
+     "correction": "Wording and dates match the live pages. §3.2.3(a) No Scraping, (b) No Caching 'except as expressly permitted under the Maps Service Specific Terms', (c) No Creating Content with examples (i)–(vii) are verbatim. The Service Specific Terms contain no 'Map Tiles', 'Photorealistic' or '3D Tiles' string. The only general caching carve-out is '3. Google ID Caching' (place_id, pano_ID, video_ID).",
+     "sources": [
+      "https://cloud.google.com/maps-platform/terms",
+      "https://cloud.google.com/maps-platform/terms/maps-service-terms"
+     ]
+    },
+    {
+     "claim": "Map Tiles API Policies (updated 2026-09-24) ban offline and non-visualization use, and allow overlaying your own 3D objects only if they 'aren't extracted, traced, or otherwise derived by hand or machine from Photorealistic 3D Tiles'. Promotional videos are capped at 30 s.",
+     "verdict": "confirmed",
+     "correction": "Verbatim. The not-allowed list is Image analysis, Machine interpretation, Object detection or identification, Geodata extraction or resale, and Offline uses. Clients must honour Cache-Control. Promo videos must be 30 s or less, marked 'for promotional purposes only', and contain no Street View. Reading collision or navmesh use as 'machine interpretation' is still the report's own interpretation.",
+     "sources": [
+      "https://developers.google.com/maps/documentation/tile/policies"
+     ]
+    },
+    {
+     "claim": "Since 8 July 2025, Photorealistic 3D Tiles return HTTP 403 for all projects billed to an EEA (e.g. Lithuanian) address.",
+     "verdict": "corrected",
+     "correction": "The block is narrower than the summary says. It covers (a) projects created after 8 July 2025 that are linked to an EEA billing address, and (b) projects that are no longer in the 'Unmodified State' after 8 July 2025. For those, both 'Photorealistic 3D tiles' and '2D satellite tiles' are 'not available' and return 403. A pre-July-2025 EEA project still in the Unmodified State is not covered. For a new Lithuanian project the practical answer is the same: 403. The EEA ToS drops No Re-Creating, No Use With Non-Google Maps and Embedded Vehicle, keeps No Scraping, No Caching and No Creating Content, and adds 'or from Street View imagery' to example (i). All confirmed.",
+     "sources": [
+      "https://developers.google.com/maps/comms/eea/map-tiles",
+      "https://cloud.google.com/terms/maps-platform/eea"
+     ]
+    },
+    {
+     "claim": "Google geo guidelines forbid using Google Earth, Earth Pro or Earth Studio output to reconstruct 3D models.",
+     "verdict": "confirmed",
+     "correction": "Verbatim: 'You may not use output, or use third party tools to capture output, from Google Earth, Google Earth Pro, or Earth Studio to reconstruct 3D models or create similar content'.",
+     "sources": [
+      "https://about.google/brand-resource-center/products-and-services/geo-guidelines/"
+     ]
+    },
+    {
+     "claim": "Cesium ion ToS (major update Aug 20, 2025; minor Aug 27, 2025): no offline use except Clips; logo prominently on the main window; perpetual licence for Value-Added Clips; no commercial integration without a separate licence. Pricing: Community free and non-commercial; Commercial $149/$524 a month; Premium $499/$874 a month; Google tiles quota 1,000/5,000/10,000 root tiles; Clips 10/25/50.",
+     "verdict": "confirmed",
+     "correction": "All figures and clause texts match. §2.2.2 does allow general-purpose client or proxy caching. The AI ban is §2.2.4(xiii). Two nuances the report left out. First, the Value-Added Clip licence survives termination, but so does the attribution duty: the Cesium trademark licence and §2.2.3 attribution 'extend beyond the Term' for Clips, so a shipped clip still needs Cesium attribution. Second, the quota is labelled 'Clips of Asset Depot Data'. The pricing FAQ requires a paid plan if the company has more than $50K annual revenue or funding.",
+     "sources": [
+      "https://cesium.com/legal/terms-of-service/",
+      "https://cesium.com/platform/cesium-ion/pricing/"
+     ]
+    },
+    {
+     "claim": "Google tiles via Cesium ion carry Google's restrictions (Appendix B-2, Aug 20, 2025, including the COPPA ban) and cannot be clipped; OSM Buildings estimates 3 m per level.",
+     "verdict": "confirmed",
+     "correction": "Appendix B-2 repeats No Scraping (including (vi) 'electronic or printed documents'), No Caching, No creating content, and No Use in Applications Directed to Children (COPPA). The clipping blog says Google Photorealistic 3D Tiles are 'not available for clipping'. The OSM Buildings page says 'over 350 million buildings', 'updated quarterly', and 3 m per level with at least 1 level.",
+     "sources": [
+      "https://cesium.com/legal/terms-for-google/",
+      "https://cesium.com/blog/2024/05/08/cesium-ion-clipping/",
+      "https://cesium.com/platform/cesium-ion/content/cesium-osm-buildings/"
+     ]
+    },
+    {
+     "claim": "Mapillary imagery is CC BY-SA (Terms effective Feb 15, 2024, §3); §12 limits commercial use; the Graph API exposes thumb_2048_url, thumb_original_url, camera_parameters, computed_rotation, sfm_cluster and mesh; Entity APIs allow 60,000 requests per minute.",
+     "verdict": "confirmed",
+     "correction": "Confirmed. The terms link to CC BY-SA 4.0, and §12 is quoted accurately. Search APIs allow 10,000 per minute and tiles 50,000 per day. The report missed §11 (Developers): you must register a client_id; the app must 'materially supplement' Mapillary and not merely redistribute Content; if you download images and serve them from your own servers, or integrate data extracted from them, you must 'visibly display the Mapillary logo' and link back to Mapillary. That credits requirement applies on top of CC BY-SA per-image attribution.",
+     "sources": [
+      "https://www.mapillary.com/terms",
+      "https://www.mapillary.com/developer/api-documentation"
+     ]
+    },
+    {
+     "claim": "Mapillary coverage of the Old Town streets (Pilies, Didžioji, Aušros Vartų, Literatų, Bokšto, Užupis) is dense and continuous.",
+     "verdict": "unverified",
+     "correction": "Could not be reproduced. The Graph API and vector tiles need an access token, and the report's own evidence is visual only, with no image counts or panorama share. Treat 'dense' as plausible but unmeasured until someone runs a token-based count per street.",
+     "sources": [
+      "https://www.mapillary.com/app/?lat=54.6815&lng=25.2890&z=15.3"
+     ]
+    },
+    {
+     "claim": "KartaView has essentially no Old Town coverage (nearest photo to Pilies ≈181 m, Didžioji ≈501 m, Aušros Vartų ≈863 m, and so on).",
+     "verdict": "confirmed",
+     "correction": "The conclusion holds, but the report's method was unreliable. The v2 radius-2000 call returns only 12 items, one per sequence (dates 2017-06 to 2022-12). Also, the v2 'distance' field is not metres (it showed 11.49 for a photo that is 204 m away). A re-run with v1 /list/nearby-photos found 0 photos within 300 m of Didžioji, Aušros Vartų, Literatų, Užupio and Bokšto. At Pilies there are 9 photos from one 2017-08 sequence, the nearest ≈195 m away.",
+     "sources": [
+      "https://api.openstreetcam.org/1.0/list/nearby-photos/",
+      "https://api.openstreetcam.org/2.0/photo/?lat=54.6840&lng=25.2893&radius=2000&itemsPerPage=100"
+     ]
+    },
+    {
+     "claim": "Panoramax bbox 25.280–25.300 E, 54.674–54.690 N returns 90 images, all CC-BY-SA-4.0, mostly 2024-08 (39) and 2026-06 (28).",
+     "verdict": "confirmed",
+     "correction": "The re-run matches exactly: 90 images, no next page, all CC-BY-SA-4.0. Providers are Robot8A 39, mapcomplete 28, p4n-pics 22 and VietovesLt 1.",
+     "sources": [
+      "https://api.panoramax.xyz/api/search?bbox=25.280,54.674,25.300,54.690&limit=100"
+     ]
+    },
+    {
+     "claim": "Commons: deepcat Vilnius Old Town 12,213 files (Palace 1,367; Cathedral 1,288; Gate of Dawn 393); Bułhak 778, Album Wileńskie 201, Vilnius in art 690, Old maps of Vilnius 133; about 72% share-alike and about 12% PD/CC0.",
+     "verdict": "corrected",
+     "correction": "All counts re-ran identically. The licence split depends on which files are sampled. A resample of 534 direct files (Category:Vilnius Old Town 374 plus Gate of Dawn 160) gave 62% share-alike and 18% PD/CC0, median about 10 MP, 41% at 12 MP or more. Planning should assume 'roughly 60–72% share-alike, 12–18% PD/CC0', not a precise 72/12. The Bułhak and Smuglewicz categories cover each artist's whole output, not only Vilnius.",
+     "sources": [
+      "https://commons.wikimedia.org/w/api.php?action=query&prop=categoryinfo&titles=Category:Old_maps_of_Vilnius",
+      "https://commons.wikimedia.org/wiki/Category:Vilnius_Old_Town"
+     ]
+    },
+    {
+     "claim": "Public-domain historic plans on Commons run from 1648 to 1875: Getkant 1648 6313×8842; 1737 only 2048×1454; Kunicki 1805 8137×6230; 1842 16106×13339; 1866 20323×23173; 1875 8663×10450.",
+     "verdict": "corrected",
+     "correction": "Every quoted dimension is exact. The date range is wrong: the category runs from 1646 (Łukiški) to 1898, plus a 1917 book. The largest file is 'Vilnia, Padhorje (1794)' at 21165×14771, which the report missed. The MAB 1808 item (F322-1730, 20.64 MB, 'InC') is not the original plan but 'šviesoraščiai su A. Raulinaičio pastabomis', meaning blueprint copies annotated by Adolfas Raulinaitis. The InC mark may therefore properly apply to the 20th-century annotations, not be a mistake.",
+     "sources": [
+      "https://commons.wikimedia.org/wiki/Category:Old_maps_of_Vilnius",
+      "https://elibrary.mab.lt/handle/1/28538?show=full"
+     ]
+    },
+    {
+     "claim": "Vilniaus DNR (launched 1 March 2023): VilniausDNR_vector has 61 layers with Pastatai_1808…_2023, Map-only (queries unsupported) and empty copyrightText; T1808 cached down to 0.132 m/px, T1845 down to 0.053 m/px, EPSG:3346; MAB_istoriniai_zemelapiai has 48 plans from the 1840s to 1964.",
+     "verdict": "corrected",
+     "correction": "Mostly confirmed: 61 layers, capabilities 'Map', a query returns 'Requested operation is not supported', copyrightText is empty, wkid 3346, T1808 9 LODs to 0.1323 m/px, T1845 10 LODs to 0.0529 m/px. The Pastatai_1808 fields are Tikslumas (alias 'Tikslumas, m'), Medziaga and Maldos_namai. The launch date of 2023-03-01 is confirmed on vilnius.lt. Corrections: (1) the vector service also has Pastatai_2024, _2025 and _2026, and 1977 has no hydrography layer; (2) MAB_istoriniai_zemelapiai's 48 layers run from undated 19th-century plans ('18--') to 1998, not 1964; (3) the report missed that the separate Kultura/VilniausDNR service has Query enabled, with 8,561 historical street polylines (Pavadinimas, Metai, Dabartines_gatves), 833 memorial objects and 183 photos. It is still unlicensed, but it can be queried. There are also cached rasters T1911 (to 0.053 m/px), T1938 and T1977 (to 0.132 m/px).",
+     "sources": [
+      "https://opencity.idvilnius.lt/gis/rest/services/Kultura/VilniausDNR_vector/MapServer?f=json",
+      "https://opencity.idvilnius.lt/gis/rest/services/Kultura/VilniausDNR/MapServer?f=json",
+      "https://opencity.idvilnius.lt/gis/rest/services/Kultura/MAB_istoriniai_zemelapiai/MapServer?f=json",
+      "https://vilnius.lt/naujienos/besidomintiems-sostines-istorija-pristatytas-interneto-portalas-vilniaus-dnr-kviecia-pazinti-vilniu-per-zemelapius"
+     ]
+    },
+    {
+     "claim": "ID Vilnius 2025 night orthophoto (Rastrai/Naktinis_orto) covers the central city including the Old Town and is a street-lighting reference; orthophotos exist for 1997 and 2005–2024.",
+     "verdict": "corrected",
+     "correction": "The night orthophoto does not cover the Old Town. The service metadata Subject reads 'Tamsiuoju paros metu dronu fiksuotos Žvėryno ir Naujamiesčio seniūnijų teritorijos': drone captures after dark of Žvėrynas and Naujamiestis only, flown 2025-09-29 to 10-01 as a pilot. Export tests returned fully transparent images at Town Hall, Cathedral, Gate of Dawn, Pilies and Užupis, and 24–58% coverage in Žvėrynas and Naujamiestis. The copyright text and disabled export are confirmed; cached tiles go down to 0.0187 m/px. Orthophoto years are 1997, 2005, 2007, 2009, 2013, 2016, 2017, 2019, 2022 and 2024, not every year from 2005 to 2024. Declassified satellite scenes run 1965–1982.",
+     "sources": [
+      "https://opencity.idvilnius.lt/gis/rest/services/Rastrai/Naktinis_orto/MapServer?f=json",
+      "https://opencity.idvilnius.lt/gis/rest/services/Ortofoto?f=json"
+     ]
+    },
+    {
+     "claim": "Lithuania has no commercial freedom of panorama: Copyright Law Art. 28(1)(1) is disabled by Art. 28(2) when the work is the main subject and use is for direct or indirect commercial advantage; the term is life+70.",
+     "verdict": "confirmed",
+     "correction": "The official consolidated text valid from 2024-01-01 (last amended for Art. 28 by XI-1833, 2011) still contains Art. 28(2) word for word. Art. 28(3) adds that the exception does not permit reproducing architecture as buildings. Whether this applies to 3D game models is still an open legal question.",
+     "sources": [
+      "https://www.latga.lt/wp-content/uploads/2022/07/AR_2024-01-01.pdf",
+      "https://e-seimas.lrs.lt/portal/legalAct/lt/TAD/TAIS.81676"
+     ]
+    },
+    {
+     "claim": "Sketchfab: Saulius.Zaura's St Anne's (1.54M faces) and Gediminas Hill (800k), and TerraModus's Old Town model (880k, 2015), are view-only with no licence; 'Vilniaus piliavietė' (CC BY-SA, 94.5k) and 'Vilnius Archway' (CC BY) are downloadable.",
+     "verdict": "confirmed",
+     "correction": "The v3 API shows license null and isDownloadable false for the three view-only models. The face counts are 1,541,178, 800,590 and 880,776, with publish dates 2023-05-05, 2023-10-26 and 2015-03-05. hillforts is CC Attribution-ShareAlike (94,528 faces). meshkamenas is CC Attribution (43,132 faces).",
+     "sources": [
+      "https://api.sketchfab.com/v3/models/148b845bb7db4e6fa330f0f58f3f9c0c",
+      "https://api.sketchfab.com/v3/models/9075d1689fff4d25b3eb3175514787f5",
+      "https://api.sketchfab.com/v3/models/e70a897e7bea4be483c438699fde4c51"
+     ]
+    },
+    {
+     "claim": "Landmark era flags: Cathedral neoclassical rebuild 1779/1783–1801; Palace demolished 1801 and rebuilt 2002–2018 (opened 6 July 2013 and 6 July 2018); municipal 3D mesh from 72 flights and 30,000 images (2020).",
+     "verdict": "confirmed",
+     "correction": "katedra.lt gives the reconstruction start as 1783 (Gucevičius; finished 1801 by M. A. Šulcas after Gucevičius died in 1798), so '1779' can be dropped. The Palace museum's history page (seen via search summary) gives reconstruction officially starting 10 May 2002, the first part opening 6 July 2013 and completion 6 July 2018. LRT (2020-06-03) confirms 72 flights and 30,000 images. Mesh download and licence status is still unverified: the ID Vilnius project page states no licence.",
+     "sources": [
+      "https://www.katedra.lt/iki-sovietmecio/",
+      "https://www.valdovurumai.lt/lt/rumu-istorija/i/142/istorine-raida/",
+      "https://www.lrt.lt/en/news-in-english/19/1184219/public-3d-map-of-vilnius-helps-planners-and-the-public"
+     ]
+    }
+   ],
+   "notes": "Overall: the Google, Cesium, Mapillary, Lithuanian copyright, Commons-count and Sketchfab claims hold up against primary sources.\n\nFour material errors:\n1. The ID Vilnius 2025 night orthophoto covers only Žvėrynas and Naujamiestis, not the Old Town. Export tests over Old Town landmarks returned empty images, so it cannot be an Old Town street-lighting reference.\n2. The EEA 403 applies to projects created after 8 July 2025 with EEA billing, or projects that left the Unmodified State. It is not a blanket block on every EEA-billed project. For a new Lithuanian project the result is the same.\n3. The MAB_istoriniai_zemelapiai plans run to 1998, not 1964. The Commons plans run 1646–1898, not 1648–1875.\n4. The KartaView v2 'distance' field is not metres, and that endpoint returns one photo per sequence. The conclusion still holds on re-test with the v1 nearby-photos endpoint: zero photos within 300 m of five of the six Old Town street points.\n\nImportant things the report missed:\n- **ORT10LT national orthophoto.** Lithuania's 1:10,000 orthophoto from the National Land Service (Nacionalinė žemės tarnyba) is on data.gov.lt (dataset 2564) under 'Creative Commons Attribution 4.0'. It is a high-value dataset, updated every 3 years. Sheets download as TIFF or MrSID from geoportal.lt, and the ArcGIS service NZT/ORT10LT_2021_2023 exists; the 0.2 m resolution comes from a search summary only and is unverified. This is the obvious legally clean aerial-imagery reference, unlike the ID Vilnius orthophotos, which have no stated licence. Source: https://data.gov.lt/datasets/2564/\n- **Queryable historical streets.** The Kultura/VilniausDNR service has Query enabled. It holds 8,561 historical street polylines with name, year and current-street fields, plus 833 memorial objects and 183 photos. This makes a historical street-name and layout layer technically easy to get, although it still has no licence, so ask ID Vilnius first.\n- **More DNR rasters and layers.** There are cached rasters for 1911 (down to 0.053 m/px), 1938 and 1977 (down to 0.132 m/px), and building layers for 2024–2026.\n- **Mapillary §11.** Developer terms require client_id registration, apps that 'materially supplement' rather than redistribute, and a visible Mapillary logo with a link back when serving downloaded images or extracted data. That is in addition to CC BY-SA per-image attribution.\n- **Cesium clip attribution.** Value-Added Clips keep the Cesium attribution duty after the subscription ends. The Community plan also has a revenue or funding threshold of $50K.\n- **MAB 1808 scan.** It is a 20th-century blueprint copy annotated by A. Raulinaitis, so its InC mark may be legitimate. Do not treat it as a mislabelled public-domain original.\n\nUnverified and left as such: Mapillary density (the API needs a token; the evidence is visual only); Google 3D Tiles coverage of Vilnius; licences for the DNR, night orthophoto and 3D mesh; whether the data.gov.lt 'Vilniaus DNR' entry has a licence (the portal is JS-rendered and its API endpoints returned 404); the other historical dates (Town Hall, Bell Tower, Gate of Dawn, belfry, Synagogue), which rest on Wikipedia only.\n\nWorking files (fetched pages, stripped text, test images) are in /private/tmp/claude-501/-Users-pauliuss-snbx/90dd4c2e-1692-47f0-8f53-18b3e44e3556/scratchpad."
+  }
+ }
+]
