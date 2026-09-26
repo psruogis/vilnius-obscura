@@ -1,5 +1,8 @@
 import * as THREE from 'three';
-import { loadArea, buildBuildingsMesh } from './world/area';
+import { loadArea } from './world/area';
+import { buildWalls, buildRoofs } from './world/buildings';
+import { Terrain } from './world/terrain';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial } from './world/materials';
 import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
@@ -51,22 +54,20 @@ async function main(): Promise<void> {
   scene.add(sun, sun.target);
   scene.add(new THREE.HemisphereLight('#bcd3ea', '#6b5d4a', 0.15));
 
-  // Ground (paving comes in M2)
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(3000, 3000),
-    new THREE.MeshStandardMaterial({ color: '#6e6456', roughness: 1 }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+  // Ground: LiDAR terrain with fieldstone cobbles
+  const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const terrain = new Terrain(data);
+  scene.add(terrain.buildMesh(createGroundMaterial(aniso), thx, thz, 1000, 4, 3.4));
 
-  // Buildings
-  scene.add(buildBuildingsMesh(data));
+  // Buildings: plastered walls with period windows, and skeleton roofs in clay tile
+  const wallMesh = new THREE.Mesh(buildWalls(data), createFacadeMaterial(aniso));
+  const roofMesh = new THREE.Mesh(buildRoofs(data), createRoofMaterial(aniso));
+  for (const m of [wallMesh, roofMesh]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
   const walls = new WallGrid(data);
 
   // Walker: start on the square, north of the Town Hall, facing it
   const input = new Input(renderer.domElement);
-  const walker = new Walker(input, walls, { cx: thx, cz: thz, radius: data.meta.walkRadius });
+  const walker = new Walker(input, walls, { cx: thx, cz: thz, radius: data.meta.walkRadius }, (x, z) => terrain.heightAt(x, z));
   walker.place(thx + 4, thz - 42, Math.PI);
   scene.add(walker.object);
 
@@ -87,7 +88,7 @@ async function main(): Promise<void> {
   function updateSun(): void {
     centre.set(
       Math.round(walker.position.x / texel) * texel,
-      0,
+      walker.position.y,
       Math.round(walker.position.z / texel) * texel,
     );
     sun.target.position.copy(centre);

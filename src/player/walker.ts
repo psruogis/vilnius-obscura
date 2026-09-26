@@ -36,6 +36,7 @@ export class Walker {
     private readonly input: Input,
     private readonly walls: WallGrid,
     private readonly bounds: { cx: number; cz: number; radius: number },
+    private readonly groundAt: (x: number, z: number) => number,
   ) {
     const body = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.3, 1.1, 6, 12),
@@ -55,7 +56,7 @@ export class Walker {
   }
 
   place(x: number, z: number, yaw: number): void {
-    this.position.set(x, 0, z);
+    this.position.set(x, this.groundAt(x, z), z);
     this.yaw = yaw;
     this.facing = yaw;
     this.velocity.set(0, 0);
@@ -85,6 +86,7 @@ export class Walker {
     this.keepInBounds(this.pos2);
     this.position.x = this.pos2.x;
     this.position.z = this.pos2.z;
+    this.position.y = this.groundAt(this.position.x, this.position.z);
 
     // Body turns towards travel direction
     if (this.velocity.lengthSq() > 0.04) {
