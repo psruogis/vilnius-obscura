@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { age } from './ageing';
+import { createTreeMaterials } from './trees';
 
 const loader = new THREE.TextureLoader();
 
@@ -96,7 +98,8 @@ export function plasterMaterial(tint: string, anisotropy: number, tile = 2.5): T
 export function createTownHallMaterials(anisotropy: number) {
   const plaster = (tint: string, tile = 2.5) => plasterMaterial(tint, anisotropy, tile);
   // Rusticated plaster: horizontal courses with staggered joints, pressed into the render.
-  const wall = plaster('#efe5cf');
+  // Honey-coloured sandstone render, as in Zaleski's view of the square
+  const wall = plaster('#dcc091');
   wall.normalScale.set(0.5, 0.5);
   wall.onBeforeCompile = shader => {
     shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>\n${PLASTER_DETAIL}\n#include <map_fragment_rust>`);
@@ -116,10 +119,10 @@ export function createTownHallMaterials(anisotropy: number) {
           diffuseColor.rgb *= 1.0 - 0.2 * max(gy, gx * 0.8);
         }`);
   };
-  const stone = plaster('#f4efe4');
-  const plinth = plaster('#b3aea4', 1.6);
+  const stone = plaster('#e3cb9c');
+  const plinth = plaster('#a8998a', 1.6);
   const roof = new THREE.MeshStandardMaterial({
-    roughness: 1,
+    roughness: 1, color: '#b98f7c',
     map: worldTex('clay_roof_tiles', 'diff', true, anisotropy, 2.2),
     normalMap: worldTex('clay_roof_tiles', 'nor', false, anisotropy, 2.2),
     roughnessMap: worldTex('clay_roof_tiles', 'rough', false, anisotropy, 2.2),
@@ -137,10 +140,10 @@ export function createTownHallMaterials(anisotropy: number) {
 /** Materials for St Casimir's (simplified): plaster, lead-grey sheet roofs, copper cupolas, gilt crown. */
 export function createChurchMaterials(anisotropy: number) {
   return {
-    wall: plasterMaterial('#ebdfc6', anisotropy),
-    stone: plasterMaterial('#f3eee3', anisotropy),
-    roof: new THREE.MeshStandardMaterial({ color: '#6c7277', metalness: 0.45, roughness: 0.55, side: THREE.DoubleSide }),
-    dome: new THREE.MeshStandardMaterial({ color: '#5c8574', metalness: 0.35, roughness: 0.6, side: THREE.DoubleSide }),
+    wall: plasterMaterial('#d8b47e', anisotropy),
+    stone: plasterMaterial('#e2c594', anisotropy),
+    roof: new THREE.MeshStandardMaterial({ color: '#7e4a3a', metalness: 0.15, roughness: 0.7, side: THREE.DoubleSide }),
+    dome: new THREE.MeshStandardMaterial({ color: '#8a4a36', metalness: 0.25, roughness: 0.6, side: THREE.DoubleSide }),
     gilt: new THREE.MeshStandardMaterial({ color: '#c9a44e', metalness: 1, roughness: 0.35 }),
     dark: new THREE.MeshStandardMaterial({ color: '#1d1b19', roughness: 0.9, side: THREE.DoubleSide }),
   };
@@ -149,10 +152,10 @@ export function createChurchMaterials(anisotropy: number) {
 /** The Town Hall promenade and the market booth (from the period views, docs/REFERENCES.md §4.5). */
 export function createPromenadeMaterials(anisotropy: number) {
   return {
-    stone: plasterMaterial('#e6ddcb', anisotropy, 1.5),
+    stone: age(plasterMaterial('#cdbb98', anisotropy, 1.5), { strength: 1.1, seed: 6 }) as THREE.MeshStandardMaterial, // weathered sandstone posts
     wood: createWoodMaterial(anisotropy),
-    bark: new THREE.MeshStandardMaterial({ color: '#4a3b2c', roughness: 1 }),
-    leaves: new THREE.MeshStandardMaterial({ color: '#6f8248', roughness: 0.95 }),
+    bark: new THREE.MeshStandardMaterial({ color: '#5a4a3a', roughness: 1, map: worldTex('weathered_planks', 'diff', true, anisotropy, 0.6) }),
+    leaves: createTreeMaterials(new THREE.MeshStandardMaterial()).leaves,
     gravel: new THREE.MeshStandardMaterial({
       color: '#c8b28a', roughness: 1,
       map: worldTex('plastered_wall_04', 'diff', true, anisotropy, 3),
@@ -181,6 +184,7 @@ export function createMarketMaterials(anisotropy: number) {
 export function createRoofMaterial(anisotropy: number): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ ...pbrSet('clay_roof_tiles', anisotropy), vertexColors: true, roughness: 1 });
   m.side = THREE.DoubleSide; // skeleton faces are thin; show them from below the eave too
+  age(m, { roof: true, strength: 1 });
   return m;
 }
 

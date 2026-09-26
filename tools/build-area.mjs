@@ -140,6 +140,8 @@ function normGrid(g) {
 const grpk = JSON.parse(fs.readFileSync(path.join(SEED, 'grpk', 'grpk_pastat_oldtown_epsg3346.geojson'), 'utf8'));
 const buildings = [];
 const removeIds = new Set(reconFiles('remove_modern.json').flatMap(f => JSON.parse(fs.readFileSync(f, 'utf8')).remove || []));
+// Reconstructed plots later found to post-date 1808 (by their feature id in any *_historic.geojson)
+const removeRecon = new Set(reconFiles('remove_modern.json').flatMap(f => JSON.parse(fs.readFileSync(f, 'utf8')).remove_recon || []));
 const stats = { lidar: 0, osmHeight: 0, osmLevels: 0, default: 0, capped: 0 };
 
 for (const f of grpk.features) {
@@ -220,6 +222,7 @@ for (const reconFile of reconFiles('_historic.geojson')) {
   for (const f of recon.features) {
     const kind = f.properties?.kind;
     if (kind !== 'plot' && kind !== 'block') continue;
+    if (removeRecon.has(f.properties?.id)) { stats.removedRecon = (stats.removedRecon || 0) + 1; continue; }
     const polys = f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [f.geometry.coordinates];
     polys.forEach((poly, i) => {
       const rings = poly.map(dropClosing);

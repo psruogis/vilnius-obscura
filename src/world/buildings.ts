@@ -6,8 +6,10 @@ const PLASTER_TILE = 2.5;
 const ROOF_TILE = 2.2;
 
 // Limewash tints for c.1800 houses, authored in sRGB.
-export const LIMEWASH = ['#efe6d2', '#e9dcbd', '#e4cf9c', '#dfc9a2', '#ebe3d3', '#dcd4c2', '#e8d2ad', '#d6cab3', '#e6d8c0', '#dcc39a'];
-const ROOF_TINTS = ['#ffffff', '#f4e4dc', '#e9d6c8', '#fff1e6', '#dcc6b8'];
+// Limewash after the period views (Zaleski, Peszka): ochres, pale pinks, straw, warm greys, a few whites.
+export const LIMEWASH = ['#e3cc9c', '#d9b884', '#e6c49c', '#d8a888', '#e0b89e', '#cdb898', '#e8d8b6', '#d3c0a0', '#cca277', '#dfcaa6', '#c2a98a', '#dcc3a0', '#d5ae86', '#e4d2b4', '#c9b08f', '#e2bfa6'];
+// Multiplied into the clay texture: deep, weathered red-browns as in the period oils.
+const ROOF_TINTS = ['#c9a08e', '#b88a78', '#d4ae98', '#a87e6e', '#c4a494', '#9c7a6c', '#bf9582'];
 
 export function hashString(s: string): number {
   let h = 2166136261;

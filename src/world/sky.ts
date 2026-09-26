@@ -23,9 +23,16 @@ export function createSky(sunDir: THREE.Vector3, scale = 4500, turbidity = 3.2):
   sky.scale.setScalar(scale);
   const u = sky.material.uniforms;
   u['turbidity'].value = turbidity;
-  u['rayleigh'].value = 1.4;
+  u['rayleigh'].value = 1.0; // paler, warmer blue, as in the oils
   u['mieCoefficient'].value = 0.004;
   u['mieDirectionalG'].value = 0.82;
   u['sunPosition'].value.copy(sunDir);
+  // Big soft summer cumulus, as in the period oils
+  if (u['cloudCoverage']) {
+    u['cloudCoverage'].value = 0.55;
+    u['cloudDensity'].value = 0.65;
+    u['cloudScale'].value = 0.00018;
+    u['cloudElevation'].value = 0.55;
+  }
   return sky;
 }

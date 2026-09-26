@@ -19,9 +19,9 @@ const GradeShader = {
   name: 'GradeShader',
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
-    uWarm: { value: new THREE.Vector3(1.035, 1.0, 0.95) },
-    uCool: { value: new THREE.Vector3(0.96, 0.99, 1.04) },
-    uSat: { value: 1.08 },
+    uWarm: { value: new THREE.Vector3(1.05, 1.0, 0.9) },
+    uCool: { value: new THREE.Vector3(0.98, 0.97, 0.98) },
+    uSat: { value: 0.96 },
     uContrast: { value: 1.06 },
     uVignette: { value: 0.28 },
     uAspect: { value: 1 },
@@ -50,11 +50,63 @@ const GradeShader = {
     }`,
 };
 
+// Oil-painting treatment after the period views: a Kuwahara filter flattens detail into brush-sized patches
+// while keeping edges, a faint canvas weave shows through, and an aged-varnish tone warms the image.
+const PaintShader = {
+  name: 'PaintShader',
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uTexel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) },
+    uRadius: { value: 3 },
+    uMix: { value: 0.5 },
+    uCanvas: { value: 0.035 },
+  },
+  vertexShader: GradeShader.vertexShader,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform vec2 uTexel;
+    uniform float uRadius, uMix, uCanvas;
+    varying vec2 vUv;
+    float h21(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+    void main() {
+      vec3 orig = texture2D(tDiffuse, vUv).rgb;
+      // Kuwahara: pick the calmest of four overlapping quadrants
+      vec3 m[4]; vec3 s[4];
+      for (int k = 0; k < 4; k++) { m[k] = vec3(0.0); s[k] = vec3(0.0); }
+      const int R = 3;
+      float n = float((R + 1) * (R + 1));
+      for (int j = 0; j <= R; j++) for (int i = 0; i <= R; i++) {
+        vec2 o = vec2(float(i), float(j)) * uTexel * (uRadius / 3.0);
+        vec3 c0 = texture2D(tDiffuse, vUv + vec2(-o.x, -o.y)).rgb; m[0] += c0; s[0] += c0 * c0;
+        vec3 c1 = texture2D(tDiffuse, vUv + vec2( o.x, -o.y)).rgb; m[1] += c1; s[1] += c1 * c1;
+        vec3 c2 = texture2D(tDiffuse, vUv + vec2( o.x,  o.y)).rgb; m[2] += c2; s[2] += c2 * c2;
+        vec3 c3 = texture2D(tDiffuse, vUv + vec2(-o.x,  o.y)).rgb; m[3] += c3; s[3] += c3 * c3;
+      }
+      vec3 best = orig; float bestV = 1e9;
+      for (int k = 0; k < 4; k++) {
+        vec3 mu = m[k] / n;
+        vec3 v = abs(s[k] / n - mu * mu);
+        float vs = v.r + v.g + v.b;
+        if (vs < bestV) { bestV = vs; best = mu; }
+      }
+      vec3 c = mix(orig, best, uMix);
+      // canvas weave
+      vec2 px = vUv / uTexel;
+      float weave = (h21(floor(px * 0.5)) - 0.5) * 0.7 + (h21(floor(px * 0.125) + 17.0) - 0.5) * 0.3; // irregular canvas tooth, no regular pattern
+      c *= 1.0 + uCanvas * weave;
+      // aged varnish: warm, slightly yellowed highlights, softened blacks
+      c = mix(c, c * vec3(1.05, 1.0, 0.86), 0.55);
+      c = c * 0.93 + vec3(0.035, 0.028, 0.018);
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+};
+
 export class Post {
   private composer: EffectComposer;
   readonly gtao: GTAOPass;
   readonly bloom: UnrealBloomPass;
   private grade: ShaderPass;
+  readonly paint: ShaderPass;
   enabled = true;
 
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera) {
@@ -79,19 +131,27 @@ export class Post {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.12, 0.4, 6.0);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
+    this.paint = new ShaderPass(PaintShader);
+    this.composer.addPass(this.paint);
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.grade);
     this.composer.addPass(new SMAAPass());
     renderer.setPixelRatio(this.scale);
     this.setSize(w, h);
 
-    window.addEventListener('keydown', e => { if (e.code === 'KeyP') this.enabled = !this.enabled; });
+    window.addEventListener('keydown', e => {
+      if (e.code === 'KeyP') this.enabled = !this.enabled;
+      if (e.code === 'KeyO') this.paint.enabled = !this.paint.enabled;
+    });
   }
 
   setSize(w: number, h: number): void {
     this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.composer.setSize(w, h);
     this.grade.uniforms.uAspect.value = w / h;
+    const pr = this.renderer.getPixelRatio();
+    this.paint.uniforms.uTexel.value.set(1 / (w * pr), 1 / (h * pr));
+    this.paint.uniforms.uRadius.value = 1.7 * pr; // brush size stays the same on screen at any resolution
   }
 
   // Dynamic resolution: keep the frame rate near 60 by trading pixel density (0.75x to 2x).

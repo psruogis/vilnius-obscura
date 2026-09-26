@@ -10,6 +10,7 @@ import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
 import { buildFacades } from './world/facades';
 import { createHouseMaterials } from './world/houseMaterials';
+import { age } from './world/ageing';
 import { Character, TOWNSMAN, TRAVELLER } from './player/character';
 import { Ambience } from './audio/ambience';
 import { Post } from './render/post';
@@ -47,7 +48,7 @@ async function main(force = false): Promise<void> {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = THREE.AgXToneMapping; // softer, filmic highlight roll-off
   renderer.toneMappingExposure = LIGHT.exposure;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -69,7 +70,7 @@ async function main(force = false): Promise<void> {
   scene.environment = pmrem.fromScene(envScene, 0, 0.1, 1000).texture;
   scene.environmentIntensity = LIGHT.env;
   pmrem.dispose();
-  scene.fog = new THREE.Fog(LIGHT.fog, 180, 1100);
+  scene.fog = new THREE.Fog(LIGHT.fog, 70, 800); // the hazy, dusty distance of the period views
 
   // Sun: cascaded shadows, sharp near the walker and still present on distant buildings.
   const shadows = new SunShadows(scene, camera, sunDir, LIGHT.sun, LIGHT.sunI);
@@ -82,7 +83,7 @@ async function main(force = false): Promise<void> {
   scene.add(terrain.buildMesh(createGroundMaterial(aniso), thx, thz, 1000, 4, 3.4));
 
   // Buildings: plastered walls with period windows, and skeleton roofs in clay tile
-  const wallMesh = new THREE.Mesh(buildWalls(data), createFacadeMaterial(aniso));
+  const wallMesh = new THREE.Mesh(buildWalls(data), age(createFacadeMaterial(aniso), { strength: 0.8, seed: 4 }));
   const roofMesh = new THREE.Mesh(buildRoofs(data), createRoofMaterial(aniso));
   for (const m of [wallMesh, roofMesh]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
   // Houses near the walk: real façade geometry (openings, reveals, sills, cornices, chimneys)
@@ -92,14 +93,26 @@ async function main(force = false): Promise<void> {
   const facades = buildFacades(data, terrain, houseMats);
   scene.add(facades.group);
   const townHallData = data.buildings.find(b => b.role === 'townhall');
-  if (townHallData) scene.add(buildTownHall(townHallData, createTownHallMaterials(aniso)));
+  if (townHallData) {
+    const m = createTownHallMaterials(aniso);
+    for (const k of ['wall', 'stone', 'plinth'] as const) age(m[k], { ground: townHallData.groundY, strength: 0.9, seed: 1 });
+    age(m.roof, { roof: true, strength: 0.9 });
+    scene.add(buildTownHall(townHallData, m));
+  }
   const stCasimirData = data.buildings.find(b => b.role === 'stcasimir');
-  if (stCasimirData) scene.add(buildStCasimir(stCasimirData, createChurchMaterials(aniso)));
+  if (stCasimirData) {
+    const m = createChurchMaterials(aniso);
+    for (const k of ['wall', 'stone'] as const) age(m[k], { ground: stCasimirData.groundY, strength: 1, seed: 2 });
+    age(m.roof, { roof: true, strength: 0.7 });
+    scene.add(buildStCasimir(stCasimirData, m));
+  }
   const walls = new WallGrid(data);
+  let promenadeRef: { update(dt: number): void } | null = null;
   if (townHallData) {
     const promenade = buildPromenade(townHallData, terrain, createPromenadeMaterials(aniso));
     scene.add(promenade.group);
     for (const [ax, az, bx, bz] of promenade.segments) walls.addSegment(ax, az, bx, bz);
+    promenadeRef = promenade;
   }
   // Market stalls, carts and townsfolk stream in after the first frame
   let market: Market | null = null;
@@ -158,6 +171,7 @@ async function main(force = false): Promise<void> {
     character?.update(dt, walker.speed);
     ambience?.update(dt, walker.position, walker.speed);
     market?.update(dt);
+    promenadeRef?.update(dt);
     shadows.update();
     post.render(dt);
     stats.update(dt);

@@ -4,6 +4,7 @@ import type { Terrain } from './terrain';
 import type { PromenadeMaterials } from './materials';
 import { townHallFrame, TOWN_HALL_SIZE } from './townhall';
 import { mbox, merged, trianglesToGeometry } from './geom';
+import { treeGeometry } from './trees';
 
 /**
  * The fenced, tree-lined promenade in front of the Town Hall portico, and a market booth beside it.
@@ -25,7 +26,7 @@ const POST_STEP = 3.0;
 const GAPS: [number, number][] = [[43, 47], [88, 92]]; // side entrances (s ranges, both sides)
 const APEX_GAP = 0.16;        // half-angle of the north entrance, radians
 
-export interface Promenade { group: THREE.Group; segments: [number, number, number, number][] }
+export interface Promenade { group: THREE.Group; segments: [number, number, number, number][]; update(dt: number): void }
 
 export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMaterials): Promenade {
   const f = townHallFrame(th);
@@ -83,17 +84,15 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
   }
 
   // --- Young lindens inside each fence (the c.1800 watercolour shows them newly planted) ------
-  const trunk = new THREE.CylinderGeometry(0.07, 0.1, 2.6, 6).translate(0, 1.3, 0);
-  const blob = (r: number, x: number, y: number, z: number) => new THREE.IcosahedronGeometry(r, 2).translate(x, y, z);
-  const crown = merged([blob(0.85, 0, 3.5, 0), blob(0.65, 0.45, 3.0, 0.2), blob(0.6, -0.35, 3.1, -0.3), blob(0.55, 0.1, 4.1, 0.15)]);
   let i = 0;
   for (let s = 5; s <= S_END - 2; s += 8.5, i++) {
     if (GAPS.some(([a, b]) => s > a - 1.5 && s < b + 1.5)) continue;
     for (const side of [-1, 1]) {
       const p = world(s, side * TREE_T);
       const k = 0.85 + 0.3 * ((i * 7 + (side > 0 ? 3 : 0)) % 5) / 4;
-      bark.push(place(trunk.clone().scale(1, k, 1), p.clone(), i));
-      leaves.push(place(crown.clone().scale(k, k, k), p.clone(), i * 1.7));
+      const t = treeGeometry(i * 2 + (side > 0 ? 1 : 0), k);
+      bark.push(place(t.wood, p.clone(), i));
+      leaves.push(place(t.leaves, p.clone(), i * 1.7));
     }
   }
 
@@ -158,7 +157,8 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
   add(leaves, mats.leaves);
   add(roof, mats.roof);
   add(gravel, mats.gravel, false);
-  return { group, segments };
+  const clock = (mats.leaves.userData.time ?? { value: 0 }) as { value: number };
+  return { group, segments, update: dt => { clock.value += dt; } };
 }
 
 /** Up-facing triangles with planar (x, z) UVs in metres. */

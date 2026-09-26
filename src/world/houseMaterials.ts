@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { plasterMaterial, worldTex } from './materials';
+import { age } from './ageing';
 
 /**
  * Materials for the detailed houses (facades.ts). Colours come from vertex colours so one material
@@ -23,7 +24,12 @@ const WEATHER = /* glsl */ `
     float u = vWall.x, h = vWall.y, top = vWall.z, seed = vWall.w;
     vec3 c = diffuseColor.rgb;
     // Patchy limewash: broad, soft variation
-    c *= 0.92 + 0.12 * hw_fbm(vec2(u * 0.22, h * 0.3) + seed * 17.0);
+    c *= 0.84 + 0.24 * hw_fbm(vec2(u * 0.22, h * 0.3) + seed * 17.0);
+    // where the limewash has flaked: darker, rougher plaster beneath
+    float flake = smoothstep(0.7, 0.74, hw_fbm(vec2(u * 0.7, h * 0.7) + seed * 23.0)) * (0.4 + 0.6 * (1.0 - smoothstep(0.5, 4.5, h)));
+    c = mix(c, vec3(0.55, 0.47, 0.4), flake * 0.7);
+    // broad, soft staining (no stripes)
+    c *= 1.0 - 0.14 * smoothstep(0.5, 0.8, hw_fbm(vec2(u * 0.35, h * 0.18) + seed * 9.0));
     // Rain streaks under each upper window sill
     float u0 = vLayout.x, bayW = vLayout.y, nb = vLayout.z, halfW = vLayout.w, nUp = vLayout2.x;
     float streak = 0.0;
@@ -37,21 +43,21 @@ const WEATHER = /* glsl */ `
           float sill = 4.0 + float(k - 1) * 3.4 + 0.85;
           float below = sill - 0.07 - h;
           if (below > 0.0 && below < 2.4) {
-            float n = hw_noise(vec2(x * 9.0 + seed * 31.0 + float(k) * 3.7, h * 0.7));
+            float n = hw_fbm(vec2(x * 2.2 + seed * 31.0 + float(k) * 3.7, h * 0.35));
             streak = max(streak, across * pow(1.0 - below / 2.4, 1.6) * (0.35 + 0.65 * n));
           }
         }
       }
     }
-    c *= 1.0 - 0.28 * streak;
+    c *= 1.0 - 0.22 * streak;
     // Grime under the cornice, with drips
     float drip = hw_noise(vec2(u * 3.0 + seed * 11.0, 0.0));
     float underCornice = smoothstep(top - 1.9 - drip * 0.9, top - 0.8, h) * (1.0 - step(top - 0.78, h));
-    c *= 1.0 - 0.16 * underCornice;
+    c *= 1.0 - 0.26 * underCornice;
     // Rising damp and splash-back at street level
     float edge = 0.9 + 0.5 * hw_fbm(vec2(u * 0.9, seed * 5.0));
     float damp = 1.0 - smoothstep(0.15, edge, h);
-    c = mix(c, c * vec3(0.72, 0.7, 0.66), damp * 0.55);
+    c = mix(c, c * vec3(0.64, 0.6, 0.54), damp * 0.7);
     diffuseColor.rgb = c;
   }
 `;
@@ -118,7 +124,18 @@ export function createHouseMaterials(anisotropy: number) {
         varying vec4 vWall; varying vec4 vLayout; varying vec4 vLayout2;
         ${NOISE}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        ${WEATHER}`);
+        ${WEATHER}`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        {
+          // hand-laid lime render: gentle waves and trowel marks catch the low sun
+          vec2 qq = vWall.xy;
+          float hgt = hw_fbm(qq * 1.4 + vWall.w * 13.0) * 0.014 + hw_noise(qq * 6.5) * 0.0025;
+          vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
+          vec3 r1 = cross(dpdy, normal), r2 = cross(normal, dpdx);
+          float det = dot(dpdx, r1);
+          vec3 grad = sign(det) * (dFdx(hgt) * r1 + dFdy(hgt) * r2);
+          normal = normalize(abs(det) * normal - grad);
+        }`);
   };
   wall.customProgramCacheKey = () => 'house-wall';
 
@@ -126,6 +143,7 @@ export function createHouseMaterials(anisotropy: number) {
   trim.vertexColors = true;
   trim.normalScale.set(0.5, 0.5);
   trim.customProgramCacheKey = () => 'house-trim';
+  age(trim, { strength: 0.8, seed: 3 });
 
   const { map, rough } = windowAtlas();
   const glass = new THREE.MeshStandardMaterial({ map, roughnessMap: rough, roughness: 1, metalness: 0, envMapIntensity: 1.8 });
@@ -136,6 +154,7 @@ export function createHouseMaterials(anisotropy: number) {
     normalMap: worldTex('weathered_planks', 'nor', false, anisotropy, 1.1),
     roughnessMap: worldTex('weathered_planks', 'rough', false, anisotropy, 1.1),
   });
+  age(wood, { strength: 0.6, seed: 5 });
   return { wall, trim, glass, wood };
 }
 export type HouseMaterials = ReturnType<typeof createHouseMaterials>;

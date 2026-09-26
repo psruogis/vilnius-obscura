@@ -1,0 +1,13 @@
+{
+ "note": "Walk-area audit (1842 plan x 1808 map), confirmed findings only: N2, S1, W-M2, W-J1, W-J2, W-C21",
+ "remove": [
+  "46b78a29-b05f-4fab-9135-9051e00a8e17"
+ ],
+ "remove_recon": [
+  "smc-0-8",
+  "smc-0-23",
+  "wedge-24-24",
+  "smc-1-0",
+  "wedge-21-0"
+ ]
+}

@@ -45,14 +45,14 @@ function column(x: number, z: number, base: number): THREE.BufferGeometry[] {
   torus.translate(x, base + 0.31, z);
   parts.push(torus);
   const shaftH = COL_H - 0.4 - 0.55;
-  const shaft = new THREE.CylinderGeometry(COL_R1, COL_R0, shaftH, 24, 4);
+  const shaft = new THREE.CylinderGeometry(COL_R1, COL_R0, shaftH, 40, 4);
   shaft.translate(x, base + 0.4 + shaftH / 2, z);
   parts.push(shaft);
   const top = base + 0.4 + shaftH;
-  const neck = new THREE.CylinderGeometry(COL_R1 + 0.05, COL_R1, 0.08, 24);
+  const neck = new THREE.CylinderGeometry(COL_R1 + 0.05, COL_R1, 0.08, 40);
   neck.translate(x, top + 0.04, z);
   parts.push(neck);
-  const echinus = new THREE.CylinderGeometry(COL_R1 + 0.2, COL_R1 + 0.02, 0.22, 24);
+  const echinus = new THREE.CylinderGeometry(COL_R1 + 0.2, COL_R1 + 0.02, 0.22, 40);
   echinus.translate(x, top + 0.19, z);
   parts.push(echinus);
   parts.push(mbox(1.6, 0.25, 1.6, x, top + 0.3 + 0.125, z));

@@ -176,8 +176,8 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
     const seed = hashString(b.id);
     const tint = new THREE.Color(LIMEWASH[seed % LIMEWASH.length]);
     const trimStyle = (seed >>> 5) % 3;
-    const trimC = trimStyle === 0 ? new THREE.Color('#f2ede2') : trimStyle === 1 ? tint.clone().lerp(cWhite.set('#ffffff'), 0.55) : new THREE.Color('#d8d0c0');
-    const plinthC = new THREE.Color('#a29b8f');
+    const trimC = trimStyle === 0 ? new THREE.Color('#e6dac2') : trimStyle === 1 ? tint.clone().lerp(cWhite.set('#f4ead6'), 0.45) : new THREE.Color('#cdbd9f');
+    const plinthC = new THREE.Color('#978b7b');
     const shutterC = new THREE.Color(SHUTTERS[(seed >>> 9) % SHUTTERS.length]);
     const doorC = new THREE.Color(DOORS[(seed >>> 13) % DOORS.length]);
     const hasShutters = rnd(seed, 1) > 0.45, hasHoods = rnd(seed, 2) > 0.4, hasPilasters = rnd(seed, 3) > 0.35;
@@ -211,8 +211,9 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
         if (ep.party || ec.party || ep.L < 0.05) return null;
         let mx = ep.nx + ec.nx, mz = ep.nz + ec.nz;
         const ml = Math.hypot(mx, mz) || 1; mx /= ml; mz /= ml;
-        const s = 1 / Math.max(0.35, mx * ec.nx + mz * ec.nz);
-        return [mx * s, mz * s];
+        const dot = mx * ec.nx + mz * ec.nz;
+        if (dot < 0.5) return null; // sharp corner: square, capped ends instead of a long spike
+        return [mx / dot, mz / dot];
       };
 
       edges.forEach((e, i) => {
@@ -255,11 +256,24 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
         }
 
         // --- Wall surface with the openings cut out ------------------------------------------------
+        // Every opening must sit fully inside the wall, clear of the plinth line and the cornice.
+        for (let k = openings.length - 1; k >= 0; k--) {
+          const o = openings[k];
+          if (o.bottom < h0 + 0.05 || o.top + (o.spring !== undefined ? 0.3 : 0.2) > topH - 0.85 || o.u - o.w / 2 < 0.35 || o.u + o.w / 2 > e.L - 0.35) openings.splice(k, 1);
+        }
         const contour = [new THREE.Vector2(0, h0), new THREE.Vector2(e.L, h0), new THREE.Vector2(e.L, topH), new THREE.Vector2(0, topH)];
-        const holes = openings.map(openingPolygon);
+        let holes = openings.map(openingPolygon);
+        let tris = THREE.ShapeUtils.triangulateShape(contour, holes);
+        // Check the cut wall's area; if triangulation went wrong, fall back to a blank wall
+        const areaOf = (pts: THREE.Vector2[]) => Math.abs(THREE.ShapeUtils.area(pts));
+        const expect = e.L * (topH - h0) - holes.reduce((a, h) => a + areaOf(h), 0);
+        const got = (() => { const allPts = contour.concat(...holes); return tris.reduce((a, [i0, i1, i2]) => a + areaOf([allPts[i0], allPts[i1], allPts[i2]]), 0); })();
+        if (!tris.length || Math.abs(got - expect) > 0.01 * expect + 0.05) {
+          openings.length = 0; holes = [];
+          tris = THREE.ShapeUtils.triangulateShape(contour, []);
+        }
         const all = contour.concat(...holes);
-        const tris = THREE.ShapeUtils.triangulateShape(contour, holes);
-        const layout = [u0, bayW, nb, halfW], layout2 = [nUp, 0, 0, 0];
+        const layout = [u0, bayW, openings.some(o => o.kind === "window") ? nb : 0, halfW], layout2 = [nUp, 0, 0, 0];
         const nOut = vN(e);
         for (const [a, bb, c] of tris) {
           const va = all[a], vb = all[bb], vc = all[c];

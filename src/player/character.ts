@@ -1,5 +1,19 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+/** Low-poly models ship flat-shaded; weld shared vertices and recompute normals for smooth, rounded forms. */
+export function smoothShade(root: THREE.Object3D): void {
+  root.traverse(o => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const g = mesh.geometry.clone();
+    g.deleteAttribute('normal');
+    const welded = mergeVertices(g, 1e-4);
+    welded.computeVertexNormals();
+    mesh.geometry = welded;
+  });
+}
 
 /**
  * The walker's body: a CC0 Quaternius figure (Poly Pizza) recoloured in dull c.1800 cloth colours,
@@ -93,6 +107,7 @@ export class Character {
   static async load(spec: CharacterSpec): Promise<Character> {
     const gltf = await new GLTFLoader().loadAsync(spec.url);
     const root = gltf.scene;
+    smoothShade(root);
     for (const name of spec.hide) {
       const n = root.getObjectByName(name);
       if (n) n.visible = false;

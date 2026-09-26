@@ -5,6 +5,7 @@ import type { AreaData, Building } from './area';
 import type { Terrain } from './terrain';
 import { townHallFrame } from './townhall';
 import { mbox, merged } from './geom';
+import { smoothShade } from '../player/character';
 
 /**
  * Market life on the square (the period views show stalls, carts and townsfolk around the Town Hall):
@@ -194,6 +195,7 @@ async function loadPeople(): Promise<Look[]> {
     try {
       const gltf = await loader.loadAsync(url);
       const src = gltf.scene;
+      smoothShade(src);
       src.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(src);
       const scale = 1.68 / (box.max.y - box.min.y);
