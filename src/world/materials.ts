@@ -21,7 +21,8 @@ function pbrSet(id: string, anisotropy: number) {
 
 /** Rounded fieldstone cobbles for streets and the square. */
 export function createGroundMaterial(anisotropy: number): THREE.MeshStandardMaterial {
-  const m = new THREE.MeshStandardMaterial({ ...pbrSet('cobblestone_floor_08', anisotropy), vertexColors: true, roughness: 1 });
+  // Warm, sandy tint: the period views show dusty ochre paving, not grey stone.
+  const m = new THREE.MeshStandardMaterial({ ...pbrSet('cobblestone_floor_08', anisotropy), color: '#f2e2c4', vertexColors: true, roughness: 1 });
   m.normalScale.set(1.3, 1.3);
   // Dry, dusty stone: no sheen at grazing angles.
   m.onBeforeCompile = shader => {
@@ -132,6 +133,27 @@ export function createChurchMaterials(anisotropy: number) {
     dark: new THREE.MeshStandardMaterial({ color: '#1d1b19', roughness: 0.9, side: THREE.DoubleSide }),
   };
 }
+
+/** The Town Hall promenade and the market booth (from the period views, docs/REFERENCES.md §4.5). */
+export function createPromenadeMaterials(anisotropy: number) {
+  return {
+    stone: plasterMaterial('#e6ddcb', anisotropy, 1.5),
+    wood: createWoodMaterial(anisotropy),
+    bark: new THREE.MeshStandardMaterial({ color: '#4a3b2c', roughness: 1 }),
+    leaves: new THREE.MeshStandardMaterial({ color: '#6f8248', roughness: 0.95 }),
+    gravel: new THREE.MeshStandardMaterial({
+      color: '#c8b28a', roughness: 1,
+      map: worldTex('plastered_wall_04', 'diff', true, anisotropy, 3),
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    }),
+    roof: new THREE.MeshStandardMaterial({
+      color: '#d9b8a6', roughness: 0.9,
+      map: worldTex('clay_roof_tiles', 'diff', true, anisotropy, 2.2),
+      normalMap: worldTex('clay_roof_tiles', 'nor', false, anisotropy, 2.2),
+    }),
+  };
+}
+export type PromenadeMaterials = ReturnType<typeof createPromenadeMaterials>;
 
 /** Hand-made clay tile roofs. */
 export function createRoofMaterial(anisotropy: number): THREE.MeshStandardMaterial {

@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { loadArea } from './world/area';
 import { buildWalls, buildRoofs } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createWoodMaterial } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createWoodMaterial } from './world/materials';
 import { buildBarriers } from './world/props';
 import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
+import { buildPromenade } from './world/promenade';
 import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
@@ -79,6 +80,11 @@ async function main(): Promise<void> {
   const stCasimirData = data.buildings.find(b => b.role === 'stcasimir');
   if (stCasimirData) scene.add(buildStCasimir(stCasimirData, createChurchMaterials(aniso)));
   const walls = new WallGrid(data);
+  if (townHallData) {
+    const promenade = buildPromenade(townHallData, terrain, createPromenadeMaterials(aniso));
+    scene.add(promenade.group);
+    for (const [ax, az, bx, bz] of promenade.segments) walls.addSegment(ax, az, bx, bz);
+  }
   const barriers = buildBarriers(data, terrain, thx, thz, data.meta.walkRadius, createWoodMaterial(aniso));
   if (barriers) scene.add(barriers);
 

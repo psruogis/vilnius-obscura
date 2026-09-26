@@ -149,6 +149,10 @@ End each one with screenshots and a short note to me.
   - The rebuild has a six-column Doric portico and no tower.
   - On 24–25 Apr 1794 the Act of Insurrection was read on the square, and Hetman Szymon Kossakowski was hanged in front of the building.
   - Keep any info-point text factual and respectful.
+- **Period views: the rendering guide.** Four views of the square supplied by the user (Peszka 1797 watercolour,
+  Zaleski c.1846 oil, a mid-19th-century engraving, a later copy after Zaleski), catalogued with what to take from
+  each in `docs/REFERENCES.md` §6.1. Match the look to them whenever rendering anything around the square. Where
+  they disagree, the 1797 Peszka wins. Positions still come from real data and the 1842 plan.
 - **St Casimir's:** Didžioji g. 34, early baroque. Its crown-shaped cupola dates from about 1755 and was restored in 1942.
 
 ```

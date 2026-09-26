@@ -253,11 +253,14 @@ export function buildTownHall(b: Building, mats: TownHallMaterials): THREE.Group
   return group;
 }
 
+/** The Town Hall's local frame in world space: +X along the north façade, +Z into the building. */
+export interface TownHallFrame { origin: THREE.Vector3; dirX: THREE.Vector3; dirZ: THREE.Vector3; theta: number }
+
 /**
  * Orients the local frame on the GRPK footprint: +X along the north façade, origin at the
  * main block's north-west corner. Uses the footprint's longest northward-facing wall.
  */
-function placeOnFootprint(group: THREE.Group, b: Building): void {
+export function townHallFrame(b: Building): TownHallFrame {
   // Main-block corners from the GRPK outline (see docs/REFERENCES.md §4.3):
   // NW (-19.33, 34.21), NE (14.37, 49.65), SW (-32.02, 65.79).
   const ring = b.rings[0];
@@ -273,6 +276,15 @@ function placeOnFootprint(group: THREE.Group, b: Building): void {
   const depth = Math.hypot(vx, vz);
   const across = (depth - D) / 2;
   const dirX = new THREE.Vector3(ux / len, 0, uz / len), dirZ = new THREE.Vector3(vx / depth, 0, vz / depth);
-  group.position.set(nw[0], b.groundY, nw[1]).addScaledVector(dirX, along).addScaledVector(dirZ, across);
-  group.rotation.y = theta;
+  const origin = new THREE.Vector3(nw[0], b.groundY, nw[1]).addScaledVector(dirX, along).addScaledVector(dirZ, across);
+  return { origin, dirX, dirZ, theta };
 }
+
+function placeOnFootprint(group: THREE.Group, b: Building): void {
+  const f = townHallFrame(b);
+  group.position.copy(f.origin);
+  group.rotation.y = f.theta;
+}
+
+/** Town Hall model dimensions, for things placed against it. */
+export const TOWN_HALL_SIZE = { W, D, PORTICO_X0, PORTICO_X1, PORTICO_DEPTH };

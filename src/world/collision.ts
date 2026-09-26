@@ -27,6 +27,11 @@ export class WallGrid {
     }
   }
 
+  /** Adds a free-standing wall (fences, booths). */
+  addSegment(ax: number, az: number, bx: number, bz: number): void {
+    this.add({ ax, az, bx, bz, stamp: 0 });
+  }
+
   private key(cx: number, cz: number): number {
     return (cx + 32768) * 65536 + (cz + 32768);
   }

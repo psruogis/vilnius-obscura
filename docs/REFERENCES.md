@@ -416,6 +416,34 @@ Category: https://commons.wikimedia.org/wiki/Category:Church_of_St._Casimir_in_V
 
 ---
 
+### 6.1 The rendering guide: four views of the square supplied by the user (26 Sep 2026)
+
+All four look at the portico from the north-west, down the square towards St Casimir's and the Gate of Dawn.
+They are the visual reference for everything rendered around the square. The 1842 plan
+(`tools/reconstruction/README.md`) fixes positions; the views fix the look.
+
+| # | View | Identified as | Date weight |
+|---|---|---|---|
+| 1 | Oil, warm evening light, stone posts with rails, steps to the portico | **Marcin Zaleski, c.1846**, National Museum, Warsaw (`Zaleski Town Hall in Vilnius.jpg`, §6) | Later: use for colour and materials |
+| 2 | Engraving, same viewpoint, open square, post-and-rail fence | Mid-19th-century print, probably the 1845 lithograph or W. Floyd 1851 (§6) [U] | Later |
+| 3 | Watercolour: fenced walk with **young trees**, a **long low booth** with a tiled hip roof west of the portico, a carriage | **Józef Peszka, 1797**, Vilnius University Library (§6) | **Closest to 1800: wins any conflict** |
+| 4 | Oil copy after Zaleski, signed, undated | Later copy; mood only (may still be in copyright, not to be reproduced) | — |
+
+What the scene takes from them, and where it is implemented:
+- **Promenade in front of the portico** (`src/world/promenade.ts`). The enclosure is as wide as the portico and runs
+  straight on from it for about 140 m, with a rounded north end and a well (1842 plan). It has **stone posts with
+  two timber rails** (views 1, 2, 4), **one row of young trees inside each fence** (view 3; the 1842 plan shows them
+  grown), and a sandy gravel walk.
+- **Market booth** west of the portico (view 3): long, low, limewashed, tiled hip roof, open timber front facing
+  the promenade. Position is conjecture (grade C).
+- **Colours:** warm cream-to-ochre plaster and red-brown tile roofs (1, 3); the Town Hall pale warm stone (3) to
+  golden in low sun (1). Paving is dusty and sandy, not grey (all four): ground tint `#f2e2c4`.
+- **St Casimir's** reads above the east side of the square with its dome, crown and two towers (1, 4), as modelled.
+- **Still to do from the views:**
+  - arcaded ground-floor shops on the east side of the square (1, 4);
+  - people and carriages (all four; M5);
+  - warm late-afternoon light as a preset (1).
+
 ## 7. Credit lines ready for CREDITS.md
 
 - **Poly Haven textures:** "<asset name> by Poly Haven (polyhaven.com), CC0". Credit is optional; list them anyway.
