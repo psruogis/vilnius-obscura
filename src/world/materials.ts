@@ -51,7 +51,7 @@ export function createWoodMaterial(anisotropy: number): THREE.MeshStandardMateri
   return new THREE.MeshStandardMaterial({ ...pbrSet('weathered_planks', anisotropy), roughness: 1 });
 }
 
-function worldTex(id: string, map: string, srgb: boolean, anisotropy: number, tile: number): THREE.Texture {
+export function worldTex(id: string, map: string, srgb: boolean, anisotropy: number, tile: number): THREE.Texture {
   const t = tex(`assets/tex/${id}/${map}.jpg`, srgb, anisotropy);
   t.repeat.set(1 / tile, 1 / tile);
   return t;
@@ -79,7 +79,7 @@ const PLASTER_DETAIL = `{
     float lum = dot(sampledDiffuseColor.rgb, vec3(0.3333)) / 0.42;
     diffuseColor.rgb = diffuse * clamp(lum, 0.82, 1.12);
   }`;
-function plasterMaterial(tint: string, anisotropy: number, tile = 2.5): THREE.MeshStandardMaterial {
+export function plasterMaterial(tint: string, anisotropy: number, tile = 2.5): THREE.MeshStandardMaterial {
     const m = new THREE.MeshStandardMaterial({
       color: tint, roughness: 1,
       map: worldTex('plastered_wall_04', 'diff', true, anisotropy, tile),

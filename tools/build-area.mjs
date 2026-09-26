@@ -280,6 +280,43 @@ function buildRoof(localRings) {
   } catch { return null; }
 }
 
+// Houses near the walk get full façade geometry in the browser (src/world/facades.ts) and roofs that
+// overhang the walls by EAVE_OVERHANG; the rest keep painted façades.
+const DETAIL_RADIUS = WALK_RADIUS + 70;
+const EAVE_OVERHANG = 0.3;
+
+/** Offsets every ring away from the building's inside (outer ring outwards, courtyards inwards). */
+function offsetRings(rings, d) {
+  const inside = (x, z) => pointInRingXZ(x, z, rings[0]) && !rings.slice(1).some(h => pointInRingXZ(x, z, h));
+  return rings.map(ring => {
+    const n = ring.length;
+    const normals = ring.map((a, i) => {
+      const b = ring[(i + 1) % n];
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      let nx = (b[1] - a[1]) / L, nz = -(b[0] - a[0]) / L;
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      if (inside(mx + nx * 0.05, mz + nz * 0.05)) { nx = -nx; nz = -nz; }
+      return [nx, nz];
+    });
+    return ring.map((v, i) => {
+      const n0 = normals[(i - 1 + n) % n], n1 = normals[i];
+      let mx = n0[0] + n1[0], mz = n0[1] + n1[1];
+      const ml = Math.hypot(mx, mz) || 1;
+      mx /= ml; mz /= ml;
+      const s = 1 / Math.max(0.35, mx * n1[0] + mz * n1[1]);
+      return [v[0] + mx * d * s, v[1] + mz * d * s];
+    });
+  });
+}
+function pointInRingXZ(x, z, r) {
+  let c = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const [xi, zi] = r[i], [xj, zj] = r[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c;
+  }
+  return c;
+}
+
 let roofFails = 0;
 for (const b of buildings) {
   const outerEN = b.rings[0].map(toEN);
@@ -290,11 +327,19 @@ for (const b of buildings) {
   b.groundY = round(groundAbs - H0);        // façade floor lines start here
   b.baseY = round(minG - H0 - 0.4);         // walls reach below the lowest ground
   b.eaveY = round(groundAbs - H0 + b.eave);
-  b.roof = buildRoof(b.rings);
+  b.detail = (b.role === 'ordinary' || b.role === 'recon') && b.dist <= DETAIL_RADIUS;
+  b.roof = null;
+  if (b.detail) {
+    b.roof = buildRoof(offsetRings(b.rings, EAVE_OVERHANG));
+    if (b.roof) b.overhang = EAVE_OVERHANG;
+  }
+  if (!b.roof) b.roof = buildRoof(b.rings);
   if (!b.roof) roofFails++;
   delete b.ground;
 }
 stats.roofFails = roofFails;
+stats.detailed = buildings.filter(b => b.detail).length;
+stats.overhangs = buildings.filter(b => b.overhang).length;
 
 // Terrain grid at 4 m, heights relative to H0 (row 0 = south edge).
 let terrainOut = null;

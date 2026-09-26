@@ -59,11 +59,17 @@ export class Post {
 
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera) {
     const w = window.innerWidth, h = window.innerHeight;
-    const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 0 });
+    // One depth buffer shared by both ping-pong targets: the AO pass reads the main render's depth and
+    // rebuilds normals from it, instead of drawing the whole scene again.
+    const depth = new THREE.DepthTexture(w, h);
+    const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 0, depthTexture: depth });
     this.composer = new EffectComposer(renderer, target);
+    this.composer.renderTarget2.depthTexture = depth;
     this.composer.addPass(new RenderPass(scene, camera));
 
     this.gtao = new GTAOPass(scene, camera, w, h);
+    // (passing depthTexture to the constructor trips a three.js r186 bug in setGBuffer; switching afterwards works)
+    this.gtao.setGBuffer(depth);
     this.gtao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.4, thickness: 1.6, scale: 1.15, samples: 16, distanceFallOff: 1.0 });
     this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
     this.gtao.blendIntensity = 0.9;
@@ -76,6 +82,7 @@ export class Post {
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.grade);
     this.composer.addPass(new SMAAPass());
+    renderer.setPixelRatio(this.scale);
     this.setSize(w, h);
 
     window.addEventListener('keydown', e => { if (e.code === 'KeyP') this.enabled = !this.enabled; });
@@ -87,8 +94,26 @@ export class Post {
     this.grade.uniforms.uAspect.value = w / h;
   }
 
+  // Dynamic resolution: keep the frame rate near 60 by trading pixel density (0.75x to 2x).
+  private acc = 0; private frames = 0;
+  private scale = Math.min(window.devicePixelRatio, 1.5);
+
   render(dt: number): void {
     if (this.enabled) this.composer.render(dt);
     else this.renderer.render(this.scene, this.camera);
+    if (dt <= 0) return;
+    this.acc += dt; this.frames++;
+    if (this.acc < 1.5) return;
+    const fps = this.frames / this.acc;
+    this.acc = 0; this.frames = 0;
+    const max = Math.min(window.devicePixelRatio, 2);
+    const next = fps < 48 ? Math.max(0.75, this.scale - 0.25) : fps > 58 && this.scale < max ? Math.min(max, this.scale + 0.125) : this.scale;
+    if (next !== this.scale) {
+      this.scale = next;
+      this.renderer.setPixelRatio(next);
+      this.setSize(window.innerWidth, window.innerHeight);
+    }
   }
+
+  get pixelRatio(): number { return this.scale; }
 }

@@ -8,6 +8,8 @@ import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
 import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
+import { buildFacades } from './world/facades';
+import { createHouseMaterials } from './world/houseMaterials';
 import { Character, TOWNSMAN, TRAVELLER } from './player/character';
 import { Ambience } from './audio/ambience';
 import { Post } from './render/post';
@@ -83,6 +85,12 @@ async function main(force = false): Promise<void> {
   const wallMesh = new THREE.Mesh(buildWalls(data), createFacadeMaterial(aniso));
   const roofMesh = new THREE.Mesh(buildRoofs(data), createRoofMaterial(aniso));
   for (const m of [wallMesh, roofMesh]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+  // Houses near the walk: real façade geometry (openings, reveals, sills, cornices, chimneys)
+  const houseMats = createHouseMaterials(aniso);
+  houseMats.glass.envMap = scene.environment; // full-strength sky reflections in the glass (scene env is dimmed)
+  houseMats.glass.envMapIntensity = 1.0;
+  const facades = buildFacades(data, terrain, houseMats);
+  scene.add(facades.group);
   const townHallData = data.buildings.find(b => b.role === 'townhall');
   if (townHallData) scene.add(buildTownHall(townHallData, createTownHallMaterials(aniso)));
   const stCasimirData = data.buildings.find(b => b.role === 'stcasimir');
@@ -161,7 +169,7 @@ async function main(force = false): Promise<void> {
       data, walker, camera, renderer, scene,
       get character() { return character; },
       get ambience() { return ambience; },
-      post, shadows,
+      post, shadows, facadeStats: facades.stats,
       // Saves the current frame to .screens/<name>.jpg via the dev server.
       snapshot: async (name: string) => {
         post.render(0);

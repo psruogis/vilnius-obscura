@@ -26,6 +26,10 @@ export interface Building {
   eaveY: number;
   roof: Roof | null;
   rings: XZ[][];
+  /** Near the walk: full façade geometry (src/world/facades.ts). */
+  detail?: boolean;
+  /** Metres the roof reaches beyond the walls (detailed houses). */
+  overhang?: number;
   source?: string | null;
   grade?: string;
 }

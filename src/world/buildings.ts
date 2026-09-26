@@ -6,7 +6,7 @@ const PLASTER_TILE = 2.5;
 const ROOF_TILE = 2.2;
 
 // Limewash tints for c.1800 houses, authored in sRGB.
-const LIMEWASH = ['#efe6d2', '#e9dcbd', '#e4cf9c', '#dfc9a2', '#ebe3d3', '#dcd4c2', '#e8d2ad', '#d6cab3', '#e6d8c0', '#dcc39a'];
+export const LIMEWASH = ['#efe6d2', '#e9dcbd', '#e4cf9c', '#dfc9a2', '#ebe3d3', '#dcd4c2', '#e8d2ad', '#d6cab3', '#e6d8c0', '#dcc39a'];
 const ROOF_TINTS = ['#ffffff', '#f4e4dc', '#e9d6c8', '#fff1e6', '#dcc6b8'];
 
 export function hashString(s: string): number {
@@ -67,7 +67,7 @@ export function buildWalls(data: AreaData): THREE.BufferGeometry {
   const n = new THREE.Vector3();
   const tint = new THREE.Color();
   for (const bd of data.buildings) {
-    if (bd.role === 'townhall' || bd.role === 'stcasimir') continue; // modelled separately
+    if (bd.role === 'townhall' || bd.role === 'stcasimir' || bd.detail) continue; // modelled separately (townhall.ts, stcasimir.ts, facades.ts)
     const seed = hashString(bd.id);
     if (bd.role === 'stcasimir') tint.set('#efe8da');
     else tint.set(LIMEWASH[seed % LIMEWASH.length]);
