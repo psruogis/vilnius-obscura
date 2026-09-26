@@ -20,23 +20,60 @@ interface Base {
   idle: THREE.AnimationClip; walk: THREE.AnimationClip;
   height: number; palettes: Record<string, string>[];
   restHeight: number;                   // model height in rest pose, scene units
+  restTop: number;
+  female: boolean;
 }
 
+// c.1900 townsfolk after the period views: dark, full clothes, hats (coat = the model's shirt and sleeves)
 const MEN = [
-  { Shirt: '#3d2f22', Pants: '#4a4237', TieTexture: '#e6dfd0', Details: '#5e4c36', Hair: '#2b2118', Skin: '#c79a7a' },
-  { Shirt: '#2c3640', Pants: '#5a5146', TieTexture: '#efe9dc', Details: '#4a3c2a', Hair: '#4a3727', Skin: '#d2a888' },
-  { Shirt: '#5a4430', Pants: '#2e2a26', TieTexture: '#ddd5c4', Details: '#3a3028', Hair: '#1f1a15', Skin: '#bb8c6a' },
-  { Shirt: '#44382e', Pants: '#6b5f4c', TieTexture: '#e2dccd', Details: '#6a5a40', Hair: '#6a5238', Skin: '#cfa283' },
-  { Shirt: '#3a4034', Pants: '#3b352e', TieTexture: '#f0ead8', Details: '#2e2822', Hair: '#3b2c20', Skin: '#c49276' },
+  { Shirt: '#1c1b1a', Pants: '#2a2826', TieTexture: '#e8e3d6', Details: '#161514', Hair: '#2b2118', Skin: '#c79a7a', Coat: '#1c1b1a', Hat: '#141312' },
+  { Shirt: '#26221e', Pants: '#3a3632', TieTexture: '#efe9dc', Details: '#1c1a18', Hair: '#4a3727', Skin: '#d2a888', Coat: '#26221e', Hat: '#1a1816' },
+  { Shirt: '#2e2a24', Pants: '#23201d', TieTexture: '#ddd5c4', Details: '#211e1b', Hair: '#1f1a15', Skin: '#bb8c6a', Coat: '#2e2a24', Hat: '#3a3530' },
+  { Shirt: '#1f2428', Pants: '#2c2c2a', TieTexture: '#e2dccd', Details: '#1a1c1e', Hair: '#6a5238', Skin: '#cfa283', Coat: '#1f2428', Hat: '#161819' },
+  { Shirt: '#3a3026', Pants: '#2e2a26', TieTexture: '#f0ead8', Details: '#2a241e', Hair: '#3b2c20', Skin: '#c49276', Coat: '#3a3026', Hat: '#2a2520' },
+  { Shirt: '#232a22', Pants: '#262420', TieTexture: '#e8e2d2', Details: '#1c201a', Hair: '#2e241b', Skin: '#c89a7c', Coat: '#232a22', Hat: '#1c1c1a' },
 ];
 const WOMEN = [
-  { Dress: '#5b4a3b', Shoes: '#2a2019', Hair: '#3a2a1d', Skin: '#d4a98a' },
-  { Dress: '#3d4a55', Shoes: '#241c16', Hair: '#5a4128', Skin: '#caa085' },
-  { Dress: '#7a6a55', Shoes: '#2a2019', Hair: '#2a1f16', Skin: '#d8b096' },
-  { Dress: '#6b3b2e', Shoes: '#221a14', Hair: '#4a3522', Skin: '#c59478' },
-  { Dress: '#4e5840', Shoes: '#2a2019', Hair: '#6b4c30', Skin: '#d2a488' },
-  { Dress: '#8a7a64', Shoes: '#221a14', Hair: '#1e1712', Skin: '#c89a7c' },
+  { Dress: '#1e1c1b', Shoes: '#1a1614', Hair: '#3a2a1d', Skin: '#d4a98a', Shawl: '#ece6d8', Hat: '#ece6d8' },
+  { Dress: '#2a2420', Shoes: '#1a1614', Hair: '#5a4128', Skin: '#caa085', Shawl: '#3a3530', Hat: '#221f1c' },
+  { Dress: '#232830', Shoes: '#1a1614', Hair: '#2a1f16', Skin: '#d8b096', Shawl: '#e2dccb', Hat: '#e2dccb' },
+  { Dress: '#3a2420', Shoes: '#1a1614', Hair: '#4a3522', Skin: '#c59478', Shawl: '#5a4e40', Hat: '#2a2320' },
+  { Dress: '#26291f', Shoes: '#1a1614', Hair: '#6b4c30', Skin: '#d2a488', Shawl: '#d8cfbc', Hat: '#d8cfbc' },
+  { Dress: '#4a4236', Shoes: '#1a1614', Hair: '#1e1712', Skin: '#c89a7c', Shawl: '#efe9dc', Hat: '#1e1c1a' },
+  { Dress: '#161616', Shoes: '#141210', Hair: '#3a2a1d', Skin: '#d4a98a', Shawl: '#8a7a64', Hat: '#161616' },
 ];
+
+// --- Period dress: hats, coat skirts, full skirts, shawls, umbrellas (attached to the bones) --------------
+function colored(g: THREE.BufferGeometry, c: THREE.ColorRepresentation): THREE.BufferGeometry {
+  const src = g.index ? g.toNonIndexed() : g;
+  const n = src.getAttribute('position').count, arr = new Float32Array(n * 3), col = new THREE.Color(c);
+  for (let i = 0; i < n; i++) { arr[i * 3] = col.r; arr[i * 3 + 1] = col.g; arr[i * 3 + 2] = col.b; }
+  src.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  if (src.getAttribute('uv')) src.deleteAttribute('uv');
+  return src;
+}
+const lathe = (pts: [number, number][], seg = 18) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
+
+function hatGeometry(kind: number, c: string): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  if (kind === 0) {        // top hat
+    parts.push(lathe([[0, 0.2], [0.098, 0.2], [0.092, 0.03], [0.095, 0]], 16), new THREE.CylinderGeometry(0.098, 0.098, 0.005, 16).translate(0, 0.2, 0));
+    parts.push(new THREE.CylinderGeometry(0.17, 0.17, 0.012, 20).translate(0, 0.012, 0));
+  } else if (kind === 1) { // bowler
+    parts.push(new THREE.SphereGeometry(0.1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.05, 1.1).translate(0, 0.01, 0));
+    parts.push(lathe([[0.1, 0.01], [0.155, 0.012], [0.165, 0.03]], 20));
+  } else if (kind === 2) { // peaked cap
+    parts.push(new THREE.CylinderGeometry(0.115, 0.1, 0.075, 14).translate(0, 0.04, 0));
+    parts.push(new THREE.BoxGeometry(0.16, 0.012, 0.09).rotateX(0.25).translate(0, 0.012, 0.13));
+  } else if (kind === 3) { // bonnet
+    parts.push(new THREE.SphereGeometry(0.115, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.62).scale(1, 1.05, 1.15).translate(0, -0.03, -0.02));
+    parts.push(new THREE.TorusGeometry(0.12, 0.025, 6, 14, Math.PI).rotateX(-0.35).translate(0, -0.03, 0.05));
+  } else {                 // headscarf, knotted under the chin
+    parts.push(new THREE.SphereGeometry(0.118, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 1.1, 1.12).translate(0, -0.04, -0.01));
+    parts.push(new THREE.ConeGeometry(0.1, 0.16, 6).rotateX(Math.PI).translate(0, -0.1, -0.1));
+  }
+  return mergeGeometries(parts.map(p => colored(p, c)), false)!;
+}
 
 async function loadBase(url: string, idleName: string, walkName: string, palettes: Record<string, string>[], height: number): Promise<Base> {
   const gltf = await new GLTFLoader().loadAsync(url);
@@ -71,7 +108,7 @@ async function loadBase(url: string, idleName: string, walkName: string, palette
   const find = (n: string) => gltf.animations.find(a => a.name.endsWith(n))!;
   scene.updateMatrixWorld(true);
   const rb = new THREE.Box3().setFromObject(scene);
-  return { geometry, partOf, parts, scene, idle: find(idleName), walk: find(walkName), height, palettes, restHeight: rb.max.y - rb.min.y };
+  return { geometry, partOf, parts, scene, idle: find(idleName), walk: find(walkName), height, palettes, restHeight: rb.max.y - rb.min.y, restTop: rb.max.y, female: parts.includes('Dress') };
 }
 
 interface Person {
@@ -87,7 +124,7 @@ export async function buildCrowd(opts: {
   walls: WallGrid; terrain: Terrain; centre: THREE.Vector2; radius: number;
   free: (x: number, z: number) => boolean;           // open ground (not inside a building)
   groups: THREE.Vector2[];                            // spots where people stand in knots
-  strollers: number; material: THREE.MeshStandardMaterial;
+  strollers: number; material: THREE.MeshStandardMaterial; accessories: THREE.MeshStandardMaterial; umbrellas: boolean;
 }): Promise<Crowd> {
   const bases = (await Promise.all([
     loadBase('assets/char/man.glb', 'Man_Idle', 'Man_Walk', MEN, 1.72),
@@ -130,10 +167,51 @@ export async function buildCrowd(opts: {
     // scale to height (from the rest-pose size of the whole model, as the market figures do)
     const s = (base.height * (0.94 + rnd() * 0.1)) / Math.max(1e-3, base.restHeight);
     skel.scale.multiplyScalar(s);
+    // dress: hat on the head, coat skirt or full skirt on the hips, shawl on the shoulders
+    skel.updateMatrixWorld(true);
+    const H = base.restHeight * s, top = base.restTop * s;
+    const bone = (n: string) => skel.getObjectByName(n);
+    const attach = (b: THREE.Object3D | undefined, geo: THREE.BufferGeometry, at: THREE.Vector3) => {
+      if (!b) return;
+      const m = new THREE.Mesh(geo, opts.accessories);
+      new THREE.Matrix4().copy(b.matrixWorld).invert().multiply(new THREE.Matrix4().makeTranslation(at.x, at.y, at.z)).decompose(m.position, m.quaternion, m.scale);
+      m.castShadow = true; m.frustumCulled = false;
+      b.add(m);
+    };
+    const head = bone('Head'), hips = bone('Hips'), torso = bone('Torso');
+    const hp = new THREE.Vector3(), tp = new THREE.Vector3();
+    if (head) head.getWorldPosition(hp);
+    if (hips) hips.getWorldPosition(tp);
+    const P = pal as Record<string, string>;
+    if (!base.female) {
+      const hatKind = rnd() < 0.42 ? 0 : rnd() < 0.62 ? 1 : 2;
+      attach(head, hatGeometry(hatKind, P.Hat ?? '#161514'), new THREE.Vector3(hp.x, top - (hatKind === 2 ? 0.06 : 0.07), hp.z + 0.01));
+      // frock coat or greatcoat skirt, waist to knee (or calf)
+      const knee = H * (rnd() < 0.4 ? 0.2 : 0.3);
+      attach(hips, colored(lathe([[0.165, H * 0.6], [0.19, H * 0.5], [0.23, H * 0.38], [0.27, knee]], 16), new THREE.Color(P.Coat ?? '#1c1b1a').multiplyScalar(0.95)), new THREE.Vector3(tp.x, 0, tp.z));
+    } else {
+      // full skirt to the ground
+      const w0 = 0.15, w1 = 0.36 + rnd() * 0.1;
+      attach(hips, colored(lathe([[w0, H * 0.6], [w0 + 0.05, H * 0.5], [w1 * 0.8, H * 0.25], [w1, 0.03], [w1 * 0.95, 0.0]], 20), P.Dress ?? '#1e1c1b'), new THREE.Vector3(tp.x, 0, tp.z));
+      // shawl over the shoulders (most women), bonnet or headscarf
+      if (rnd() < 0.75) attach(torso ?? hips, colored(lathe([[0.075, H * 0.84], [0.17, H * 0.8], [0.25, H * 0.7], [0.24, H * 0.6]], 18), P.Shawl ?? '#ece6d8'), new THREE.Vector3(tp.x, 0, tp.z));
+      const hatKind = rnd() < 0.55 ? 4 : 3;
+      attach(head, hatGeometry(hatKind, P.Hat ?? '#ece6d8'), new THREE.Vector3(hp.x, top - 0.1, hp.z));
+    }
     const root = new THREE.Group();
     root.add(skel);
     root.position.set(x, opts.terrain.heightAt(x, z), z);
     root.rotation.y = yaw;
+    if (opts.umbrellas && rnd() < 0.4) {
+      const u = new THREE.Mesh(mergeGeometries([
+        colored(new THREE.CylinderGeometry(0.01, 0.01, 1.3, 5).translate(0, 1.55, 0), '#2a2420'),
+        colored(lathe([[0, 0.3], [0.2, 0.22], [0.42, 0.06], [0.5, 0]], 8).translate(0, 2.05, 0), '#141414'),
+      ], false)!, opts.accessories);
+      u.position.set(0.18, 0, 0.08);
+      u.rotation.z = -0.08;
+      u.castShadow = true;
+      root.add(u);
+    }
     group.add(root);
     const mixer = new THREE.AnimationMixer(skel);
     const idle = mixer.clipAction(base.idle), walk = mixer.clipAction(base.walk);

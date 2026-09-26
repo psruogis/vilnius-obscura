@@ -112,7 +112,7 @@ export async function buildMarket(data: AreaData, th: Building, terrain: Terrain
   goods.forEach((g, i) => add(g, mats.goods[i]));
 
   // --- Townsfolk ---------------------------------------------------------------------------------
-  const people = await loadPeople();
+  const people = withStalls ? await loadPeople() : []; // c.1900: the crowd (people.ts) fills the square instead
   const mixers: THREE.AnimationMixer[] = [];
   const walkers: { obj: THREE.Object3D; a: THREE.Vector3; b: THREE.Vector3; t: number; dir: number; speed: number }[] = [];
   const figures = (people.length ? standAt : []).map((s, i) => ({ ...s, look: people[i % people.length] }));

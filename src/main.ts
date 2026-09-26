@@ -190,6 +190,8 @@ async function main(force = false): Promise<void> {
       buildCrowd({
         walls, terrain, free, centre: new THREE.Vector2(thx, thz), radius: data.meta.walkRadius + 25, groups, strollers: 46,
         material: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }),
+        accessories: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }),
+        umbrellas: RAIN,
       }).then(c => { crowd = c; scene.add(c.group); shadows.apply(c.group); }).catch(err => console.warn('crowd', err));
     }).catch(err => console.warn('market', err));
   }
