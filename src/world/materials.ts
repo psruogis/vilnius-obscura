@@ -33,6 +33,11 @@ export function createGroundMaterial(anisotropy: number): THREE.MeshStandardMate
   return m;
 }
 
+/** Weathered timber for fences, barrels, carts and stalls. */
+export function createWoodMaterial(anisotropy: number): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({ ...pbrSet('weathered_planks', anisotropy), roughness: 1 });
+}
+
 /** Hand-made clay tile roofs. */
 export function createRoofMaterial(anisotropy: number): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ ...pbrSet('clay_roof_tiles', anisotropy), vertexColors: true, roughness: 1 });

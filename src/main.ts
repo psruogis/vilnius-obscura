@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { loadArea } from './world/area';
 import { buildWalls, buildRoofs } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createWoodMaterial } from './world/materials';
+import { buildBarriers } from './world/props';
 import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
@@ -64,6 +65,8 @@ async function main(): Promise<void> {
   const roofMesh = new THREE.Mesh(buildRoofs(data), createRoofMaterial(aniso));
   for (const m of [wallMesh, roofMesh]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
   const walls = new WallGrid(data);
+  const barriers = buildBarriers(data, terrain, thx, thz, data.meta.walkRadius, createWoodMaterial(aniso));
+  if (barriers) scene.add(barriers);
 
   // Walker: start on the square, north of the Town Hall, facing it
   const input = new Input(renderer.domElement);

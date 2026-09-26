@@ -275,7 +275,20 @@ if (terrain) {
     for (let j = 0; j < f; j++) for (let i = 0; i < f; i++) sum += z[(y * f + j) * nx + (x * f + i)];
     h.push(round(sum / (f * f) - H0));
   }
-  terrainOut = { e0: origin[0], n0: origin[1], cell: TERRAIN_CELL, nx: tx, ny: ty, h };
+  // c.1800 streets had slopes but no kerbs, planters or terraces: remove features
+  // smaller than ~10 m (3x3 median, then two 3x3 box blurs) and keep the real gradient.
+  const filt = (src, fn) => src.map((_, i) => {
+    const x = i % tx, y = (i / tx) | 0, win = [];
+    for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+      const xx = Math.min(tx - 1, Math.max(0, x + k)), yy = Math.min(ty - 1, Math.max(0, y + j));
+      win.push(src[yy * tx + xx]);
+    }
+    return fn(win);
+  });
+  const median = w => w.sort((a, b) => a - b)[4];
+  const mean = w => w.reduce((a, b) => a + b, 0) / w.length;
+  const smooth = filt(filt(filt(h, median), mean), mean).map(round);
+  terrainOut = { e0: origin[0], n0: origin[1], cell: TERRAIN_CELL, nx: tx, ny: ty, h: smooth };
 }
 
 const out = {
