@@ -30,12 +30,13 @@ const E0 = 583000, N0 = 6061000;
 const TOWN_HALL = { E: 582993, N: 6060944 };
 const WALK_RADIUS = 110;     // walkable area around the Town Hall (owner: keep it close)
 const CONTEXT_RADIUS = 450;  // backdrop buildings beyond it
-const STOREY_GROUND = 4.0, STOREY_UPPER = 3.4;
-const DEFAULT_EAVE = 11.0;
-const CAP_ORDINARY = STOREY_GROUND + 2 * STOREY_UPPER + 0.7; // three storeys, c.1800
-const CAP_LARGE = 16.0;      // palaces, monasteries, big blocks
+// Setting: c.1900 (the owner's photographs). Tall shop ground floors, 3-4 storeys, lower metal roofs.
+const STOREY_GROUND = 4.4, STOREY_UPPER = 3.7;
+const DEFAULT_EAVE = STOREY_GROUND + 2 * STOREY_UPPER + 0.7; // three storeys
+const CAP_ORDINARY = STOREY_GROUND + 3 * STOREY_UPPER + 0.9; // four storeys, c.1900 (post-war towers capped)
+const CAP_LARGE = 20.0;      // palaces, monasteries, big blocks
 const LARGE_FOOTPRINT = 1500;
-const RECON_EAVE = STOREY_GROUND + STOREY_UPPER + 0.6; // two storeys, the common c.1800 house
+const RECON_EAVE = STOREY_GROUND + 2 * STOREY_UPPER + 0.7; // three storeys, the common c.1900 house
 
 const local = ([e, n]) => [round(e - E0), round(-(n - N0))];
 const round = v => Math.round(v * 100) / 100;
@@ -199,7 +200,7 @@ for (const f of grpk.features) {
     else if (match && match.levels) { eave = STOREY_GROUND + (match.levels - 1) * STOREY_UPPER + 0.5; source = 'osm-levels'; stats.osmLevels++; }
     else { eave = DEFAULT_EAVE; source = 'default'; stats.default++; }
   }
-  // c.1800 rule: many houses gained storeys later. Cap ordinary houses at three storeys.
+  // c.1900 rule: cap ordinary houses at four storeys (taller ones are post-war).
   let capped = false;
   if (role === 'ordinary') {
     const cap = area > LARGE_FOOTPRINT ? CAP_LARGE : CAP_ORDINARY;
@@ -227,7 +228,7 @@ for (const reconFile of reconFiles('_historic.geojson')) {
     polys.forEach((poly, i) => {
       const rings = poly.map(dropClosing);
       const c = ringCentroid(rings[0]);
-      const storeys = Number(f.properties.storeys) || 0;
+      const storeys = (Number(f.properties.storeys) || 2) + 1; // plots traced from 1842 gained a storey by 1900
       const eave = storeys ? STOREY_GROUND + (storeys - 1) * STOREY_UPPER + 0.6 : RECON_EAVE;
       buildings.push({
         id: `${tag}-${f.properties.id ?? buildings.length}-${i}`, role: 'recon', area: Math.round(ringArea(rings[0])),
@@ -244,8 +245,8 @@ for (const reconFile of reconFiles('_historic.geojson')) {
 const townHallB = buildings.find(b => b.role === 'townhall');
 const H0 = round((townHallB && lidar?.[townHallB.id]?.ground) ?? groundAt(TOWN_HALL.E, TOWN_HALL.N) ?? 0);
 const toEN = ([x, z]) => [x + E0, N0 - z];
-const ROOF_MAX = 9;        // m; c.1800 roofs are steep, but deep blocks shouldn't tower
-const PITCH = 1.0;         // tan(45°)
+const ROOF_MAX = 7;        // m; deep blocks shouldn't tower
+const PITCH = 0.7;         // tan(35°): c.1900 sheet-metal roofs are lower than the old tile roofs
 
 function cleanRing(r) {
   const out = [];
@@ -318,6 +319,15 @@ function pointInRingXZ(x, z, r) {
     if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c;
   }
   return c;
+}
+
+// Buildings modelled from the owner's photographs (src/world/facades.ts heroFacade): style and height.
+// d71a876e: the eclectic corner house east of the Town Hall (1920s photo of the square), 3 storeys.
+const HEROES = { 'd71a876e': { style: 'eclectic', eave: 13.4 }, '7228928c': { style: 'hotel', eave: 16.6 } };
+// 7228928c: Hotel Italia (today's Astorija, Didžioji 35) on Didžioji opposite St Casimir's (postcard 'Ulica Wielka'), 4 storeys.
+for (const b of buildings) {
+  const h = Object.entries(HEROES).find(([k]) => b.id.startsWith(k));
+  if (h) { b.style = h[1].style; b.eave = h[1].eave; b.capped = false; }
 }
 
 let roofFails = 0;

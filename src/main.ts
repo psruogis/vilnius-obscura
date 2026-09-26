@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { loadArea } from './world/area';
-import { buildWalls, buildRoofs } from './world/buildings';
+import { buildWalls, buildRoofs, hasTileRoof } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createWoodMaterial } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial } from './world/materials';
 import { buildBarriers } from './world/props';
 import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
@@ -101,7 +101,10 @@ async function main(force = false): Promise<void> {
   const wallMat = age(createFacadeMaterial(aniso), { strength: 0.8, seed: 4 });
   if (RAIN) wet(wallMat, 'wall', 0, 'vFacade.y');
   const wallMesh = new THREE.Mesh(buildWalls(data), wallMat);
-  const roofMesh = new THREE.Mesh(buildRoofs(data), RAIN ? wet(createRoofMaterial(aniso), 'roof') : createRoofMaterial(aniso));
+  const roofMesh = new THREE.Mesh(buildRoofs(data, hasTileRoof), RAIN ? wet(createRoofMaterial(aniso), 'roof') : createRoofMaterial(aniso));
+  const metalRoofMesh = new THREE.Mesh(buildRoofs(data, b => !hasTileRoof(b), true), RAIN ? wet(createMetalRoofMaterial(), 'roof') : createMetalRoofMaterial());
+  metalRoofMesh.castShadow = true; metalRoofMesh.receiveShadow = true;
+  scene.add(metalRoofMesh);
   for (const m of [wallMesh, roofMesh]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
   // Houses near the walk: real façade geometry (openings, reveals, sills, cornices, chimneys)
   const houseMats = createHouseMaterials(aniso);
@@ -110,9 +113,11 @@ async function main(force = false): Promise<void> {
   if (RAIN) {
     wet(houseMats.wall, 'wall', 0, 'vWall.y');
     wet(houseMats.trim, 'wall', 0);
+    wet(houseMats.canvas, 'roof');
+    wet(houseMats.metal, 'roof');
     houseMats.glass.emissiveIntensity = 1.6; // a few rooms lit against the gloom
   }
-  const facades = buildFacades(data, terrain, houseMats);
+  const facades = buildFacades(data, terrain, houseMats, openGround(data, thx, thz, 240));
   scene.add(facades.group);
   const townHallData = data.buildings.find(b => b.role === 'townhall');
   if (townHallData) {
@@ -142,7 +147,9 @@ async function main(force = false): Promise<void> {
   const walls = new WallGrid(data);
   let promenadeRef: { update(dt: number): void } | null = null;
   if (townHallData) {
-    const promenade = buildPromenade(townHallData, terrain, createPromenadeMaterials(aniso));
+    const promMats = createPromenadeMaterials(aniso);
+    if (RAIN) { promMats.lampGlass.emissiveIntensity = 2.2; wet(promMats.lawn, 'roof'); } // gas lamps lit in the gloom
+    const promenade = buildPromenade(townHallData, terrain, promMats);
     scene.add(promenade.group);
     for (const [ax, az, bx, bz] of promenade.segments) walls.addSegment(ax, az, bx, bz);
     promenadeRef = promenade;
@@ -151,7 +158,7 @@ async function main(force = false): Promise<void> {
   let market: Market | null = null;
   let crowd: Crowd | null = null, traffic: Traffic | null = null;
   if (townHallData) {
-    buildMarket(data, townHallData, terrain, createMarketMaterials(aniso)).then(async mk => {
+    buildMarket(data, townHallData, terrain, createMarketMaterials(aniso), false).then(async mk => { // c.1900: no stalls on the square
       market = mk;
       scene.add(mk.group);
       shadows.apply(mk.group);

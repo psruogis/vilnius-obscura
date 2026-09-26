@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { AreaData, Building, XZ } from './area';
 import type { Terrain } from './terrain';
-import { hashString, LIMEWASH } from './buildings';
+import { hashString, LIMEWASH, hasTileRoof } from './buildings';
 import type { HouseMaterials } from './houseMaterials';
 
 /**
@@ -12,8 +12,8 @@ import type { HouseMaterials } from './houseMaterials';
  * Everything casts and receives the sun's shadows; the wall shader adds weathering from the same layout.
  */
 
-const GROUND_F = 4.0;   // ground-floor height, m (matches the painted façades)
-const UPPER_F = 3.4;    // upper floors
+const GROUND_F = 4.4;   // ground-floor height, m (c.1900 shop floors; matches the painted façades and the data)
+const UPPER_F = 3.7;    // upper floors
 const WIN_DEPTH = 0.26; // window glass set back from the wall face
 const DOOR_DEPTH = 0.42;
 
@@ -90,6 +90,19 @@ function box(g: GeoBuilder, e: Edge, u: number, h: number, d: number, su: number
   faces.forEach(([n, cs, uvs], fi) => { if (onWall && fi === 1) return; g.quad(c(...cs[0] as [number, number, number]), c(...cs[1] as [number, number, number]), c(...cs[2] as [number, number, number]), c(...cs[3] as [number, number, number]), n, uvs, color); });
 }
 
+/** Places geometry built in an edge-local frame (x along the wall, y up, z out) at (u, h) on the wall. */
+function onEdge(g: GeoBuilder, geo: THREE.BufferGeometry, e: Edge, u: number, h: number, color: THREE.Color): void {
+  const m = new THREE.Matrix4().makeBasis(vT(e), UP, vN(e)).setPosition(P(e, u, h, 0));
+  const src = (geo.index ? geo.toNonIndexed() : geo).applyMatrix4(m);
+  const pos = src.getAttribute('position'), nor = src.getAttribute('normal');
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
+    n.fromBufferAttribute(nor, i);
+    g.tri(a.clone(), b.clone(), c.clone(), n.clone(), [0, 0], [0.3, 0], [0.3, 0.3], color);
+  }
+}
+
 /**
  * Extrudes a cross-section profile [(d, h)] (from the wall face out and back) along an edge from ua to ub.
  * At ring corners the ends are mitred (startMiter/endMiter give the corner's offset direction per metre of d);
@@ -139,7 +152,7 @@ function inRing(x: number, z: number, r: XZ[]): boolean {
 }
 const insideBuilding = (b: Building, x: number, z: number) => inRing(x, z, b.rings[0]) && !b.rings.slice(1).some(h => inRing(x, z, h));
 
-interface Opening { kind: 'window' | 'gwindow' | 'door' | 'gate'; u: number; w: number; bottom: number; top: number; spring?: number; variant: number }
+interface Opening { kind: 'window' | 'gwindow' | 'door' | 'gate' | 'shop'; u: number; w: number; bottom: number; top: number; spring?: number; rise?: number; variant: number; balcony?: boolean; pediment?: 0 | 1 | 2 }
 
 function rnd(seed: number, salt: number): number {
   const x = Math.sin(seed * 12.9898 + salt * 78.233) * 43758.5453;
@@ -150,14 +163,363 @@ function openingPolygon(o: Opening): THREE.Vector2[] {
   const l = o.u - o.w / 2, r = o.u + o.w / 2;
   if (o.spring === undefined) return [new THREE.Vector2(l, o.bottom), new THREE.Vector2(r, o.bottom), new THREE.Vector2(r, o.top), new THREE.Vector2(l, o.top)];
   const pts = [new THREE.Vector2(l, o.bottom), new THREE.Vector2(r, o.bottom)];
+  if (o.rise !== undefined && o.rise < o.w / 2 - 1e-3) {
+    // segmental arch: a circle through both springing points with the given rise
+    const hw = o.w / 2, R = (hw * hw + o.rise * o.rise) / (2 * o.rise), cy = o.spring + o.rise - R, a0 = Math.asin(hw / R), N = 10;
+    for (let i = 0; i <= N; i++) { const a = -a0 + (2 * a0 * (N - i)) / N; pts.push(new THREE.Vector2(o.u + Math.sin(a) * R, cy + Math.cos(a) * R)); }
+    return pts;
+  }
   const R = o.w / 2, N = 10;
   for (let i = 0; i <= N; i++) { const a = (Math.PI * i) / N; pts.push(new THREE.Vector2(o.u + Math.cos(a) * R, o.spring + Math.sin(a) * R)); }
   return pts;
 }
 
-export interface FacadeStats { houses: number; windows: number; doors: number; triangles: number }
+/**
+ * Wall with openings, triangulated column by column between the given cut lines (each column is a
+ * simple rectangle with its own holes), which is robust where one big shape can fail.
+ */
+function wallWithHoles(g: GeoBuilder, e: Edge, cuts: number[], h0: number, topH: number, openings: Opening[], color: THREE.Color, seedW: number): void {
+  const nOut = vN(e), z4 = [0, 0, 0, 0];
+  const xs = [...new Set([0, ...cuts.filter(c => c > 0.01 && c < e.L - 0.01), e.L])].sort((a, b) => a - b);
+  for (let k = 0; k + 1 < xs.length; k++) {
+    const x0 = xs[k], x1 = xs[k + 1];
+    const contour = [new THREE.Vector2(x0, h0), new THREE.Vector2(x1, h0), new THREE.Vector2(x1, topH), new THREE.Vector2(x0, topH)];
+    const holes = openings.filter(o => o.u > x0 && o.u < x1).map(openingPolygon);
+    const all = contour.concat(...holes);
+    for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(contour, holes)) {
+      const va = all[a], vb = all[b], vc = all[c];
+      g.tri(P(e, va.x, va.y, 0), P(e, vb.x, vb.y, 0), P(e, vc.x, vc.y, 0), nOut, [va.x / 2.5, va.y / 2.5], [vb.x / 2.5, vb.y / 2.5], [vc.x / 2.5, vc.y / 2.5], color,
+        [[[va.x, va.y, topH, seedW], [vb.x, vb.y, topH, seedW], [vc.x, vc.y, topH, seedW]], [z4, z4, z4], [z4, z4, z4]]);
+    }
+  }
+}
 
-export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMaterials): { group: THREE.Group; stats: FacadeStats } {
+// --- Hero façade: the eclectic house east of the Town Hall (the owner's 1920s photograph) -------------
+// Three storeys over tall shopfronts: paired round-arched first-floor windows in stucco surrounds,
+// paired second-floor windows under hoods, ornamental panels, a dentilled cornice, a baroque gable with
+// an oval window over the balcony bay, and a low sheet-metal roof with dormers.
+function heroFacade(e: Edge, topH: number, h0: number, terrain: Terrain,
+  G: { wall: GeoBuilder; trim: GeoBuilder; flat: GeoBuilder; glass: GeoBuilder; wood: GeoBuilder; canvas: GeoBuilder; iron: GeoBuilder; shop: GeoBuilder; sign: GeoBuilder },
+  wallC: THREE.Color, trimC: THREE.Color, stats: FacadeStats, withGable = true): void {
+  const F0 = 4.6, F1 = 9.1, F2 = topH - 0.9;   // floor lines: first floor, second floor, cornice base
+  const white = new THREE.Color('#ffffff');
+  const nPairs = Math.max(2, Math.round((e.L - 2) / 4.9));
+  const pairW = (e.L - 1.6) / nPairs, u0 = 0.8;
+  const gablePair = withGable ? Math.min(1, nPairs - 1) : -1;
+  const openings: Opening[] = [];
+  const hlAt = (u: number) => { const g = P(e, u, 0, 0.5); return Math.max(h0 + 0.12, terrain.heightAt(g.x, g.z) - e.gy); };
+  for (let p = 0; p < nPairs; p++) {
+    const uc = u0 + (p + 0.5) * pairW;
+    const hl = hlAt(uc);
+    openings.push({ kind: 'shop', u: uc, w: Math.min(3.9, pairW - 0.9), bottom: hl, top: Math.min(hl + 3.3, F0 - 0.95), variant: p % 3 });
+    for (const sd of [-1, 1]) {
+      const u = uc + sd * 1.15;
+      const balcony = p === gablePair;
+      openings.push({ kind: 'window', u, w: 1.2, bottom: balcony ? F0 + 0.35 : F0 + 0.95, spring: F0 + 2.75, top: F0 + 3.35, variant: (p * 2 + sd + 3) % 4, balcony });
+      openings.push({ kind: 'window', u, w: 1.15, bottom: F1 + 0.75, top: F1 + 2.75, variant: (p * 3 + sd + 5) % 4 });
+    }
+  }
+  // wall with openings, bay by bay
+  const holes = openings.map(openingPolygon);
+  const nOut = vN(e);
+  wallWithHoles(G.wall, e, Array.from({ length: nPairs + 1 }, (_, p) => u0 + p * pairW), h0, topH, openings, wallC, 0.3);
+  // reveals
+  for (const [oi, o] of openings.entries()) {
+    const poly = holes[oi], depth = o.kind === 'shop' ? 0.34 : 0.3;
+    for (let j = 0; j < poly.length; j++) {
+      const p = poly[j], q = poly[(j + 1) % poly.length];
+      const du = q.x - p.x, dh = q.y - p.y, len = Math.hypot(du, dh);
+      if (len < 1e-4) continue;
+      const nIn = vT(e, -dh / len).add(UP.clone().multiplyScalar(du / len));
+      G.flat.quad(P(e, p.x, p.y, 0), P(e, q.x, q.y, 0), P(e, q.x, q.y, -depth), P(e, p.x, p.y, -depth), nIn, [[0, 0], [len, 0], [len, depth], [0, depth]], wallC);
+    }
+  }
+  const band = (y: number, h: number, out: number) => extrude(G.trim, e, 0, e.L, [[0, y], [out * 0.6, y], [out, y + h * 0.35], [out, y + h], [0, y + h]], trimC, null, null);
+  // ground-floor rusticated piers between shopfronts, first-floor sill band, storey cornices
+  for (let p = 0; p <= nPairs; p++) {
+    const u = u0 + p * pairW;
+    for (let y = 0.3; y < F0 - 0.4; y += 0.55) box(G.flat, e, u, y + 0.25, 0.05, 0.55, 0.24, 0.05, trimC, true);
+  }
+  extrude(G.trim, e, 0, e.L, [[0, h0], [0.1, h0], [0.1, 0.5], [0, 0.6]], new THREE.Color('#8f8577'), null, null);
+  band(F0 - 0.25, 0.45, 0.32);
+  band(F1 - 0.15, 0.3, 0.2);
+  // main cornice with dentils and modillions
+  extrude(G.trim, e, 0, e.L, [[0, F2], [0.12, F2], [0.12, F2 + 0.25], [0.3, F2 + 0.35], [0.3, F2 + 0.5], [0.75, F2 + 0.62], [0.78, F2 + 0.8], [0, F2 + 0.9]], trimC, null, null);
+  for (let u = 0.3; u < e.L - 0.2; u += 0.32) box(G.flat, e, u, F2 + 0.4, 0.22, 0.07, 0.06, 0.1, trimC, true);
+  for (let u = 0.5; u < e.L - 0.3; u += 1.1) box(G.trim, e, u, F2 + 0.55, 0.45, 0.09, 0.07, 0.3, trimC, true);
+  // ornamental pilaster strips between the window pairs on both upper floors, and a frieze of panels
+  for (let p = 0; p <= nPairs; p++) {
+    const u = u0 + p * pairW;
+    for (const [y0, y1] of [[F0 + 0.2, F1 - 0.15], [F1 + 0.15, F2 - 0.05]]) {
+      box(G.flat, e, u, (y0 + y1) / 2, 0.04, 0.28, (y1 - y0) / 2, 0.04, trimC, true);
+      box(G.flat, e, u, (y0 + y1) / 2, 0.09, 0.14, (y1 - y0) / 2 - 0.35, 0.03, trimC, true);
+      for (let y = y0 + 0.6; y < y1 - 0.4; y += 1.2) G.trim.tri(P(e, u - 0.1, y, 0.13), P(e, u + 0.1, y, 0.13), P(e, u, y + 0.2, 0.13), nOut, [0, 0], [0.2, 0], [0.1, 0.2], trimC);
+    }
+  }
+  for (const o of openings) {
+    const l = o.u - o.w / 2, r = o.u + o.w / 2;
+    if (o.kind === 'shop') {
+      stats.shops++;
+      const fC = new THREE.Color(FASCIA[Math.floor(o.u * 7) % FASCIA.length]);
+      const d = -0.32, H = o.top - o.bottom;
+      box(G.wood, e, o.u, o.bottom + 0.3, d, o.w / 2, 0.3, 0.03, fC, true);
+      const doorAt = o.variant === 1 ? r - 0.6 : o.u;
+      for (const [a, c] of [[l, doorAt - 0.5], [doorAt + 0.5, r]] as [number, number][]) {
+        if (c - a < 0.3) continue;
+        G.shop.quad(P(e, a, o.bottom + 0.6, d - 0.01), P(e, c, o.bottom + 0.6, d - 0.01), P(e, c, o.top, d - 0.01), P(e, a, o.top, d - 0.01), nOut, shopCell(Math.floor(a * 3)), white);
+        box(G.wood, e, (a + c) / 2, o.bottom + 0.6 + (H - 0.6) * 0.78, d + 0.02, (c - a) / 2, 0.03, 0.02, fC, true);
+      }
+      box(G.wood, e, doorAt, o.bottom + H / 2, d - 0.03, 0.5, H / 2, 0.03, fC, true);
+      G.glass.quad(P(e, doorAt - 0.35, o.bottom + H * 0.45, d), P(e, doorAt + 0.35, o.bottom + H * 0.45, d), P(e, doorAt + 0.35, o.top - 0.12, d), P(e, doorAt - 0.35, o.top - 0.12, d), nOut, [[0.5, 0.5], [1, 0.5], [1, 1], [0.5, 1]], white);
+      // signboard across the pair
+      box(G.wood, e, o.u, o.top + 0.4, 0.08, o.w / 2 + 0.2, 0.3, 0.08, fC, true);
+      signQuad(G.sign, e, o.u, o.top + 0.13, o.top + 0.67, o.w / 2 + 0.15, 0.165, Math.floor(o.u * 7));
+      box(G.trim, e, o.u, o.top + 0.75, 0.12, o.w / 2 + 0.3, 0.04, 0.12, trimC, true);
+      if (o.variant === 2) {
+        const aw = o.w / 2 + 0.25, ay = o.top + 0.05, out = 1.5, drop = 0.7;
+        const A = P(e, o.u - aw, ay, 0.15), B = P(e, o.u + aw, ay, 0.15), C = P(e, o.u + aw, ay - drop, out), D = P(e, o.u - aw, ay - drop, out);
+        const upv = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(B, A), new THREE.Vector3().subVectors(D, A)).normalize();
+        if (upv.y < 0) upv.negate();
+        G.canvas.quad(A, B, C, D, upv, [[0, 0], [aw * 2, 0], [aw * 2, 1], [0, 1]], new THREE.Color('#e4d9c2'));
+      }
+      continue;
+    }
+    stats.windows++;
+    const d = -0.28;
+    const vx = (o.variant % 2) * 0.5, vy = 1 - (Math.floor(o.variant / 2) + 1) * 0.5;
+    const top = o.spring !== undefined ? o.spring : o.top;
+    G.glass.quad(P(e, l, o.bottom, d), P(e, r, o.bottom, d), P(e, r, top, d), P(e, l, top, d), nOut, [[vx, vy], [vx + 0.5, vy], [vx + 0.5, vy + 0.5], [vx, vy + 0.5]], white);
+    if (o.spring !== undefined) {
+      // arched head: glass fan and a moulded archivolt with a keystone cartouche
+      const R = o.w / 2, N = 10;
+      for (let k = 0; k < N; k++) {
+        const a0 = (Math.PI * k) / N, a1 = (Math.PI * (k + 1)) / N;
+        const q = (a: number, rr: number, dd: number) => P(e, o.u + Math.cos(a) * rr, o.spring! + Math.sin(a) * rr, dd);
+        G.glass.tri(P(e, o.u, o.spring!, d), q(a0, R, d), q(a1, R, d), nOut, [vx + 0.25, vy + 0.4], [vx + 0.5, vy + 0.5], [vx + 0.25, vy + 0.5], white);
+        G.flat.quad(q(a0, R + 0.02, 0.06), q(a0, R + 0.2, 0.06), q(a1, R + 0.2, 0.06), q(a1, R + 0.02, 0.06), nOut, [[0, 0], [0.2, 0], [0.2, 0.2], [0, 0.2]], trimC);
+      }
+      box(G.trim, e, o.u, o.spring + R + 0.15, 0.1, 0.16, 0.24, 0.1, trimC, true);
+      for (const sd of [-1, 1]) box(G.flat, e, o.u + sd * (o.w / 2 + 0.11), (o.bottom + o.spring) / 2, 0.05, 0.09, (o.spring - o.bottom) / 2, 0.05, trimC, true);
+    } else {
+      // eared architrave and a cornice hood on consoles
+      for (const sd of [-1, 1]) box(G.flat, e, o.u + sd * (o.w / 2 + 0.1), (o.bottom + o.top) / 2, 0.05, 0.1, (o.top - o.bottom) / 2 + 0.1, 0.05, trimC, true);
+      box(G.flat, e, o.u, o.top + 0.12, 0.05, o.w / 2 + 0.2, 0.1, 0.05, trimC, true);
+      box(G.trim, e, o.u, o.top + 0.35, 0.12, o.w / 2 + 0.35, 0.07, 0.12, trimC, true);
+      box(G.flat, e, o.u, o.top + 0.24, 0.07, o.w / 2 - 0.1, 0.05, 0.04, trimC, true); // frieze
+    }
+    // sill with an apron panel
+    box(G.trim, e, o.u, o.bottom - 0.05, 0.08, o.w / 2 + 0.15, 0.05, 0.1, trimC, true);
+    if (!o.balcony) box(G.flat, e, o.u, o.bottom - 0.45, 0.03, o.w / 2 - 0.05, 0.3, 0.03, trimC, true);
+  }
+  // balcony on consoles over the gable pair
+  if (gablePair >= 0) {
+    const uc = u0 + (gablePair + 0.5) * pairW, bw = 4.2, by = F0 + 0.2;
+    box(G.trim, e, uc, by, 0.55, bw / 2, 0.1, 0.55, trimC, true);
+    for (const sd of [-1, -0.33, 0.33, 1]) box(G.trim, e, uc + sd * (bw / 2 - 0.3), by - 0.35, 0.3, 0.1, 0.25, 0.3, trimC, true);
+    const rh = 1.0;
+    box(G.iron, e, uc, by + 0.1 + rh, 1.05, bw / 2, 0.025, 0.03, white);
+    for (const sd of [-1, 1]) box(G.iron, e, uc + sd * (bw / 2 - 0.02), by + 0.1 + rh, 0.55, 0.02, 0.025, 0.52, white);
+    for (let x = -bw / 2 + 0.08; x < bw / 2; x += 0.12) box(G.iron, e, uc + x, by + 0.1 + rh / 2, 1.05, 0.009, rh / 2, 0.009, white);
+    for (const sd of [-1, 1]) for (let dd = 0.1; dd < 1.05; dd += 0.12) box(G.iron, e, uc + sd * (bw / 2 - 0.02), by + 0.1 + rh / 2, dd, 0.009, rh / 2, 0.009, white);
+    // baroque gable over the cornice: scroll sides, oval window, capped by a segmental cornice and finial
+    const gw = 5.4, gy = F2 + 0.9, gh = 3.2;
+    const sh = new THREE.Shape();
+    sh.moveTo(-gw / 2, 0); sh.lineTo(gw / 2, 0);
+    sh.bezierCurveTo(gw / 2 - 0.2, 0.9, gw / 2 - 1.3, 0.9, gw / 2 - 1.1, gh * 0.72);
+    sh.quadraticCurveTo(0, gh * 1.12, -gw / 2 + 1.1, gh * 0.72);
+    sh.bezierCurveTo(-gw / 2 + 1.3, 0.9, -gw / 2 + 0.2, 0.9, -gw / 2, 0);
+    const oval = new THREE.Path(); oval.absellipse(0, gh * 0.45, 0.45, 0.6, 0, Math.PI * 2, true);
+    sh.holes.push(oval);
+    const gg = new THREE.ExtrudeGeometry(sh, { depth: 0.5, bevelEnabled: false, curveSegments: 16 }).translate(0, 0, -0.45);
+    onEdge(G.wall, gg, e, uc, gy, wallC);
+    const og = new THREE.TorusGeometry(0.52, 0.08, 6, 24).scale(1, 1.3, 1).translate(0, gh * 0.45, 0.08);
+    onEdge(G.trim, og, e, uc, gy, trimC);
+    const ovalGlass = new THREE.CircleGeometry(0.45, 20).scale(1, 1.33, 1).translate(0, gh * 0.45, -0.3);
+    onEdge(G.glass, ovalGlass, e, uc, gy, white);
+    const cap = new THREE.TorusGeometry(gw * 0.32, 0.09, 6, 16, Math.PI * 0.62).rotateZ(Math.PI * 0.19).translate(0, gh * 0.93 - gw * 0.32, 0.05);
+    onEdge(G.trim, cap, e, uc, gy, trimC);
+    for (const sd of [-1, 1]) onEdge(G.trim, new THREE.TorusGeometry(0.22, 0.08, 6, 12).translate(sd * (gw / 2 - 0.35), 0.35, 0.05), e, uc, gy, trimC);
+    onEdge(G.trim, new THREE.SphereGeometry(0.2, 10, 8).scale(1, 1.4, 1).translate(0, gh + 0.35, -0.2), e, uc, gy, trimC);
+  }
+}
+
+// --- Hero façade: Hotel Italia behind the Town Hall (postcard "Ulica Wielka", c.1910) ------------------
+// Four storeys: shops with a glass canopy at the hotel door, pedimented windows (triangular, then
+// segmental, then eared), iron balconies, a bracketed cornice and the HOTEL ITALIA signboard.
+function hotelFacade(e: Edge, topH: number, h0: number, terrain: Terrain,
+  G: { wall: GeoBuilder; trim: GeoBuilder; flat: GeoBuilder; glass: GeoBuilder; wood: GeoBuilder; canvas: GeoBuilder; iron: GeoBuilder; shop: GeoBuilder; sign: GeoBuilder },
+  wallC: THREE.Color, trimC: THREE.Color, stats: FacadeStats, extras: THREE.Object3D[], signMat: THREE.Material | null): void {
+  const F = [4.6, 8.4, 12.1], FC = topH - 0.95;
+  const white = new THREE.Color('#ffffff');
+  const nPairs = Math.max(1, Math.round((e.L - 1.6) / 4.6));
+  const pairW = (e.L - 1.6) / nPairs, u0 = 0.8;
+  const openings: Opening[] = [];
+  const hlAt = (u: number) => { const g = P(e, u, 0, 0.5); return Math.max(h0 + 0.12, terrain.heightAt(g.x, g.z) - e.gy); };
+  const doorPair = Math.floor(nPairs / 2);
+  for (let p = 0; p < nPairs; p++) {
+    const uc = u0 + (p + 0.5) * pairW, hl = hlAt(uc);
+    openings.push({ kind: 'shop', u: uc, w: Math.min(3.6, pairW - 0.9), bottom: hl, top: Math.min(hl + 3.2, F[0] - 0.95), variant: p === doorPair ? 0 : (p % 2) + 1 });
+    for (const sd of [-1, 1]) {
+      const u = uc + sd * 1.1;
+      for (let f = 0; f < 3; f++) {
+        const base = F[f], balcony = (f === 0 && (p === 1 || p === nPairs - 2)) || (f === 1 && p === doorPair);
+        openings.push({ kind: 'window', u, w: 1.15, bottom: base + (balcony ? 0.3 : 0.85), top: base + 2.75 - (f === 2 ? 0.2 : 0), variant: (p * 5 + f * 3 + sd + 7) % 4, balcony, pediment: f === 0 ? 1 : f === 1 ? 2 : 0 });
+      }
+    }
+  }
+  const holes = openings.map(openingPolygon), nOut = vN(e);
+  wallWithHoles(G.wall, e, Array.from({ length: nPairs + 1 }, (_, p) => u0 + p * pairW), h0, topH, openings, wallC, 0.6);
+  for (const [oi, o] of openings.entries()) {
+    const poly = holes[oi], depth = o.kind === 'shop' ? 0.34 : 0.3;
+    for (let j = 0; j < poly.length; j++) {
+      const p = poly[j], q = poly[(j + 1) % poly.length], du = q.x - p.x, dh = q.y - p.y, len = Math.hypot(du, dh);
+      if (len < 1e-4) continue;
+      const nIn = vT(e, -dh / len).add(UP.clone().multiplyScalar(du / len));
+      G.flat.quad(P(e, p.x, p.y, 0), P(e, q.x, q.y, 0), P(e, q.x, q.y, -depth), P(e, p.x, p.y, -depth), nIn, [[0, 0], [len, 0], [len, depth], [0, depth]], wallC);
+    }
+  }
+  const band = (y: number, h: number, out: number) => extrude(G.trim, e, 0, e.L, [[0, y], [out * 0.6, y], [out, y + h * 0.35], [out, y + h], [0, y + h]], trimC, null, null);
+  extrude(G.trim, e, 0, e.L, [[0, h0], [0.1, h0], [0.1, 0.5], [0, 0.6]], new THREE.Color('#8f8577'), null, null);
+  band(F[0] - 0.3, 0.5, 0.32); band(F[1] - 0.15, 0.25, 0.18); band(F[2] - 0.15, 0.25, 0.18);
+  extrude(G.trim, e, 0, e.L, [[0, FC], [0.12, FC], [0.12, FC + 0.3], [0.35, FC + 0.4], [0.35, FC + 0.55], [0.85, FC + 0.7], [0.88, FC + 0.88], [0, FC + 0.95]], trimC, null, null);
+  for (let u = 0.45; u < e.L - 0.3; u += 0.9) box(G.trim, e, u, FC + 0.5, 0.5, 0.09, 0.12, 0.34, trimC, true);    // cornice brackets
+  for (let p = 0; p <= nPairs; p++) {                                                                          // rusticated piers, pilasters
+    const u = u0 + p * pairW;
+    for (let y = 0.3; y < F[0] - 0.45; y += 0.5) box(G.flat, e, u, y + 0.22, 0.05, 0.5, 0.22, 0.05, trimC, true);
+    box(G.flat, e, u, (F[0] + FC) / 2, 0.05, 0.3, (FC - F[0]) / 2 - 0.1, 0.05, trimC, true);
+  }
+  for (const o of openings) {
+    const l = o.u - o.w / 2, r = o.u + o.w / 2;
+    if (o.kind === 'shop') {
+      stats.shops++;
+      const fC = new THREE.Color(o.variant === 0 ? '#2a2420' : FASCIA[Math.floor(o.u * 5) % FASCIA.length]), d = -0.32, H = o.top - o.bottom;
+      box(G.wood, e, o.u, o.bottom + 0.3, d, o.w / 2, 0.3, 0.03, fC, true);
+      const doorAt = o.variant === 2 ? r - 0.6 : o.u;
+      for (const [a, c] of [[l, doorAt - 0.55], [doorAt + 0.55, r]] as [number, number][]) {
+        if (c - a < 0.3) continue;
+        G.shop.quad(P(e, a, o.bottom + 0.6, d - 0.01), P(e, c, o.bottom + 0.6, d - 0.01), P(e, c, o.top, d - 0.01), P(e, a, o.top, d - 0.01), nOut, shopCell(Math.floor(a * 3)), white);
+      }
+      box(G.wood, e, doorAt, o.bottom + H / 2, d - 0.03, 0.55, H / 2, 0.03, fC, true);
+      box(G.wood, e, o.u, o.top + 0.38, 0.08, o.w / 2 + 0.2, 0.28, 0.08, fC, true);
+      if (o.variant !== 0) signQuad(G.sign, e, o.u, o.top + 0.13, o.top + 0.63, o.w / 2 + 0.15, 0.165, Math.floor(o.u * 11) + 3);
+      if (o.variant === 0) {
+        // the hotel door: glass-and-iron canopy on brackets
+        const cw = 2.4, cy = o.top + 0.05, out = 1.8;
+        box(G.iron, e, o.u, cy, out / 2, cw / 2, 0.04, out / 2, white);
+        for (const sd of [-1, 1]) box(G.iron, e, o.u + sd * (cw / 2 - 0.05), cy - 0.35, out / 2, 0.03, 0.03, out / 2, white);
+        G.glass.quad(P(e, o.u - cw / 2, cy + 0.05, 0.05), P(e, o.u + cw / 2, cy + 0.05, 0.05), P(e, o.u + cw / 2, cy + 0.2, out), P(e, o.u - cw / 2, cy + 0.2, out), UP, [[0.5, 0.5], [1, 0.5], [1, 1], [0.5, 1]], white);
+      } else if (o.variant === 1) {
+        const aw = o.w / 2 + 0.25, ay = o.top + 0.05, out = 1.4, drop = 0.65;
+        const A = P(e, o.u - aw, ay, 0.15), B = P(e, o.u + aw, ay, 0.15), C = P(e, o.u + aw, ay - drop, out), D = P(e, o.u - aw, ay - drop, out);
+        const upv = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(B, A), new THREE.Vector3().subVectors(D, A)).normalize();
+        if (upv.y < 0) upv.negate();
+        G.canvas.quad(A, B, C, D, upv, [[0, 0], [aw * 2, 0], [aw * 2, 1], [0, 1]], new THREE.Color('#d9ccb0'));
+      }
+      continue;
+    }
+    stats.windows++;
+    const d = -0.28, vx = (o.variant % 2) * 0.5, vy = 1 - (Math.floor(o.variant / 2) + 1) * 0.5;
+    G.glass.quad(P(e, l, o.bottom, d), P(e, r, o.bottom, d), P(e, r, o.top, d), P(e, l, o.top, d), nOut, [[vx, vy], [vx + 0.5, vy], [vx + 0.5, vy + 0.5], [vx, vy + 0.5]], white);
+    for (const sd of [-1, 1]) box(G.flat, e, o.u + sd * (o.w / 2 + 0.1), (o.bottom + o.top) / 2, 0.05, 0.1, (o.top - o.bottom) / 2 + 0.1, 0.05, trimC, true);
+    box(G.flat, e, o.u, o.top + 0.1, 0.05, o.w / 2 + 0.2, 0.1, 0.05, trimC, true);
+    box(G.trim, e, o.u, o.bottom - 0.05, 0.08, o.w / 2 + 0.15, 0.05, 0.1, trimC, true);
+    const span = o.w / 2 + 0.3, yb = o.top + 0.22;
+    if (o.pediment === 1) {
+      box(G.trim, e, o.u, yb, 0.08, span, 0.05, 0.08, trimC, true);
+      const rise = 0.4, len = Math.hypot(span, rise), ang = Math.atan2(rise, span);
+      for (const sd of [-1, 1]) onEdge(G.trim, new THREE.BoxGeometry(len, 0.09, 0.14).rotateZ(-sd * ang).translate(sd * span / 2, rise / 2, 0.07), e, o.u, yb + 0.05, trimC);
+    } else if (o.pediment === 2) {
+      box(G.trim, e, o.u, yb, 0.08, span, 0.05, 0.08, trimC, true);
+      const R = span * 1.3, cy0 = -Math.sqrt(R * R - span * span), a0 = Math.asin(span / R);
+      for (let k = 0; k < 8; k++) {
+        const t0 = -a0 + (2 * a0 * k) / 8, t1 = -a0 + (2 * a0 * (k + 1)) / 8;
+        const x0 = Math.sin(t0) * R, y0 = Math.cos(t0) * R + cy0, x1 = Math.sin(t1) * R, y1 = Math.cos(t1) * R + cy0;
+        onEdge(G.trim, new THREE.BoxGeometry(Math.hypot(x1 - x0, y1 - y0) + 0.01, 0.09, 0.14).rotateZ(Math.atan2(y1 - y0, x1 - x0)).translate((x0 + x1) / 2, (y0 + y1) / 2, 0.07), e, o.u, yb + 0.05, trimC);
+      }
+    } else {
+      box(G.trim, e, o.u, yb + 0.02, 0.1, span - 0.05, 0.06, 0.1, trimC, true);
+    }
+    if (o.balcony) {
+      const bw = 2.1, by = o.bottom - 0.18;
+      box(G.trim, e, o.u, by, 0.5, bw / 2, 0.09, 0.5, trimC, true);
+      for (const sd of [-1, 1]) box(G.trim, e, o.u + sd * (bw / 2 - 0.2), by - 0.3, 0.25, 0.08, 0.22, 0.25, trimC, true);
+      box(G.iron, e, o.u, by + 1.05, 0.96, bw / 2, 0.022, 0.03, white);
+      for (let x = -bw / 2 + 0.07; x < bw / 2; x += 0.12) box(G.iron, e, o.u + x, by + 0.55, 0.96, 0.009, 0.5, 0.009, white);
+      for (const sd of [-1, 1]) for (let dd = 0.1; dd < 0.95; dd += 0.12) box(G.iron, e, o.u + sd * (bw / 2 - 0.02), by + 0.55, dd, 0.009, 0.5, 0.009, white);
+    }
+  }
+  // HOTEL ITALIA signboard across the middle of the front, between ground and first floor
+  if (signMat && e.L > 14) {
+    const sw = Math.min(9, e.L * 0.45), sh = 0.8;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), signMat);
+    m.position.copy(P(e, e.L / 2, F[0] + 0.2, 0.36));
+    m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(UP, vN(e)).normalize(), UP, vN(e)));
+    m.castShadow = true;
+    extras.push(m);
+  }
+}
+
+function hotelSign(): THREE.MeshStandardMaterial {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 96;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#e8e0cc'; g.fillRect(0, 0, 1024, 96);
+  g.strokeStyle = '#3a3128'; g.lineWidth = 6; g.strokeRect(6, 6, 1012, 84);
+  g.fillStyle = '#2a241e'; g.font = 'bold 64px Georgia, "Times New Roman", serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('HOTEL  ITALIA', 512, 52);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return new THREE.MeshStandardMaterial({ map: t, roughness: 0.8 });
+}
+
+/** Corner turret: an octagonal oriel on corbels from the first floor, a drum, bell dome, lantern and spire. */
+function cornerTurret(cx: number, cz: number, dirX: number, dirZ: number, gy: number, topH: number,
+  G: { wall: GeoBuilder; trim: GeoBuilder; glass: GeoBuilder; metal: GeoBuilder }, wallC: THREE.Color, trimC: THREE.Color): void {
+  const R = 2.3, x = cx + dirX * 1.0, z = cz + dirZ * 1.0, y0 = gy + 4.8, y1 = gy + topH + 1.8;
+  const mk = (g: THREE.BufferGeometry, b: GeoBuilder, c: THREE.Color) => {
+    const src = (g.index ? g.toNonIndexed() : g);
+    src.translate(x, 0, z);
+    const pos = src.getAttribute('position'), nor = src.getAttribute('normal');
+    const a = new THREE.Vector3(), bb = new THREE.Vector3(), cc = new THREE.Vector3(), n = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i += 3) {
+      a.fromBufferAttribute(pos, i); bb.fromBufferAttribute(pos, i + 1); cc.fromBufferAttribute(pos, i + 2); n.fromBufferAttribute(nor, i);
+      b.tri(a.clone(), bb.clone(), cc.clone(), n.clone(), [a.x * 0.4, a.y * 0.4], [bb.x * 0.4, bb.y * 0.4], [cc.x * 0.4, cc.y * 0.4], c);
+    }
+  };
+  mk(new THREE.ConeGeometry(R, 1.6, 8, 1, true).rotateX(Math.PI).translate(0, y0 - 0.8, 0), G.trim, trimC);   // corbel
+  mk(new THREE.CylinderGeometry(R, R, y1 - y0, 8, 1).translate(0, (y0 + y1) / 2, 0), G.wall, wallC);
+  for (let f = 0; f < 3; f++) {
+    const yy = y0 + 0.9 + f * 3.7;
+    for (let k = 0; k < 8; k += 2) {
+      const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
+      const g = new THREE.PlaneGeometry(0.9, 2.0).rotateY(-a + Math.PI / 2).translate(Math.cos(a) * (R * 0.93), yy + 1.0, Math.sin(a) * (R * 0.93));
+      mk(g, G.glass, new THREE.Color('#ffffff'));
+    }
+    mk(new THREE.CylinderGeometry(R + 0.12, R + 0.12, 0.22, 8).translate(0, yy - 0.3, 0), G.trim, trimC);
+  }
+  mk(new THREE.CylinderGeometry(R + 0.35, R + 0.35, 0.5, 8).translate(0, y1, 0), G.trim, trimC);
+  mk(new THREE.CylinderGeometry(R * 0.85, R * 0.9, 1.6, 8).translate(0, y1 + 1.05, 0), G.wall, wallC);
+  const bell = new THREE.LatheGeometry([[0, 0], [R * 0.95, 0], [R, 0.3], [R * 0.85, 1.3], [R * 0.5, 2.0], [R * 0.3, 2.4], [R * 0.34, 2.8], [0.25, 3.1], [0, 3.2]].map(([a, b]) => new THREE.Vector2(a, b)), 16);
+  mk(bell.translate(0, y1 + 1.85, 0), G.metal, new THREE.Color('#566064'));
+  mk(new THREE.CylinderGeometry(0.35, 0.4, 1.0, 8).translate(0, y1 + 5.3, 0), G.wall, wallC);
+  mk(new THREE.ConeGeometry(0.42, 2.4, 8).translate(0, y1 + 7.0, 0), G.metal, new THREE.Color('#566064'));
+}
+
+const shopCell = (k: number): number[][] => { const c = ((k % 4) + 4) % 4, cx = (c % 2) * 0.5, cy = c < 2 ? 0.5 : 0; return [[cx, cy], [cx + 0.5, cy], [cx + 0.5, cy + 0.5], [cx, cy + 0.5]]; };
+const signRow = (k: number): number[][] => { const r = ((k % 16) + 16) % 16, v0 = 1 - (r + 1) / 16, v1 = 1 - r / 16; return [[0, v0], [1, v0], [1, v1], [0, v1]]; };
+function signQuad(b: GeoBuilder, e: Edge, u: number, y0: number, y1: number, hw: number, d: number, k: number): void {
+  // lettering must read left to right for someone facing the wall: run it along the viewer's right (up x n)
+  const n = vN(e), right = new THREE.Vector3().crossVectors(UP, n).normalize();
+  const c = P(e, u, 0, d);
+  const at = (s: number, y: number) => new THREE.Vector3(c.x + right.x * s, e.gy + y, c.z + right.z * s);
+  b.quad(at(-hw, y0), at(hw, y0), at(hw, y1), at(-hw, y1), n, signRow(k), new THREE.Color('#ffffff'));
+}
+
+export interface FacadeStats { houses: number; windows: number; doors: number; shops: number; triangles: number; heroDebug?: unknown[] }
+
+// Shopfront fascia (signboard) and awning colours, after the period photographs of Wielka street
+const FASCIA = ['#3f5a48', '#6e2e26', '#34425c', '#5a4632', '#8a6a34', '#cfc2a4', '#4a5e4a', '#7a5a3c'];
+const AWNING = ['#e8dcc0', '#c8b48a', '#7a3b2c', '#3e5a44', '#d6c8a4', '#8a6a3a'];
+
+export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMaterials, free?: (x: number, z: number) => boolean): { group: THREE.Group; stats: FacadeStats } {
   const houses = data.buildings.filter(b => b.detail);
   // Neighbours for party-wall tests: every building whose bounding box is near
   const boxes = data.buildings.map(b => {
@@ -169,7 +531,17 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
   const wall = new GeoBuilder(['aWall', 'aLayout', 'aLayout2']);
   // flat: thin mouldings whose shadows are too small to matter (AO shades them); kept out of the shadow maps
   const trim = new GeoBuilder(), flat = new GeoBuilder(), glass = new GeoBuilder(), wood = new GeoBuilder();
-  const stats: FacadeStats = { houses: houses.length, windows: 0, doors: 0, triangles: 0 };
+  const canvas = new GeoBuilder(), iron = new GeoBuilder(), metal = new GeoBuilder(), shop = new GeoBuilder(), sign = new GeoBuilder();
+  const extras: THREE.Object3D[] = [];
+  const signMat = houses.some(h => h.style === 'hotel') ? hotelSign() : null;
+  const stats: FacadeStats = { houses: houses.length, windows: 0, doors: 0, shops: 0, triangles: 0 };
+  // open ground ahead of a wall: how far the street or square reaches (m, up to 30)
+  const frontage = (e: Edge): number => {
+    if (!free) return 0;
+    const mx = e.ax + e.tx * e.L / 2, mz = e.az + e.tz * e.L / 2;
+    for (let d = 1.5; d <= 30; d += 1.5) if (!free(mx + e.nx * d, mz + e.nz * d)) return d;
+    return 30;
+  };
   const cWhite = new THREE.Color();
 
   for (const b of houses) {
@@ -180,7 +552,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
     const plinthC = new THREE.Color('#978b7b');
     const shutterC = new THREE.Color(SHUTTERS[(seed >>> 9) % SHUTTERS.length]);
     const doorC = new THREE.Color(DOORS[(seed >>> 13) % DOORS.length]);
-    const hasShutters = rnd(seed, 1) > 0.45, hasHoods = rnd(seed, 2) > 0.4, hasPilasters = rnd(seed, 3) > 0.35;
+    const hasShutters = rnd(seed, 1) > 0.6, hasHoods = rnd(seed, 2) > 0.3, hasPilasters = rnd(seed, 3) > 0.55, bracketed = rnd(seed, 12) > 0.35;
     const bayTarget = 2.9 + 0.8 * rnd(seed, 4);
     const k = b.roof?.k ?? 0, ov = b.overhang ?? 0;
     const topH = b.eaveY - b.groundY + ov * k;
@@ -216,12 +588,33 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
         return [mx / dot, mz / dot];
       };
 
+      // hero buildings: the square-facing front is modelled from the photograph
+      // the square-facing front may be several slightly angled wall segments: take every open, square-facing
+      // edge within 30 degrees of the longest one; the gable goes on the longest
+      const heroEdges = new Set<number>();
+      let gableEdge = -1;
+      if (b.style && ri === 0) {
+        const cand = edges.map((e, i) => ({ e, i })).filter(({ e }) => !e.party && e.L > 8 && frontage(e) >= (b.style === 'hotel' ? 6 : 12));
+        const main = cand.reduce<{ e: Edge; i: number } | null>((m, c) => (!m || c.e.L > m.e.L ? c : m), null);
+        if (main) {
+          gableEdge = main.i;
+          for (const c of cand) if (b.style === 'hotel' || c.e.nx * main.e.nx + c.e.nz * main.e.nz > 0.86) heroEdges.add(c.i);
+        }
+      }
       edges.forEach((e, i) => {
         if (e.L < 0.05) return;
+        if (heroEdges.has(i)) {
+          if (b.style === 'hotel') hotelFacade(e, topH, h0, terrain, { wall, trim, flat, glass, wood, canvas, iron, shop, sign }, new THREE.Color('#d9cdb4'), new THREE.Color('#ece3d0'), stats, extras, i === gableEdge ? signMat : null);
+          else heroFacade(e, topH, h0, terrain, { wall, trim, flat, glass, wood, canvas, iron, shop, sign }, new THREE.Color('#e3dccb'), new THREE.Color('#efe9dc'), stats, i === gableEdge);
+          return;
+        }
         const eseed = hashString(`${b.id}:${ri}:${i}`);
         // --- Openings -------------------------------------------------------------------------------
         const openings: Opening[] = [];
         let u0 = 0.7, bayW = 0, nb = 0, halfW = 0;
+        const front = ri === 0 && !e.party ? frontage(e) : 0;
+        const shopEdge = front >= 12 ? rnd(eseed, 11) < 0.92 : front >= 5 ? rnd(eseed, 11) < 0.45 : false;
+        const grand = front >= 12;              // houses facing the square: richer upper storeys
         if (!e.party && e.L >= 2.6) {
           const usable = e.L - 1.4;
           nb = Math.max(1, Math.floor(usable / bayTarget));
@@ -237,7 +630,17 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
             const g = P(e, u, 0, 0.5);
             const hl = Math.max(h0 + 0.12, terrain.heightAt(g.x, g.z) - e.gy);
             // Ground floor
-            if (bi === gateBay && hl < 0.9) {
+            if (shopEdge && bi !== gateBay && hl < 0.9 && hl > h0 + 0.05) {
+              // every shop its own size, position in the bay and shape (square or arched head)
+              const ss = hashString(`${b.id}:${ri}:${i}:${bi}`);
+              const wMax = Math.min(3.5, bayW - 0.35);
+              const w = Math.max(1.5, wMax * (0.6 + 0.4 * rnd(ss, 1)));
+              const top = Math.min(hl + 2.35 + 0.95 * rnd(ss, 2), GROUND_F - 0.8);
+              const arched = rnd(ss, 3) < 0.4 && top - hl > 2.3;
+              const rise = arched ? (rnd(ss, 4) < 0.35 ? w / 2 : Math.min(w / 2 - 0.01, 0.3 + 0.55 * rnd(ss, 5))) : undefined;
+              const du = (rnd(ss, 6) - 0.5) * Math.max(0, bayW - 0.35 - w) * 0.8;
+              openings.push({ kind: 'shop', u: u + du, w, bottom: hl, top, spring: arched ? top - rise! : undefined, rise, variant: ss });
+            } else if (bi === gateBay && hl < 0.9) {
               const w = Math.min(2.6, bayW - 0.4);
               openings.push({ kind: 'gate', u, w, bottom: hl, spring: hl + 1.9, top: hl + 1.9 + w / 2, variant: 0 });
             } else if ((bi + doorOff) % doorEvery === 0 && hl < 0.95 && hl > h0 + 0.1) {
@@ -248,9 +651,11 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
             }
             // Upper floors
             for (let s = 1; s <= nUp; s++) {
-              const sill = GROUND_F + (s - 1) * UPPER_F + 0.85, top = sill + 1.8;
+              const nobile = grand && s === 1;           // the first floor: taller windows, pediments
+              const balcony = nobile && nb >= 3 && bi === Math.floor(nb / 2);
+              const sill = GROUND_F + (s - 1) * UPPER_F + (balcony ? 0.3 : nobile ? 0.7 : 0.85), top = GROUND_F + (s - 1) * UPPER_F + (nobile ? 2.8 : 2.65);
               if (top > topH - 0.95) break;
-              openings.push({ kind: 'window', u, w: halfW * 2, bottom: sill, top, variant: (eseed + bi * 7 + s * 3) % 4 });
+              openings.push({ kind: 'window', u, w: halfW * 2, bottom: sill, top, variant: (eseed + bi * 7 + s * 3) % 4, balcony, pediment: nobile ? (bi % 2 === 0 ? 1 : 2) : 0 });
             }
           }
         }
@@ -286,7 +691,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
         // --- Reveals, glazing, doors, trim ---------------------------------------------------------
         for (const [oi, o] of openings.entries()) {
           const poly = holes[oi];
-          const depth = o.kind === 'door' || o.kind === 'gate' ? DOOR_DEPTH : WIN_DEPTH;
+          const depth = o.kind === 'door' || o.kind === 'gate' ? DOOR_DEPTH : o.kind === 'shop' ? 0.32 : WIN_DEPTH;
           for (let j = 0; j < poly.length; j++) {
             const p = poly[j], q = poly[(j + 1) % poly.length];
             const du = q.x - p.x, dh = q.y - p.y, len = Math.hypot(du, dh);
@@ -310,14 +715,183 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
             box(flat, e, l - sw / 2, (o.bottom + o.top + sw) / 2, 0.0175, sw / 2, (o.top + sw - o.bottom) / 2, 0.0175, trimC, true);
             box(flat, e, r + sw / 2, (o.bottom + o.top + sw) / 2, 0.0175, sw / 2, (o.top + sw - o.bottom) / 2, 0.0175, trimC, true);
             box(flat, e, o.u, o.top + sw / 2, 0.0175, o.w / 2, sw / 2, 0.0175, trimC, true);
-            if (o.kind === 'window' && hasHoods) {
+            if (o.kind === 'window' && o.pediment) {
+              // triangular (1) or segmental (2) pediment on consoles
+              const span = o.w / 2 + 0.3, yb = o.top + sw + 0.02;
+              box(trim, e, o.u, yb + 0.06, 0.07, span, 0.06, 0.07, trimC, true);
+              if (o.pediment === 1) {
+                const rise = 0.42, len = Math.hypot(span, rise), ang = Math.atan2(rise, span);
+                for (const sd of [-1, 1]) {
+                  const g = new THREE.BoxGeometry(len, 0.09, 0.14).rotateZ(-sd * ang).translate(sd * span / 2, rise / 2, 0.07);
+                  onEdge(trim, g, e, o.u, yb + 0.12, trimC);
+                }
+              } else {
+                const R = span * 1.25, cy = yb + 0.12 - Math.sqrt(R * R - span * span);
+                const a0 = Math.asin(span / R);
+                for (let k = 0; k < 8; k++) {
+                  const t0 = -a0 + (2 * a0 * k) / 8, t1 = -a0 + (2 * a0 * (k + 1)) / 8;
+                  const x0 = Math.sin(t0) * R, y0 = Math.cos(t0) * R, x1 = Math.sin(t1) * R, y1 = Math.cos(t1) * R;
+                  const len = Math.hypot(x1 - x0, y1 - y0);
+                  const g = new THREE.BoxGeometry(len + 0.01, 0.09, 0.14).rotateZ(Math.atan2(y1 - y0, x1 - x0)).translate((x0 + x1) / 2, (y0 + y1) / 2 + cy - yb - 0.12, 0.07);
+                  onEdge(trim, g, e, o.u, yb + 0.12, trimC);
+                }
+              }
+              for (const sd of [-1, 1]) box(trim, e, o.u + sd * (o.w / 2 + 0.12), o.top + sw - 0.12, 0.06, 0.07, 0.14, 0.06, trimC, true); // consoles
+            } else if (o.kind === 'window' && hasHoods) {
               box(trim, e, o.u, o.top + sw + 0.07, 0.055, o.w / 2 + 0.22, 0.05, 0.055, trimC, true);
               box(trim, e, o.u, o.top + sw + 0.15, 0.075, o.w / 2 + 0.27, 0.03, 0.075, trimC, true);
             }
-            if (o.kind === 'window' && hasShutters && bayW - o.w - 2 * sw > o.w * 0.95) {
+            if (o.balcony) {
+              // stone slab on consoles, wrought-iron railing
+              const bw = Math.max(2.2, o.w + 1.1), by = GROUND_F + 0.14;
+              box(trim, e, o.u, by, 0.46, bw / 2, 0.08, 0.46, trimC, true);
+              for (const sd of [-1, 1]) box(trim, e, o.u + sd * (bw / 2 - 0.25), by - 0.28, 0.25, 0.09, 0.2, 0.25, trimC, true);
+              const rh = 0.95;
+              box(iron, e, o.u, by + 0.08 + rh, 0.88, bw / 2, 0.025, 0.03, cWhite.set('#ffffff'));
+              for (const sd of [-1, 1]) box(iron, e, o.u + sd * (bw / 2 - 0.02), by + 0.08 + rh / 2, 0.46, 0.02, rh / 2, 0.44, cWhite.set('#ffffff'));
+              box(iron, e, o.u, by + 0.08 + rh, 0.46, 0.02, 0.02, 0.44, cWhite.set('#ffffff'));
+              for (let x = -bw / 2 + 0.1; x < bw / 2 - 0.05; x += 0.13) box(iron, e, o.u + x, by + 0.08 + rh / 2, 0.88, 0.009, rh / 2, 0.009, cWhite.set('#ffffff'));
+              for (const sd of [-1, 1]) for (let d = 0.12; d < 0.85; d += 0.13) box(iron, e, o.u + sd * (bw / 2 - 0.02), by + 0.08 + rh / 2, d, 0.009, rh / 2, 0.009, cWhite.set('#ffffff'));
+            }
+            if (o.kind === 'window' && !o.balcony && hasShutters && bayW - o.w - 2 * sw > o.w * 0.95) {
               const sh = (o.top - o.bottom) / 2, mid = (o.top + o.bottom) / 2;
               box(wood, e, l - sw - 0.02 - o.w / 4, mid, 0.055, o.w / 4, sh, 0.018, shutterC, true);
               box(wood, e, r + sw + 0.02 + o.w / 4, mid, 0.055, o.w / 4, sh, 0.018, shutterC, true);
+            }
+          } else if (o.kind === 'shop') {
+            stats.shops++;
+            const ss = o.variant, R = (k: number) => rnd(ss, k);
+            // colours unique to this shop: a period base colour, shifted in hue, saturation and value
+            const fC = new THREE.Color(FASCIA[ss % FASCIA.length]).offsetHSL((R(10) - 0.5) * 0.1, (R(11) - 0.5) * 0.25, (R(12) - 0.5) * 0.14);
+            const frameC = R(13) < 0.28 ? new THREE.Color('#e6ddc8').offsetHSL(0, 0, (R(14) - 0.5) * 0.08) : fC.clone().lerp(cWhite.set('#2e2720'), 0.1 + 0.35 * R(14));
+            const tintC = new THREE.Color().setHSL(0.06 + 0.07 * R(18), 0.2 + 0.35 * R(19), 0.72 + 0.26 * R(20));
+            const d = -depth + 0.02, arched = o.spring !== undefined, sTop = arched ? o.spring! : o.top, headTop = o.top;
+            const riser = 0.4 + 0.4 * R(15), gb = o.bottom + riser;
+            const cell = shopCell(ss), cu = cell[0][0], cv = cell[0][1];
+            const uvAt = (x: number, y: number) => [cu + 0.5 * (x - l) / o.w, cv + 0.5 * Math.min(1, (y - gb) / Math.max(0.5, headTop - gb))];
+            // stall riser: plain boards or fielded panels
+            box(wood, e, o.u, o.bottom + riser / 2, d, o.w / 2, riser / 2, 0.03, frameC, true);
+            if (R(34) < 0.5) for (let x = l + 0.35; x < r - 0.2; x += 0.6) box(wood, e, x, o.bottom + riser / 2, d + 0.03, 0.22, riser / 2 - 0.08, 0.015, frameC.clone().multiplyScalar(0.85), true);
+            // door: none, left, centre or right
+            const dm = Math.floor(R(16) * 4), dw = 0.9 + 0.25 * R(17);
+            let doorAt: number | null = dm === 0 ? null : dm === 1 ? l + dw / 2 + 0.06 : dm === 2 ? o.u : r - dw / 2 - 0.06;
+            if (doorAt !== null && o.w < dw + 0.9) doorAt = null;
+            const spans = (doorAt === null ? [[l, r]] : [[l, doorAt - dw / 2], [doorAt + dw / 2, r]]).filter(([x0, x1]) => x1 - x0 > 0.25) as [number, number][];
+            const nBars = Math.floor(R(21) * 4), transomAt = R(23) < 0.6 ? sTop - (0.35 + 0.3 * R(22)) : null;
+            for (const [x0, x1] of spans) {
+              shop.tri(P(e, x0, gb, d - 0.01), P(e, x1, gb, d - 0.01), P(e, x1, sTop, d - 0.01), nOut, uvAt(x0, gb), uvAt(x1, gb), uvAt(x1, sTop), tintC);
+              shop.tri(P(e, x0, gb, d - 0.01), P(e, x1, sTop, d - 0.01), P(e, x0, sTop, d - 0.01), nOut, uvAt(x0, gb), uvAt(x1, sTop), uvAt(x0, sTop), tintC);
+              const n = Math.min(nBars, Math.floor((x1 - x0) / 0.45));
+              for (let k = 1; k <= n; k++) box(wood, e, x0 + ((x1 - x0) * k) / (n + 1), (gb + sTop) / 2, d + 0.02, 0.022, (sTop - gb) / 2, 0.02, frameC, true);
+              if (transomAt !== null) {
+                box(wood, e, (x0 + x1) / 2, transomAt, d + 0.02, (x1 - x0) / 2, 0.035, 0.025, frameC, true);
+                if (R(24) < 0.5) for (let x = x0 + 0.28; x < x1 - 0.1; x += 0.28) box(wood, e, x, (transomAt + sTop) / 2, d + 0.02, 0.012, (sTop - transomAt) / 2, 0.015, frameC, true);
+              }
+            }
+            if (arched) {
+              // glazed head with radiating bars, a moulded stone archivolt and keystone
+              const poly = holes[oi].slice(2);   // the arc points, left to right reversed
+              for (let k = 0; k + 1 < poly.length; k++) {
+                const p0 = poly[k], p1 = poly[k + 1];
+                shop.tri(P(e, o.u, sTop, d - 0.01), P(e, p0.x, p0.y, d - 0.01), P(e, p1.x, p1.y, d - 0.01), nOut, uvAt(o.u, sTop), uvAt(p0.x, p0.y), uvAt(p1.x, p1.y), tintC);
+                const mid = new THREE.Vector2((p0.x + p1.x) / 2 - o.u, (p0.y + p1.y) / 2 - sTop), len = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+                const nR = mid.clone().normalize();
+                const q = (x: number, y: number, k2: number, dd: number) => P(e, x + nR.x * k2, y + nR.y * k2, dd);
+                flat.quad(q(p0.x, p0.y, 0.02, 0.05), q(p0.x, p0.y, 0.22, 0.05), q(p1.x, p1.y, 0.22, 0.05), q(p1.x, p1.y, 0.02, 0.05), nOut, [[0, 0], [0.2, 0], [0.2, len], [0, len]], trimC);
+                if (R(25) < 0.65 && k % 2 === 0) {
+                  const ang = Math.atan2(p0.y - sTop, p0.x - o.u), rl = Math.hypot(p0.x - o.u, p0.y - sTop);
+                  onEdge(wood, new THREE.BoxGeometry(rl, 0.025, 0.02).translate(rl / 2, 0, 0).rotateZ(ang), e, o.u, sTop, frameC);
+                }
+              }
+              box(wood, e, o.u, sTop, d + 0.02, o.w / 2, 0.035, 0.025, frameC, true);
+              box(trim, e, o.u, headTop + 0.14, 0.09, 0.14, 0.22, 0.09, trimC, true);
+            }
+            if (doorAt !== null) {
+              const dTop = arched ? sTop : sTop;
+              box(wood, e, doorAt, o.bottom + (dTop - o.bottom) / 2, d - 0.04, dw / 2, (dTop - o.bottom) / 2, 0.03, frameC, true);
+              const gl = R(26) < 0.5 ? 0.45 : 0.3;
+              shop.quad(P(e, doorAt - dw / 2 + 0.14, o.bottom + (dTop - o.bottom) * gl, d), P(e, doorAt + dw / 2 - 0.14, o.bottom + (dTop - o.bottom) * gl, d), P(e, doorAt + dw / 2 - 0.14, dTop - 0.14, d), P(e, doorAt - dw / 2 + 0.14, dTop - 0.14, d), nOut,
+                [uvAt(doorAt - 0.3, gb), uvAt(doorAt + 0.3, gb), uvAt(doorAt + 0.3, sTop), uvAt(doorAt - 0.3, sTop)], tintC);
+              box(iron, e, doorAt + dw / 2 - 0.2, o.bottom + 1.05, d + 0.04, 0.015, 0.1, 0.02, cWhite.set('#ffffff'));   // handle
+            }
+            // surround: plain boards, reeded pilasters or cast-iron columns
+            const pil = Math.floor(R(27) * 3), ph = arched ? sTop - o.bottom : o.top - o.bottom;
+            for (const sd of [-1, 1]) {
+              const px = o.u + sd * (o.w / 2 + 0.11);
+              if (pil === 2) {
+                onEdge(iron, new THREE.CylinderGeometry(0.07, 0.08, ph, 10).translate(0, ph / 2, 0.12), e, px, o.bottom, cWhite.set('#ffffff'));
+                box(iron, e, px, o.bottom + ph + 0.06, 0.12, 0.13, 0.06, 0.1, cWhite.set('#ffffff'));
+              } else {
+                box(wood, e, px, o.bottom + ph / 2 + 0.05, 0.06, 0.11, ph / 2 + 0.05, 0.06, frameC, true);
+                if (pil === 1) for (const dx of [-0.05, 0, 0.05]) box(wood, e, px + dx, o.bottom + ph / 2 + 0.05, 0.12, 0.012, ph / 2 - 0.2, 0.012, frameC.clone().multiplyScalar(1.12), true);
+                box(wood, e, px, o.bottom + ph + 0.12, 0.09, 0.15, 0.08, 0.09, frameC, true);   // capital
+              }
+            }
+            // fascia and sign: a board over square fronts; over arches a smaller board if there is room
+            const room = GROUND_F - 0.2 - (headTop + (arched ? 0.4 : 0.08));
+            if (room > 0.35) {
+              const fh = Math.min(room - 0.1, 0.4 + 0.3 * R(28)), fy = headTop + (arched ? 0.4 : 0.08);
+              const fw = arched ? Math.min(o.w / 2, 1.1 + 0.5 * R(29)) : o.w / 2 + 0.24;
+              box(wood, e, o.u, fy + fh / 2, 0.07, fw, fh / 2, 0.07, fC, true);
+              signQuad(sign, e, o.u, fy + 0.05, fy + fh - 0.05, fw - 0.05, 0.145, ss >>> 4);
+              box(wood, e, o.u, fy + fh + 0.04, 0.1, fw + 0.08, 0.04, 0.1, frameC, true);
+            }
+            // awning: none, flat, rounded, or long with a scalloped valance; striped or plain canvas
+            const aStyle = arched && R(30) > 0.3 ? 0 : Math.floor(R(31) * 4);
+            if (aStyle > 0) {
+              const aC = new THREE.Color(AWNING[(ss >>> 3) % AWNING.length]).offsetHSL((R(32) - 0.5) * 0.06, (R(33) - 0.5) * 0.2, (R(35) - 0.5) * 0.1);
+              const striped = R(36) < 0.55;
+              const aw = o.w / 2 + 0.2, ay = (arched ? sTop : o.top) + 0.06;
+              const U = (x: number, v: number): number[] => (striped ? [x, v] : [0.15, v]);
+              if (aStyle === 2) {
+                // rounded canopy: a quarter barrel curving out and down, with closed ends
+                const out = 0.9 + 0.4 * R(37), N = 7;
+                const prof = Array.from({ length: N + 1 }, (_, k) => { const t = (k / N) * Math.PI / 2; return [0.1 + out * Math.sin(t), ay + 0.35 - 0.95 * (1 - Math.cos(t))]; });
+                for (let k = 0; k < N; k++) {
+                  const [d0, y0] = prof[k], [d1, y1] = prof[k + 1];
+                  const A = P(e, o.u - aw, y0, d0), B = P(e, o.u + aw, y0, d0), C = P(e, o.u + aw, y1, d1), D = P(e, o.u - aw, y1, d1);
+                  const nn = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(B, A), new THREE.Vector3().subVectors(D, A)).normalize();
+                  if (nn.dot(vN(e)) + nn.y < 0) nn.negate();
+                  canvas.quad(A, B, C, D, nn, [U(0, k / N), U(aw * 2, k / N), U(aw * 2, (k + 1) / N), U(0, (k + 1) / N)], aC);
+                  for (const sd of [-1, 1]) canvas.tri(P(e, o.u + sd * aw, prof[N][1], 0.1), P(e, o.u + sd * aw, y0, d0), P(e, o.u + sd * aw, y1, d1), vT(e, sd), U(0.1, 0.5), U(0.1, 0.5), U(0.1, 0.5), aC);
+                }
+              } else {
+                const out = aStyle === 3 ? 1.6 + 0.4 * R(37) : 1.05 + 0.4 * R(37), drop = 0.45 + 0.35 * R(38);
+                const A = P(e, o.u - aw, ay, 0.12), B = P(e, o.u + aw, ay, 0.12), C = P(e, o.u + aw, ay - drop, out), D = P(e, o.u - aw, ay - drop, out);
+                const up = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(B, A), new THREE.Vector3().subVectors(D, A)).normalize();
+                if (up.y < 0) up.negate();
+                canvas.quad(A, B, C, D, up, [U(0, 0), U(aw * 2, 0), U(aw * 2, 1), U(0, 1)], aC);
+                const vh = 0.18 + 0.12 * R(39);
+                if (aStyle === 3) {
+                  // scalloped valance
+                  const nS = Math.max(3, Math.round((aw * 2) / 0.35));
+                  for (let k = 0; k < nS; k++) {
+                    const x0 = o.u - aw + (aw * 2 * k) / nS, x1 = o.u - aw + (aw * 2 * (k + 1)) / nS, xm = (x0 + x1) / 2;
+                    canvas.quad(P(e, x0, ay - drop, out), P(e, x1, ay - drop, out), P(e, x1, ay - drop - vh * 0.5, out), P(e, x0, ay - drop - vh * 0.5, out), vN(e), [U(x0, 1), U(x1, 1), U(x1, 1.1), U(x0, 1.1)], aC);
+                    canvas.tri(P(e, x0, ay - drop - vh * 0.5, out), P(e, x1, ay - drop - vh * 0.5, out), P(e, xm, ay - drop - vh, out), vN(e), U(x0, 1.1), U(x1, 1.1), U(xm, 1.2), aC);
+                  }
+                  for (const sd of [-1, 1]) box(iron, e, o.u + sd * aw, ay - drop / 2 - 0.6, out, 0.012, drop / 2 + 0.6, 0.012, cWhite.set('#ffffff')); // posts
+                } else {
+                  canvas.quad(D, C, P(e, o.u + aw, ay - drop - vh, out), P(e, o.u - aw, ay - drop - vh, out), vN(e), [U(0, 1), U(aw * 2, 1), U(aw * 2, 1.2), U(0, 1.2)], aC);
+                }
+                for (const sd of [-1, 1]) box(iron, e, o.u + sd * aw, ay - drop / 2, out / 2 + 0.06, 0.01, 0.01, out / 2, cWhite.set('#ffffff')); // rods
+              }
+            }
+            // hanging sign on an iron bracket, goods set out by the door
+            if (R(2) < 0.34 && o.u + o.w / 2 + 0.7 < e.L - 0.3) {
+              const sx = o.u + o.w / 2 + 0.45, sy = GROUND_F - 0.35, shape = R(40);
+              box(iron, e, sx, sy, 0.5, 0.015, 0.015, 0.5, cWhite.set('#ffffff'));
+              box(iron, e, sx, sy - 0.25, 0.08, 0.015, 0.25, 0.015, cWhite.set('#ffffff'));
+              if (shape < 0.5) box(wood, e, sx, sy - 0.45, 0.62, 0.02, 0.28, 0.32, fC, false);
+              else onEdge(wood, new THREE.CylinderGeometry(0.3, 0.3, 0.04, 16).rotateZ(Math.PI / 2).rotateY(Math.PI / 2).translate(0, 0, 0.62), e, sx, sy - 0.42, fC);
+            }
+            if (R(41) < 0.22 && doorAt !== null) {
+              for (let k = 0; k < 2; k++) {
+                const gx = doorAt + (k ? 1 : -1) * (dw / 2 + 0.4);
+                if (gx < 0.4 || gx > e.L - 0.4) continue;
+                if (R(42 + k) < 0.5) onEdge(wood, new THREE.CylinderGeometry(0.26, 0.26, 0.7, 10).translate(0, 0.35, 0.45), e, gx, o.bottom, frameC.clone().lerp(cWhite.set('#6a4a30'), 0.7));
+                else box(wood, e, gx, o.bottom + 0.22, 0.4, 0.3, 0.22, 0.25, new THREE.Color('#6a5038'), true);
+              }
             }
           } else {
             stats.doors++;
@@ -352,7 +926,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
         // --- Bands: plinth, string course, cornice (street and courtyard faces only) --------------
         if (!e.party) {
           const mStart = miterAt(i), mEnd = miterAt((i + 1) % n);
-          const doorSpans = openings.filter(o => o.kind === 'door' || o.kind === 'gate').map(o => [o.u - o.w / 2 - (o.kind === 'gate' ? 0.3 : 0.22), o.u + o.w / 2 + (o.kind === 'gate' ? 0.3 : 0.22)]);
+          const doorSpans = openings.filter(o => o.kind === 'door' || o.kind === 'gate' || o.kind === 'shop').map(o => [o.u - o.w / 2 - (o.kind === 'gate' ? 0.3 : 0.22), o.u + o.w / 2 + (o.kind === 'gate' ? 0.3 : 0.22)]);
           const plinth = [[0, h0], [0.07, h0], [0.07, 0.55], [0.03, 0.62], [0, 0.62]];
           let ua = 0;
           for (const [s0, s1] of doorSpans.sort((p, q) => p[0] - q[0])) {
@@ -379,10 +953,86 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
             const ph = (0.62 + topH - 0.78) / 2, phh = (topH - 0.78 - 0.62) / 2;
             if (!ep.party && convex(ep, e) && e.L > 1.6) box(flat, e, 0.25, ph, 0.02, 0.25, phh, 0.02, trimC, true);
             if (!en.party && convex(e, en) && e.L > 1.6) box(flat, e, e.L - 0.25, ph, 0.02, 0.25, phh, 0.02, trimC, true);
+          } else {
+            // rusticated quoins on convex street corners: alternating long and short blocks
+            const ep = edges[(i - 1 + n) % n], en = edges[(i + 1) % n];
+            const convex = (a: Edge, c: Edge) => c.tx * a.nx + c.tz * a.nz < -0.3;
+            for (const [ok, u, sd] of [[!ep.party && convex(ep, e), 0, 1], [!en.party && convex(e, en), e.L, -1]] as [boolean, number, number][]) {
+              if (!ok || e.L < 2) continue;
+              let k = 0;
+              for (let y = 0.7; y < topH - 1.0; y += 0.42, k++) {
+                const w = k % 2 ? 0.45 : 0.8;
+                box(flat, e, u + sd * w / 2, y + 0.18, 0.03, w / 2, 0.18, 0.03, trimC, true);
+              }
+            }
+          }
+          // cornice brackets (c.1900 houses)
+          if (bracketed) for (let u = 0.5; u < e.L - 0.3; u += 0.95) box(trim, e, u, topH - 0.62, 0.2, 0.07, 0.1, 0.18, trimC, true);
+          // downpipes at both ends with a hopper, and the eave gutter
+          if (e.L > 4 && topH > 5) {
+            const pipeC = new THREE.Color('#6f7478');
+            for (const u of [0.28, e.L - 0.28]) {
+              const cyl = new THREE.CylinderGeometry(0.055, 0.055, topH - 0.5, 6).translate(0, (topH - 0.5) / 2, 0);
+              onEdge(metal, cyl, e, u, 0.05, pipeC);
+              onEdge(metal, new THREE.CylinderGeometry(0.14, 0.06, 0.28, 6).translate(0, topH - 0.34, 0), e, u, 0.05, pipeC);
+            }
+            if (ov > 0) box(metal, e, e.L / 2, topH - 0.04, ov + 0.1, e.L / 2, 0.06, 0.07, pipeC);
+          }
+        }
+        // flower boxes under some upper windows (street fronts)
+        if (front >= 5) for (const o of openings) {
+          if (o.kind !== 'window' || o.balcony || rnd(hashString(`${b.id}:${i}:${o.u.toFixed(1)}:${o.bottom.toFixed(1)}`), 9) > 0.14) continue;
+          box(wood, e, o.u, o.bottom - 0.2, 0.2, o.w / 2, 0.1, 0.12, new THREE.Color('#5a4030'), true);
+          for (let x = -o.w / 2 + 0.1; x < o.w / 2 - 0.05; x += 0.14) {
+            const blob = new THREE.IcosahedronGeometry(0.09, 0).translate(x, 0.02, 0.22);
+            onEdge(canvas, blob, e, o.u, o.bottom - 0.08, new THREE.Color(rnd(x * 97, 3) < 0.5 ? '#5a7a3a' : '#a8362a'));
+          }
+        }
+        // dormers in the roof over street fronts
+        if (front >= 5 && b.roof && k > 0.2 && e.L > 7) {
+          const nd = Math.floor(e.L / 6.5);
+          const roofC = new THREE.Color(hasTileRoof(b) ? '#9a5a44' : '#7c8286');
+          for (let j = 0; j < nd; j++) {
+            const u = (e.L / nd) * (j + 0.5), din = 0.9, yb = topH + din * k;
+            const H = 1.35, w = 1.0, depth = 1.2 + H / k;
+            const yBot = yb - 0.05 - depth * k, yTop = yb + H; // the back of the body is buried in the roof
+            box(wall, e, u, (yBot + yTop) / 2, -din - depth / 2, w / 2 + 0.12, (yTop - yBot) / 2, depth / 2, tint, true);
+            box(trim, e, u, yb + H + 0.04, -din + 0.06, w / 2 + 0.2, 0.05, 0.12, trimC, true);
+            glass.quad(P(e, u - w / 2 + 0.12, yb + 0.15, -din + 0.01), P(e, u + w / 2 - 0.12, yb + 0.15, -din + 0.01), P(e, u + w / 2 - 0.12, yb + H - 0.1, -din + 0.01), P(e, u - w / 2 + 0.12, yb + H - 0.1, -din + 0.01), vN(e), [[0, 0], [0.5, 0], [0.5, 0.5], [0, 0.5]], cWhite.set('#ffffff'));
+            // little gable roof over the dormer
+            const gw = w / 2 + 0.3, gr = 0.55;
+            for (const sd of [-1, 1]) {
+              const A = P(e, u + sd * gw, yb + H + 0.08, -din + 0.25), B = P(e, u, yb + H + 0.08 + gr, -din + 0.25);
+              const C = P(e, u, yb + H + 0.08 + gr, -din - depth), D = P(e, u + sd * gw, yb + H + 0.08, -din - depth);
+              const nn = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(B, A), new THREE.Vector3().subVectors(D, A)).normalize();
+              if (nn.y < 0) nn.negate();
+              metal.quad(A, B, C, D, nn, [[0, 0], [1, 0], [1, 1], [0, 1]], roofC);
+            }
+            const tri = [P(e, u - gw + 0.25, yb + H + 0.08, -din + 0.02), P(e, u + gw - 0.25, yb + H + 0.08, -din + 0.02), P(e, u, yb + H + 0.08 + gr - 0.15, -din + 0.02)];
+            wall.tri(tri[0], tri[1], tri[2], vN(e), [0, 0], [1, 0], [0.5, 0.4], tint);
           }
         }
       });
     });
+
+    // --- Hero roof: low sheet-metal hip roof from the skeleton, with dormers ------------------------
+    if (b.style && b.roof) {
+      const V = b.roof.v, kk = Math.min(b.roof.k, 0.42);
+      const tris: THREE.Vector3[][] = [];
+      const vy = (i: number) => b.eaveY + V[i * 3 + 2] * kk;
+      for (const face of b.roof.f) {
+        const contour = face.map(i => new THREE.Vector2(V[i * 3], V[i * 3 + 1]));
+        for (const [a, c, d] of THREE.ShapeUtils.triangulateShape(contour, [])) {
+          tris.push([face[a], face[c], face[d]].map(i => new THREE.Vector3(V[i * 3], vy(i), V[i * 3 + 1])));
+        }
+      }
+      const roofC = new THREE.Color('#7b8184');
+      for (const [a, c, d] of tris) {
+        const n = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(c, a), new THREE.Vector3().subVectors(d, a)).normalize();
+        if (n.y < 0) n.negate();
+        metal.tri(a, c, d, n, [a.x, a.z], [c.x, c.z], [d.x, d.z], roofC);
+      }
+    }
 
     // --- Chimneys on the ridge ----------------------------------------------------------------------
     if (b.roof && b.area > 35) {
@@ -413,13 +1063,14 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
         box(trim, f, 0, ridge + 0.2, 0, 0.42, 1.2, 0.28, chimC);
         box(trim, f, 0, ridge + 1.44, 0, 0.52, 0.05, 0.38, capC);
         box(trim, f, 0, ridge + 1.56, 0, 0.3, 0.07, 0.17, capC);
+        for (const dx of [-0.18, 0.18]) box(trim, f, dx, ridge + 1.78, 0, 0.07, 0.16, 0.07, new THREE.Color('#9a6a52')); // clay pots
       }
     }
   }
 
   const group = new THREE.Group();
   group.name = 'facades';
-  for (const [builder, mat, cast] of [[wall, mats.wall, true], [trim, mats.trim, true], [flat, mats.trim, false], [glass, mats.glass, false], [wood, mats.wood, true]] as const) {
+  for (const [builder, mat, cast] of [[wall, mats.wall, true], [trim, mats.trim, true], [flat, mats.trim, false], [glass, mats.glass, false], [wood, mats.wood, true], [canvas, mats.canvas, true], [iron, mats.iron, false], [metal, mats.metal, true], [shop, mats.shopGlass, false], [sign, mats.signs, false]] as const) {
     const g = builder.geometry();
     if (!g) continue;
     stats.triangles += g.getAttribute('position').count / 3;
@@ -428,5 +1079,6 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
     mesh.receiveShadow = true;
     group.add(mesh);
   }
+  for (const x of extras) group.add(x);
   return { group, stats };
 }

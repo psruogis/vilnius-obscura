@@ -19,6 +19,7 @@ interface Base {
   scene: THREE.Object3D;                // skeleton source
   idle: THREE.AnimationClip; walk: THREE.AnimationClip;
   height: number; palettes: Record<string, string>[];
+  restHeight: number;                   // model height in rest pose, scene units
 }
 
 const MEN = [
@@ -68,7 +69,9 @@ async function loadBase(url: string, idleName: string, walkName: string, palette
   const partOf = geometry.getAttribute('part').array as Float32Array;
   geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(partOf.length * 3), 3));
   const find = (n: string) => gltf.animations.find(a => a.name.endsWith(n))!;
-  return { geometry, partOf, parts, scene, idle: find(idleName), walk: find(walkName), height, palettes };
+  scene.updateMatrixWorld(true);
+  const rb = new THREE.Box3().setFromObject(scene);
+  return { geometry, partOf, parts, scene, idle: find(idleName), walk: find(walkName), height, palettes, restHeight: rb.max.y - rb.min.y };
 }
 
 interface Person {
@@ -124,11 +127,9 @@ export async function buildCrowd(opts: {
     mesh.receiveShadow = true;
     src.parent!.add(mesh);
     skel.traverse(o => { if ((o as THREE.Mesh).isMesh && o !== mesh) o.visible = false; });
-    // scale to height
-    skel.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(src);
-    const s = (base.height * (0.94 + rnd() * 0.1)) / Math.max(0.1, box.max.y - box.min.y);
-    skel.scale.setScalar(s);
+    // scale to height (from the rest-pose size of the whole model, as the market figures do)
+    const s = (base.height * (0.94 + rnd() * 0.1)) / Math.max(1e-3, base.restHeight);
+    skel.scale.multiplyScalar(s);
     const root = new THREE.Group();
     root.add(skel);
     root.position.set(x, opts.terrain.heightAt(x, z), z);

@@ -2,8 +2,8 @@ import type * as THREE from 'three';
 
 const CREDITS_HTML = `
   <h2>Credits</h2>
-  <p>Town Hall Square around 1800, rebuilt from real map data. Ordinary houses follow their real footprints and heights
-  with a generated c.&nbsp;1800 look; historic layouts come from public-domain city plans.</p>
+  <p>Town Hall Square around 1900, rebuilt from real map data and period photographs. Ordinary houses follow their real footprints
+  and heights with a generated late-19th-century look; historic layouts come from public-domain city plans.</p>
   <ul>
     <li>Building footprints: GRPK © Nacionalinė žemės tarnyba prie Aplinkos ministerijos, CC BY 4.0</li>
     <li>Heights and terrain: national LiDAR © Nacionalinė žemės tarnyba prie Aplinkos ministerijos, 2025, CC BY 4.0</li>
@@ -31,7 +31,7 @@ export function createOverlay(onStart: () => void): Overlay {
   el.innerHTML = `
     <div class="panel">
       <h1>Vilnius Town Hall</h1>
-      <p>Town Hall Square, around 1800</p>
+      <p>Town Hall Square, around 1900</p>
       <div class="bar"><div class="fill"></div></div>
       <div class="cta" data-start hidden>Click to walk</div>
       <p class="hint">W A S D to walk · Shift to jog · mouse to look · M to mute · Esc to pause</p>
@@ -85,7 +85,7 @@ export function showUnsupported(reason: string, onTryAnyway: (() => void) | null
   el.innerHTML = `
     <div class="panel">
       <h1>Vilnius Town Hall</h1>
-      <p>Town Hall Square, around 1800</p>
+      <p>Town Hall Square, around 1900</p>
       <p style="margin-top:22px">${reason === 'phone'
         ? 'This walk needs a keyboard and a mouse. Open it on a desktop or laptop.'
         : 'This walk needs WebGL 2, which this browser or device does not support.'}</p>

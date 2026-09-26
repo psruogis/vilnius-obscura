@@ -11,6 +11,9 @@ export const LIMEWASH = ['#e3cc9c', '#d9b884', '#e6c49c', '#d8a888', '#e0b89e', 
 // Multiplied into the clay texture: deep, weathered red-browns as in the period oils.
 const ROOF_TINTS = ['#c9a08e', '#b88a78', '#d4ae98', '#a87e6e', '#c4a494', '#9c7a6c', '#bf9582'];
 
+/** c.1900: most roofs were re-covered in painted sheet metal; about three in ten kept clay tile. */
+export const hasTileRoof = (b: Building): boolean => hashString(b.id) % 10 < 3;
+
 export function hashString(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
@@ -131,16 +134,20 @@ function fixWinding(g: THREE.BufferGeometry): void {
  * Roofs from straight skeletons: every face rises from its eave edge at the building's pitch.
  * aRoof = (u along the eave, slope distance from the eave, seed, 0)
  */
-export function buildRoofs(data: AreaData): THREE.BufferGeometry {
+// Painted sheet metal, c.1900: grey, red-brown, green
+const METAL_TINTS = ['#80868a', '#6d7275', '#7a4234', '#5a6a58', '#8a8e8c', '#6a3a30'];
+
+/** Roofs of the buildings `pick` selects (default: all); metal ones take painted-metal tints. */
+export function buildRoofs(data: AreaData, pick: (b: Building) => boolean = () => true, metal = false): THREE.BufferGeometry {
   const b = new Builder();
   const tint = new THREE.Color();
   const n = new THREE.Vector3();
   const pa = new THREE.Vector3(), pb = new THREE.Vector3(), pc = new THREE.Vector3();
   const none = [0, 0, 0, 0];
   for (const bd of data.buildings) {
-    if (bd.role === 'townhall' || bd.role === 'stcasimir') continue;
+    if (bd.role === 'townhall' || bd.role === 'stcasimir' || bd.style || !pick(bd)) continue; // hero roofs are built in facades.ts
     const seed = hashString(bd.id);
-    tint.set(ROOF_TINTS[(seed >>> 3) % ROOF_TINTS.length]);
+    tint.set(metal ? METAL_TINTS[(seed >>> 3) % METAL_TINTS.length] : ROOF_TINTS[(seed >>> 3) % ROOF_TINTS.length]);
     const roof = bd.roof;
     if (!roof) {
       addFlatRoof(b, bd, tint);

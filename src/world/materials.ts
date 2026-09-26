@@ -156,6 +156,14 @@ export function createPromenadeMaterials(anisotropy: number) {
     wood: createWoodMaterial(anisotropy),
     bark: new THREE.MeshStandardMaterial({ color: '#5a4a3a', roughness: 1, map: worldTex('weathered_planks', 'diff', true, anisotropy, 0.6) }),
     leaves: createTreeMaterials(new THREE.MeshStandardMaterial()).leaves,
+    lawn: new THREE.MeshStandardMaterial({
+      color: '#5b6e37', roughness: 1,
+      map: worldTex('plastered_wall_04', 'diff', true, anisotropy, 1.2),
+      polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
+    }),
+    water: new THREE.MeshStandardMaterial({ color: '#2f3b3a', roughness: 0.04, metalness: 0.2 }),
+    iron: new THREE.MeshStandardMaterial({ color: '#23231f', roughness: 0.5, metalness: 0.55 }),
+    lampGlass: new THREE.MeshStandardMaterial({ color: '#d8d4c4', roughness: 0.15, metalness: 0, transparent: true, opacity: 0.75, emissive: new THREE.Color('#ffcf8a'), emissiveIntensity: 0.0 }),
     gravel: new THREE.MeshStandardMaterial({
       color: '#c8b28a', roughness: 1,
       map: worldTex('plastered_wall_04', 'diff', true, anisotropy, 3),
@@ -178,6 +186,20 @@ export function createMarketMaterials(anisotropy: number) {
     canvas: new THREE.MeshStandardMaterial({ color: '#d9ceb6', roughness: 1, side: THREE.DoubleSide }),
     goods: [plain('#6f8a45'), plain('#9a3b2a'), plain('#c9b48a'), plain('#b7894a'), plain('#a08a64')], // cabbages, apples, turnips, onions, sacks
   };
+}
+
+/** Painted sheet-metal roofs with standing seams (most roofs c.1900). */
+export function createMetalRoofMaterial(): THREE.MeshStandardMaterial {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 8;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 8);
+  g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, 3, 8);                       // seam shadow
+  g.fillStyle = '#f0f0f0'; g.fillRect(3, 0, 2, 8);                       // seam highlight
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2.2 / 0.6, 1);   // roof UVs are in 2.2 m units: a seam every 0.6 m along the eave
+  const m = new THREE.MeshStandardMaterial({ map: t, vertexColors: true, roughness: 0.5, metalness: 0.35, side: THREE.DoubleSide });
+  return m;
 }
 
 /** Hand-made clay tile roofs. */
@@ -205,7 +227,7 @@ const FACADE_FRAGMENT = /* glsl */ `
     col = mix(vec3(0.46, 0.43, 0.39), col, smoothstep(0.35, 0.45, h));
 
     // Cornice under the eave, and a thin string course at each floor line
-    float groundF = 4.0, upperF = 3.4;
+    float groundF = 4.4, upperF = 3.7;
     float cornice = smoothstep(eave - 0.55, eave - 0.45, h);
     col = mix(col, wall * 1.08 + 0.03, cornice);
     col *= 1.0 - 0.35 * smoothstep(eave - 0.62, eave - 0.55, h) * (1.0 - smoothstep(eave - 0.55, eave - 0.52, h));

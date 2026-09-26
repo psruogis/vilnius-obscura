@@ -36,7 +36,7 @@ export interface Market {
   update(dt: number): void;
 }
 
-export async function buildMarket(data: AreaData, th: Building, terrain: Terrain, mats: MarketMaterials): Promise<Market> {
+export async function buildMarket(data: AreaData, th: Building, terrain: Terrain, mats: MarketMaterials, withStalls = true): Promise<Market> {
   const f = townHallFrame(th);
   const toWorld = (x: number, z: number) => {
     const p = f.origin.clone().addScaledVector(f.dirX, x).addScaledVector(f.dirZ, z);
@@ -57,7 +57,7 @@ export async function buildMarket(data: AreaData, th: Building, terrain: Terrain
   const put = (list: THREE.BufferGeometry[], g: THREE.BufferGeometry, p: THREE.Vector3, yaw: number) =>
     list.push(g.applyMatrix4(m.compose(p, q.setFromAxisAngle(Y, yaw), one)));
 
-  for (const [i, s] of SPOTS.entries()) {
+  for (const [i, s] of (withStalls ? SPOTS : []).entries()) {
     const p = toWorld(s.x, s.z), yaw = worldYaw(s.yaw);
     const [L, W] = FOOTPRINT[s.kind];
     const corners = [[-L / 2 - 1.5, -W / 2 - 1.5], [L / 2 + 1.5, -W / 2 - 1.5], [L / 2 + 1.5, W / 2 + 1.5], [-L / 2 - 1.5, W / 2 + 1.5]]

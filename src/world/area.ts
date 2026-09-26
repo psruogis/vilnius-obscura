@@ -28,6 +28,8 @@ export interface Building {
   rings: XZ[][];
   /** Near the walk: full façade geometry (src/world/facades.ts). */
   detail?: boolean;
+  /** Modelled from a photograph (facades.ts heroFacade). */
+  style?: 'eclectic' | 'hotel';
   /** Metres the roof reaches beyond the walls (detailed houses). */
   overhang?: number;
   source?: string | null;

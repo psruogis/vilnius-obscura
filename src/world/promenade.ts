@@ -90,7 +90,7 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
     for (const side of [-1, 1]) {
       const p = world(s, side * TREE_T);
       const k = 0.85 + 0.3 * ((i * 7 + (side > 0 ? 3 : 0)) % 5) / 4;
-      const t = treeGeometry(i * 2 + (side > 0 ? 1 : 0), k);
+      const t = treeGeometry(i * 2 + (side > 0 ? 1 : 0), k * 2.05); // c.1900: grown lindens (~10 m)
       bark.push(place(t.wood, p.clone(), i));
       leaves.push(place(t.leaves, p.clone(), i * 1.7));
     }
@@ -114,12 +114,43 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
   }
   gravel.push(flatGeometry(tris));
 
-  // --- Public well near the north end (the circle on the plan) ---------------------------------
-  const wp = world(S_END + 2, -2);
-  stone.push(new THREE.CylinderGeometry(1.3, 1.4, 0.9, 20).translate(wp.x, wp.y + 0.45, wp.z));
-  for (const side of [-1, 1]) wood.push(place(mbox(0.18, 2.6, 0.18, 0, 1.3, side * 1.2), wp.clone(), yawAlong));
-  wood.push(place(mbox(0.16, 0.16, 2.8, 0, 2.5, 0), wp.clone(), yawAlong));
-  segments.push(...ringSegments(wp, 1.45));
+  // --- c.1900 garden: lawns inside the gravel walk, a round basin with a fountain, gas lamps ----
+  const lawnTris: THREE.Vector3[][] = [];
+  const lawnT = WALK_T - 2.6, ls0 = 7, ls1 = S_END - 4, lift2 = (p: THREE.Vector3) => { p.y += 0.07; return p; };
+  const basinS = S_END - 26, basinR = 4.2;
+  for (let s = ls0; s < ls1; s += 4) {
+    for (let t = -lawnT; t < lawnT - 1e-6; t += lawnT / 2) {
+      const s1 = Math.min(s + 4, ls1), t1 = t + lawnT / 2;
+      // leave a gravel circle round the basin and a cross path through the middle
+      const cs = (s + s1) / 2, ct = (t + t1) / 2;
+      if (Math.hypot(cs - basinS, ct) < basinR + 3.2) continue;
+      if (Math.abs(ct) < 1.2 && false) continue;
+      lawnTris.push([lift2(world(s, t)), lift2(world(s, t1)), lift2(world(s1, t1))], [lift2(world(s, t)), lift2(world(s1, t1)), lift2(world(s1, t))]);
+    }
+  }
+  const lawn: THREE.BufferGeometry[] = [flatGeometry(lawnTris)];
+  // basin: a low stone rim, dark water, a small fountain in the middle
+  const bp = world(basinS, 0);
+  const rim = new THREE.LatheGeometry([[basinR - 0.35, 0], [basinR, 0], [basinR + 0.05, 0.45], [basinR - 0.05, 0.55], [basinR - 0.4, 0.5], [basinR - 0.4, 0.1]].map(([a, b]) => new THREE.Vector2(a, b)), 40);
+  stone.push(rim.translate(bp.x, bp.y, bp.z));
+  stone.push(new THREE.CylinderGeometry(0.35, 0.5, 1.1, 16).translate(bp.x, bp.y + 0.55, bp.z));
+  stone.push(new THREE.LatheGeometry([[0, 0], [0.9, 0.05], [1.05, 0.3], [0.95, 0.35], [0.2, 0.2]].map(([a, b]) => new THREE.Vector2(a, b)), 24).translate(bp.x, bp.y + 1.05, bp.z));
+  const water: THREE.BufferGeometry[] = [new THREE.CircleGeometry(basinR - 0.38, 40).rotateX(-Math.PI / 2).translate(bp.x, bp.y + 0.36, bp.z)];
+  segments.push(...ringSegments(bp, basinR + 0.1, 16));
+  // cast-iron gas lamps just outside both fences
+  const iron: THREE.BufferGeometry[] = [], lampGlass: THREE.BufferGeometry[] = [];
+  for (let s = 10; s < S_END - 4; s += 18) {
+    for (const side of [-1, 1]) {
+      const lp = world(s + (side > 0 ? 9 : 0), side * (HALF + 0.9));
+      iron.push(new THREE.CylinderGeometry(0.2, 0.26, 0.6, 10).translate(lp.x, lp.y + 0.3, lp.z));
+      iron.push(new THREE.CylinderGeometry(0.06, 0.09, 3.5, 8).translate(lp.x, lp.y + 2.3, lp.z));
+      iron.push(new THREE.CylinderGeometry(0.12, 0.07, 0.25, 8).translate(lp.x, lp.y + 4.1, lp.z));
+      lampGlass.push(new THREE.CylinderGeometry(0.22, 0.14, 0.55, 6).translate(lp.x, lp.y + 4.5, lp.z));
+      iron.push(new THREE.ConeGeometry(0.3, 0.3, 6).translate(lp.x, lp.y + 4.93, lp.z));
+      iron.push(mbox(0.5, 0.04, 0.04, 0, 3.7, 0).applyMatrix4(new THREE.Matrix4().makeTranslation(lp.x, lp.y, lp.z))); // ladder bar
+      segments.push(...ringSegments(lp, 0.25, 6));
+    }
+  }
 
   // --- Market booth west of the portico (the c.1800 watercolour) -------------------------------
   // Long and low, a tiled hip roof, its open side (counter and posts) facing the promenade.
@@ -157,6 +188,10 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
   add(leaves, mats.leaves);
   add(roof, mats.roof);
   add(gravel, mats.gravel, false);
+  add(lawn, mats.lawn, false);
+  add(water, mats.water, false);
+  add(iron, mats.iron);
+  add(lampGlass, mats.lampGlass, false);
   const clock = (mats.leaves.userData.time ?? { value: 0 }) as { value: number };
   return { group, segments, update: dt => { clock.value += dt; } };
 }
