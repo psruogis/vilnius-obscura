@@ -116,9 +116,19 @@ interface Person {
   idle: THREE.AnimationAction; walk: THREE.AnimationAction;
   mode: 'stand' | 'walk' | 'pause';
   target: THREE.Vector2; speed: number; timer: number; yaw: number; wIdle: number;
+  job?: LampJob;
 }
 
-export interface Crowd { group: THREE.Group; update(dt: number, walker: THREE.Vector3): void; count: number }
+/** A lamplighter's round: go to the nearest lamp that needs him (and that he can see), work it, move on. */
+interface LampJob {
+  ground: THREE.Vector2[]; needs: (i: number) => boolean; act: (i: number) => void;
+  state: 'seek' | 'go' | 'work' | 'wander'; lamp: number; t: number; done: boolean;
+}
+
+export interface Crowd {
+  group: THREE.Group; update(dt: number, walker: THREE.Vector3): void; count: number;
+  addLamplighter(o: { start: THREE.Vector2; ground: THREE.Vector2[]; needs: (i: number) => boolean; act: (i: number) => void }): void;
+}
 
 export async function buildCrowd(opts: {
   walls: WallGrid; terrain: Terrain; centre: THREE.Vector2; radius: number;
@@ -138,12 +148,12 @@ export async function buildCrowd(opts: {
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const tint = new THREE.Color(), skinVar = new THREE.Color();
 
-  const spawn = (x: number, z: number, mode: Person['mode'], yaw: number): void => {
-    const base = bases[people.length % bases.length === 0 && rnd() < 0.5 ? 0 : Math.floor(rnd() * bases.length)];
+  const spawn = (x: number, z: number, mode: Person['mode'], yaw: number, lamplighter = false): Person | null => {
+    const base = lamplighter ? (bases.find(b => !b.female) ?? bases[0]) : bases[people.length % bases.length === 0 && rnd() < 0.5 ? 0 : Math.floor(rnd() * bases.length)];
     const skel = cloneSkinned(base.scene);
     let skinned: THREE.SkinnedMesh | null = null;
     skel.traverse(o => { if (!skinned && (o as THREE.SkinnedMesh).isSkinnedMesh) skinned = o as THREE.SkinnedMesh; });
-    if (!skinned) return;
+    if (!skinned) return null;
     const src = skinned as THREE.SkinnedMesh;
     // one mesh, one material: our merged geometry bound to this clone's skeleton
     const geo = base.geometry.clone();
@@ -178,13 +188,23 @@ export async function buildCrowd(opts: {
       m.castShadow = true; m.frustumCulled = false;
       b.add(m);
     };
+    const attachM = (b: THREE.Object3D | undefined, geo: THREE.BufferGeometry, world: THREE.Matrix4) => {
+      if (!b) return;
+      const m = new THREE.Mesh(geo, opts.accessories);
+      new THREE.Matrix4().copy(b.matrixWorld).invert().multiply(world).decompose(m.position, m.quaternion, m.scale);
+      m.castShadow = true; m.frustumCulled = false;
+      b.add(m);
+    };
     const head = bone('Head'), hips = bone('Hips'), torso = bone('Torso');
+    const palm = bone('PalmR') ?? bone('Palm.R');
+    const umbrellaHand = !lamplighter && opts.umbrellas && palm && rnd() < 0.4 ? palm.getWorldPosition(new THREE.Vector3()) : null;
+    const umbrellaTop = top;
     const hp = new THREE.Vector3(), tp = new THREE.Vector3();
     if (head) head.getWorldPosition(hp);
     if (hips) hips.getWorldPosition(tp);
     const P = pal as Record<string, string>;
     if (!base.female) {
-      const hatKind = rnd() < 0.42 ? 0 : rnd() < 0.62 ? 1 : 2;
+      const hatKind = lamplighter ? 2 : rnd() < 0.42 ? 0 : rnd() < 0.62 ? 1 : 2;
       attach(head, hatGeometry(hatKind, P.Hat ?? '#161514'), new THREE.Vector3(hp.x, top - (hatKind === 2 ? 0.06 : 0.07), hp.z + 0.01));
       // frock coat or greatcoat skirt, waist to knee (or calf)
       const knee = H * (rnd() < 0.4 ? 0.2 : 0.3);
@@ -202,15 +222,27 @@ export async function buildCrowd(opts: {
     root.add(skel);
     root.position.set(x, opts.terrain.heightAt(x, z), z);
     root.rotation.y = yaw;
-    if (opts.umbrellas && rnd() < 0.4) {
-      const u = new THREE.Mesh(mergeGeometries([
-        colored(new THREE.CylinderGeometry(0.01, 0.01, 1.3, 5).translate(0, 1.55, 0), '#2a2420'),
-        colored(lathe([[0, 0.3], [0.2, 0.22], [0.42, 0.06], [0.5, 0]], 8).translate(0, 2.05, 0), '#141414'),
+    if (lamplighter) {
+      // the lighting pole, held upright: a hook and a small burning wick at the top
+      const pole = new THREE.Mesh(mergeGeometries([
+        colored(new THREE.CylinderGeometry(0.016, 0.02, 3.6, 6).translate(0, 2.35, 0), '#5a4430'),
+        colored(new THREE.TorusGeometry(0.06, 0.008, 4, 8, Math.PI).translate(0, 4.2, 0), '#2a2622'),
+        colored(new THREE.SphereGeometry(0.03, 6, 4).translate(0.03, 4.13, 0), '#ffcf7a'),
       ], false)!, opts.accessories);
-      u.position.set(0.18, 0, 0.08);
-      u.rotation.z = -0.08;
-      u.castShadow = true;
-      root.add(u);
+      pole.position.set(0.25, 0, 0.18);
+      root.add(pole);
+    } else if (opts.umbrellas && umbrellaHand) {
+      // umbrella held in the right hand: shaft from the hand up over the head, canopy just above the hat
+      const hand = umbrellaHand, headTop = umbrellaTop;
+      const tip = new THREE.Vector3(hp.x * 0.3 + hand.x * 0.7, headTop + 0.22, hp.z * 0.3 + hand.z * 0.7 + 0.05);
+      const axis = tip.clone().sub(hand), len = axis.length();
+      const geo = mergeGeometries([
+        colored(new THREE.CylinderGeometry(0.009, 0.009, len + 0.1, 5).translate(0, (len + 0.1) / 2 - 0.08, 0), '#2a2420'),
+        colored(new THREE.TorusGeometry(0.035, 0.008, 4, 8, Math.PI).rotateZ(Math.PI).translate(0.035, -0.08, 0), '#2a2420'),   // crook handle
+        colored(lathe([[0, 0.3], [0.2, 0.24], [0.4, 0.1], [0.47, 0.02], [0.46, 0]], 8).translate(0, len - 0.02, 0), '#141414'),
+      ], false)!;
+      const m = new THREE.Matrix4().compose(hand, new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.normalize()), new THREE.Vector3(1, 1, 1));
+      attachM(palm ?? bone('LowerArmR'), geo, m);
     }
     group.add(root);
     const mixer = new THREE.AnimationMixer(skel);
@@ -220,7 +252,9 @@ export async function buildCrowd(opts: {
     const walking = mode === 'walk';
     idle.setEffectiveWeight(walking ? 0 : 1); walk.setEffectiveWeight(walking ? 1 : 0);
     idle.timeScale = 0.8 + rnd() * 0.4;
-    people.push({ root, mesh, mixer, idle, walk, mode, target: new THREE.Vector2(x, z), speed: 1.05 + rnd() * 0.35, timer: rnd() * 6, yaw, wIdle: walking ? 0 : 1 });
+    const person: Person = { root, mesh, mixer, idle, walk, mode, target: new THREE.Vector2(x, z), speed: 1.05 + rnd() * 0.35, timer: rnd() * 6, yaw, wIdle: walking ? 0 : 1 };
+    people.push(person);
+    return person;
   };
 
   // Knots of 2-4 people facing each other
@@ -259,13 +293,41 @@ export async function buildCrowd(opts: {
   const tmp = new THREE.Vector2();
   return {
     group, count: people.length,
+    addLamplighter(o) {
+      const p = spawn(o.start.x, o.start.y, 'pause', 0, true);
+      if (!p) return;
+      p.speed = 1.25;
+      p.job = { ground: o.ground, needs: o.needs, act: o.act, state: 'seek', lamp: -1, t: 0, done: false };
+    },
     update(dt: number, walker: THREE.Vector3) {
       for (const p of people) {
         const dist = Math.hypot(p.root.position.x - walker.x, p.root.position.z - walker.z);
         const far = dist > 140;
         p.root.visible = !far;
         p.mesh.castShadow = dist < 45;
-        if (p.mode === 'pause') {
+        const j = p.job;
+        if (j) {
+          if (j.state === 'seek') {
+            // the nearest lamp that needs lighting (or putting out) and that he can walk to in a straight line
+            const px = p.root.position.x, pz = p.root.position.z;
+            let best = -1, bd = Infinity;
+            j.ground.forEach((g, i) => {
+              if (!j.needs(i)) return;
+              const d = Math.hypot(g.x - px, g.y - pz);
+              if (d < bd && d < 90 && opts.walls.castSegment(px, pz, g.x, g.y) >= 0.999) { bd = d; best = i; }
+            });
+            if (best >= 0) { j.lamp = best; p.target.copy(j.ground[best]); p.mode = 'walk'; j.state = 'go'; }
+            else if (pickTarget(p)) { p.mode = 'walk'; j.state = 'wander'; }
+          } else if ((j.state === 'go' || j.state === 'wander') && p.mode === 'pause') {
+            if (j.state === 'go') { j.state = 'work'; j.t = 0; j.done = false; } else j.state = 'seek';
+          } else if (j.state === 'work') {
+            j.t += dt;
+            p.mode = 'stand';
+            if (j.t > 1.3 && !j.done) { j.act(j.lamp); j.done = true; }
+            if (j.t > 2.6) { j.state = 'seek'; p.mode = 'pause'; p.timer = 99; }
+          }
+        }
+        if (p.mode === 'pause' && !j) {
           p.timer -= dt;
           if (p.timer <= 0) p.mode = pickTarget(p) ? 'walk' : 'pause', p.timer = 1 + rnd() * 3;
         } else if (p.mode === 'walk') {

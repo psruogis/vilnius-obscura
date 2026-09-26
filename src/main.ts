@@ -19,6 +19,7 @@ import { Post } from './render/post';
 import { SunShadows } from './render/shadows';
 import { installHeightFog, createOvercastSky, createRain, wet, WET, RAIN_TIME, FLOW } from './render/weather';
 import { buildFlowMap } from './world/flow';
+import { StreetLamps, type LampSpot } from './world/lamps';
 import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
@@ -151,6 +152,8 @@ async function main(force = false): Promise<void> {
   }
   const walls = new WallGrid(data);
   let promenadeRef: { update(dt: number): void } | null = null;
+  // gas lamps: the garden's lamp posts and the lanterns on the house fronts
+  const lampSpots: LampSpot[] = [...facades.lamps];
   if (townHallData) {
     const promMats = createPromenadeMaterials(aniso);
     if (RAIN) { promMats.lampGlass.emissiveIntensity = 2.2; wet(promMats.lawn, 'roof'); } // gas lamps lit in the gloom
@@ -158,6 +161,7 @@ async function main(force = false): Promise<void> {
     scene.add(promenade.group);
     for (const [ax, az, bx, bz] of promenade.segments) walls.addSegment(ax, az, bx, bz);
     promenadeRef = promenade;
+    lampSpots.push(...promenade.lamps);
   }
   // Market stalls, carts and townsfolk stream in after the first frame
   let market: Market | null = null;
@@ -192,9 +196,20 @@ async function main(force = false): Promise<void> {
         material: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }),
         accessories: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }),
         umbrellas: RAIN,
-      }).then(c => { crowd = c; scene.add(c.group); shadows.apply(c.group); }).catch(err => console.warn('crowd', err));
+      }).then(c => {
+        crowd = c; scene.add(c.group);
+        c.addLamplighter({
+          start: new THREE.Vector2(thx + 10, thz - 40), ground: lampSpots.map(l => l.ground),
+          needs: i => (RAIN ? !lamps.isLit(i) : lamps.isLit(i)),
+          act: i => (RAIN ? lamps.light(i) : lamps.putOut(i)),
+        });
+        shadows.apply(c.group);
+      }).catch(err => console.warn('crowd', err));
     }).catch(err => console.warn('market', err));
   }
+  // In the rain the lamps start dark and the lamplighter lights them; on the clear morning he puts them out.
+  const lamps = new StreetLamps(lampSpots, !RAIN, RAIN ? 30 : 12);
+  scene.add(lamps.group);
   const barriers = buildBarriers(data, terrain, thx, thz, data.meta.walkRadius, createWoodMaterial(aniso));
   if (barriers) scene.add(barriers);
 
@@ -248,6 +263,7 @@ async function main(force = false): Promise<void> {
     crowd?.update(dt, walker.position);
     traffic?.update(dt, walker.position);
     promenadeRef?.update(dt);
+    lamps.update(dt, camera.position);
     shadows.update();
     post.render(dt);
     stats.update(dt);
@@ -260,7 +276,7 @@ async function main(force = false): Promise<void> {
       get character() { return character; },
       get ambience() { return ambience; },
       get crowd() { return crowd; }, get traffic() { return traffic; },
-      post, shadows, facadeStats: facades.stats, flowStats: flow.stats, flowTex: flow.tex, flowBox: flow.box,
+      post, shadows, lamps, facadeStats: facades.stats, flowStats: flow.stats, flowTex: flow.tex, flowBox: flow.box,
       // Saves the current frame to .screens/<name>.jpg via the dev server.
       snapshot: async (name: string) => {
         post.render(0);

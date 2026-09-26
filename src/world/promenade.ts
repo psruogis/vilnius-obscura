@@ -5,6 +5,7 @@ import type { PromenadeMaterials } from './materials';
 import { townHallFrame, TOWN_HALL_SIZE } from './townhall';
 import { mbox, merged, trianglesToGeometry } from './geom';
 import { treeGeometry } from './trees';
+import type { LampSpot } from './lamps';
 
 /**
  * The fenced, tree-lined promenade in front of the Town Hall portico, and a market booth beside it.
@@ -26,7 +27,7 @@ const POST_STEP = 3.0;
 const GAPS: [number, number][] = [[43, 47], [88, 92]]; // side entrances (s ranges, both sides)
 const APEX_GAP = 0.16;        // half-angle of the north entrance, radians
 
-export interface Promenade { group: THREE.Group; segments: [number, number, number, number][]; update(dt: number): void }
+export interface Promenade { group: THREE.Group; segments: [number, number, number, number][]; update(dt: number): void; lamps: LampSpot[] }
 
 export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMaterials): Promenade {
   const f = townHallFrame(th);
@@ -138,14 +139,15 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
   const water: THREE.BufferGeometry[] = [new THREE.CircleGeometry(basinR - 0.38, 40).rotateX(-Math.PI / 2).translate(bp.x, bp.y + 0.36, bp.z)];
   segments.push(...ringSegments(bp, basinR + 0.1, 16));
   // cast-iron gas lamps just outside both fences
-  const iron: THREE.BufferGeometry[] = [], lampGlass: THREE.BufferGeometry[] = [];
+  const iron: THREE.BufferGeometry[] = [];
+  const lamps: LampSpot[] = [];
   for (let s = 10; s < S_END - 4; s += 18) {
     for (const side of [-1, 1]) {
       const lp = world(s + (side > 0 ? 9 : 0), side * (HALF + 0.9));
       iron.push(new THREE.CylinderGeometry(0.2, 0.26, 0.6, 10).translate(lp.x, lp.y + 0.3, lp.z));
       iron.push(new THREE.CylinderGeometry(0.06, 0.09, 3.5, 8).translate(lp.x, lp.y + 2.3, lp.z));
       iron.push(new THREE.CylinderGeometry(0.12, 0.07, 0.25, 8).translate(lp.x, lp.y + 4.1, lp.z));
-      lampGlass.push(new THREE.CylinderGeometry(0.22, 0.14, 0.55, 6).translate(lp.x, lp.y + 4.5, lp.z));
+      lamps.push({ pos: new THREE.Vector3(lp.x, lp.y + 4.5, lp.z), ground: new THREE.Vector2(lp.x - (lp.x - world(s, 0).x) * 0.12, lp.z - (lp.z - world(s, 0).z) * 0.12) }); // glass: lamps.ts
       iron.push(new THREE.ConeGeometry(0.3, 0.3, 6).translate(lp.x, lp.y + 4.93, lp.z));
       iron.push(mbox(0.5, 0.04, 0.04, 0, 3.7, 0).applyMatrix4(new THREE.Matrix4().makeTranslation(lp.x, lp.y, lp.z))); // ladder bar
       segments.push(...ringSegments(lp, 0.25, 6));
@@ -191,9 +193,8 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
   add(lawn, mats.lawn, false);
   add(water, mats.water, false);
   add(iron, mats.iron);
-  add(lampGlass, mats.lampGlass, false);
   const clock = (mats.leaves.userData.time ?? { value: 0 }) as { value: number };
-  return { group, segments, update: dt => { clock.value += dt; } };
+  return { group, segments, lamps, update: dt => { clock.value += dt; } };
 }
 
 /** Up-facing triangles with planar (x, z) UVs in metres. */

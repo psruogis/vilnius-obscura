@@ -3,6 +3,7 @@ import type { AreaData, Building, XZ } from './area';
 import type { Terrain } from './terrain';
 import { hashString, LIMEWASH, hasTileRoof } from './buildings';
 import type { HouseMaterials } from './houseMaterials';
+import type { LampSpot } from './lamps';
 
 /**
  * Real façade geometry for the houses near the walk (Building.detail): walls with openings cut
@@ -519,7 +520,7 @@ export interface FacadeStats { houses: number; windows: number; doors: number; s
 const FASCIA = ['#3f5a48', '#6e2e26', '#34425c', '#5a4632', '#8a6a34', '#cfc2a4', '#4a5e4a', '#7a5a3c'];
 const AWNING = ['#e8dcc0', '#c8b48a', '#7a3b2c', '#3e5a44', '#d6c8a4', '#8a6a3a'];
 
-export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMaterials, free?: (x: number, z: number) => boolean): { group: THREE.Group; stats: FacadeStats } {
+export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMaterials, free?: (x: number, z: number) => boolean): { group: THREE.Group; stats: FacadeStats; lamps: LampSpot[] } {
   const houses = data.buildings.filter(b => b.detail);
   // Neighbours for party-wall tests: every building whose bounding box is near
   const boxes = data.buildings.map(b => {
@@ -533,6 +534,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
   const trim = new GeoBuilder(), flat = new GeoBuilder(), glass = new GeoBuilder(), wood = new GeoBuilder();
   const canvas = new GeoBuilder(), iron = new GeoBuilder(), metal = new GeoBuilder(), shop = new GeoBuilder(), sign = new GeoBuilder();
   const extras: THREE.Object3D[] = [];
+  const lamps: LampSpot[] = [];
   const signMat = houses.some(h => h.style === 'hotel') ? hotelSign() : null;
   const stats: FacadeStats = { houses: houses.length, windows: 0, doors: 0, shops: 0, triangles: 0 };
   // open ground ahead of a wall: how far the street or square reaches (m, up to 30)
@@ -636,8 +638,8 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
               const wMax = Math.min(3.5, bayW - 0.35);
               const w = Math.max(1.5, wMax * (0.6 + 0.4 * rnd(ss, 1)));
               const top = Math.min(hl + 2.35 + 0.95 * rnd(ss, 2), GROUND_F - 0.8);
-              const arched = rnd(ss, 3) < 0.4 && top - hl > 2.3;
-              const rise = arched ? (rnd(ss, 4) < 0.35 ? w / 2 : Math.min(w / 2 - 0.01, 0.3 + 0.55 * rnd(ss, 5))) : undefined;
+              const arched = rnd(ss, 3) < 0.75 && top - hl > 2.2;   // most shops open through arches, as in the period views
+              const rise = arched ? (rnd(ss, 4) < 0.6 ? Math.min(w / 2, top - hl - 1.6) : Math.min(w / 2 - 0.01, 0.35 + 0.6 * rnd(ss, 5))) : undefined;
               const du = (rnd(ss, 6) - 0.5) * Math.max(0, bayW - 0.35 - w) * 0.8;
               openings.push({ kind: 'shop', u: u + du, w, bottom: hl, top, spring: arched ? top - rise! : undefined, rise, variant: ss });
             } else if (bi === gateBay && hl < 0.9) {
@@ -798,13 +800,13 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
                 const nR = mid.clone().normalize();
                 const q = (x: number, y: number, k2: number, dd: number) => P(e, x + nR.x * k2, y + nR.y * k2, dd);
                 flat.quad(q(p0.x, p0.y, 0.02, 0.05), q(p0.x, p0.y, 0.22, 0.05), q(p1.x, p1.y, 0.22, 0.05), q(p1.x, p1.y, 0.02, 0.05), nOut, [[0, 0], [0.2, 0], [0.2, len], [0, len]], trimC);
-                if (R(25) < 0.65 && k % 2 === 0) {
+                if (R(25) < 0.4 && k % 2 === 0) {
                   const ang = Math.atan2(p0.y - sTop, p0.x - o.u), rl = Math.hypot(p0.x - o.u, p0.y - sTop);
-                  onEdge(wood, new THREE.BoxGeometry(rl, 0.025, 0.02).translate(rl / 2, 0, 0).rotateZ(ang), e, o.u, sTop, frameC);
+                  onEdge(wood, new THREE.BoxGeometry(rl, 0.014, 0.015).translate(rl / 2, 0, 0).rotateZ(ang), e, o.u, sTop, frameC);
                 }
               }
               box(wood, e, o.u, sTop, d + 0.02, o.w / 2, 0.035, 0.025, frameC, true);
-              box(trim, e, o.u, headTop + 0.14, 0.09, 0.14, 0.22, 0.09, trimC, true);
+              box(trim, e, o.u, headTop + 0.08, 0.07, 0.09, 0.14, 0.07, trimC, true);   // keystone
             }
             if (doorAt !== null) {
               const dTop = arched ? sTop : sTop;
@@ -829,11 +831,12 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
             }
             // fascia and sign: a board over square fronts; over arches a smaller board if there is room
             const room = GROUND_F - 0.2 - (headTop + (arched ? 0.4 : 0.08));
-            if (room > 0.35) {
+            const signStyle = R(44);   // about half the shops have a lettered board, some a plain board, the rest none
+            if (room > 0.35 && signStyle < 0.7) {
               const fh = Math.min(room - 0.1, 0.4 + 0.3 * R(28)), fy = headTop + (arched ? 0.4 : 0.08);
               const fw = arched ? Math.min(o.w / 2, 1.1 + 0.5 * R(29)) : o.w / 2 + 0.24;
               box(wood, e, o.u, fy + fh / 2, 0.07, fw, fh / 2, 0.07, fC, true);
-              signQuad(sign, e, o.u, fy + 0.05, fy + fh - 0.05, fw - 0.05, 0.145, ss >>> 4);
+              if (signStyle < 0.5) signQuad(sign, e, o.u, fy + 0.05, fy + fh - 0.05, fw - 0.05, 0.145, ss >>> 4);
               box(wood, e, o.u, fy + fh + 0.04, 0.1, fw + 0.08, 0.04, 0.1, frameC, true);
             }
             // awning: none, flat, rounded, or long with a scalloped valance; striped or plain canvas
@@ -878,7 +881,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
               }
             }
             // hanging sign on an iron bracket, goods set out by the door
-            if (R(2) < 0.34 && o.u + o.w / 2 + 0.7 < e.L - 0.3) {
+            if (R(2) < 0.22 && o.u + o.w / 2 + 0.7 < e.L - 0.3) {
               const sx = o.u + o.w / 2 + 0.45, sy = GROUND_F - 0.35, shape = R(40);
               box(iron, e, sx, sy, 0.5, 0.015, 0.015, 0.5, cWhite.set('#ffffff'));
               box(iron, e, sx, sy - 0.25, 0.08, 0.015, 0.25, 0.015, cWhite.set('#ffffff'));
@@ -964,6 +967,21 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
                 const w = k % 2 ? 0.45 : 0.8;
                 box(flat, e, u + sd * w / 2, y + 0.18, 0.03, w / 2, 0.18, 0.03, trimC, true);
               }
+            }
+          }
+          // gas lantern on an iron bracket, at a pier between bays, every ~18 m along the streets
+          if (front >= 5 && ri === 0 && e.L > 6 && topH > GROUND_F + 2) {
+            const uL = nb > 0 ? u0 + Math.round(nb / 2) * bayW : e.L / 2;
+            const base = P(e, uL, GROUND_F + 0.75, 0.85);
+            if (uL > 0.8 && uL < e.L - 0.8 && !lamps.some(q => q.pos.distanceTo(base) < 18) && !openings.some(o => Math.abs(o.u - uL) < o.w / 2 + 0.3 && o.top > GROUND_F)) {
+              const white = new THREE.Color('#ffffff');
+              box(iron, e, uL, GROUND_F + 1.02, 0.45, 0.025, 0.025, 0.45, white);                               // arm
+              onEdge(iron, new THREE.BoxGeometry(0.02, 0.62, 0.02).rotateX(-0.95).translate(0, -0.12, 0.28), e, uL, GROUND_F + 0.85, white); // stay
+              box(iron, e, uL, GROUND_F + 0.85, 0.02, 0.07, 0.25, 0.02, white);                                 // wall plate
+              onEdge(iron, new THREE.ConeGeometry(0.2, 0.18, 6).translate(0, 0, 0.85), e, uL, GROUND_F + 0.97, white);   // cap
+              onEdge(iron, new THREE.CylinderGeometry(0.06, 0.08, 0.06, 6).translate(0, 0, 0.85), e, uL, GROUND_F + 0.52, white);
+              const g = P(e, uL, 0, 1.9);
+              lamps.push({ pos: P(e, uL, GROUND_F + 0.72, 0.85), ground: new THREE.Vector2(g.x, g.z) });
             }
           }
           // cornice brackets (c.1900 houses)
@@ -1080,5 +1098,5 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
     group.add(mesh);
   }
   for (const x of extras) group.add(x);
-  return { group, stats };
+  return { group, stats, lamps };
 }
