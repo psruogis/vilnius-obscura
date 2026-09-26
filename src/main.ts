@@ -128,7 +128,16 @@ async function main(force = false): Promise<void> {
     for (const k of ['wall', 'stone'] as const) age(m[k], { ground: stCasimirData.groundY, strength: 1, seed: 2 });
     age(m.roof, { roof: true, strength: 0.7 });
     if (RAIN) { for (const k of ['wall', 'stone'] as const) wet(m[k], 'wall', stCasimirData.groundY); }
-    scene.add(buildStCasimir(stCasimirData, m));
+    // ?church=1800 shows the pre-1864 form; default follows the owner's c.1900 photographs:
+    // a pale limewashed front and dark painted-metal helms
+    const churchForm = new URLSearchParams(location.search).get('church') === '1800' ? '1800' : 'photos';
+    if (churchForm === 'photos') {
+      (m.wall as THREE.MeshStandardMaterial).color.set('#e2d9c6');
+      (m.stone as THREE.MeshStandardMaterial).color.set('#ece5d6');
+      (m.dome as THREE.MeshStandardMaterial).color.set('#46534c');
+      (m.roof as THREE.MeshStandardMaterial).color.set('#565d5c');
+    }
+    scene.add(buildStCasimir(stCasimirData, m, churchForm));
   }
   const walls = new WallGrid(data);
   let promenadeRef: { update(dt: number): void } | null = null;
