@@ -23,7 +23,7 @@ function tex(url: string, srgb: boolean, anisotropy: number): THREE.Texture {
 }
 
 function pbrSet(id: string, anisotropy: number) {
-  const base = `/assets/tex/${id}`;
+  const base = `assets/tex/${id}`;
   return {
     map: tex(`${base}/diff.jpg`, true, anisotropy),
     normalMap: tex(`${base}/nor.jpg`, false, anisotropy),
@@ -52,7 +52,7 @@ export function createWoodMaterial(anisotropy: number): THREE.MeshStandardMateri
 }
 
 function worldTex(id: string, map: string, srgb: boolean, anisotropy: number, tile: number): THREE.Texture {
-  const t = tex(`/assets/tex/${id}/${map}.jpg`, srgb, anisotropy);
+  const t = tex(`assets/tex/${id}/${map}.jpg`, srgb, anisotropy);
   t.repeat.set(1 / tile, 1 / tile);
   return t;
 }

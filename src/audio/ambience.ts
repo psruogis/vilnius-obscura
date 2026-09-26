@@ -7,12 +7,12 @@ import * as THREE from 'three';
  */
 
 const FILES = {
-  crowd: '/assets/snd/market_crowd.mp3',
-  scene: '/assets/snd/market_scene.mp3',
-  sparrows: '/assets/snd/sparrows.mp3',
-  bells: '/assets/snd/bells.mp3',
-  horses: '/assets/snd/horses.mp3',
-  steps: '/assets/snd/steps_stone.mp3',
+  crowd: 'assets/snd/market_crowd.mp3',
+  scene: 'assets/snd/market_scene.mp3',
+  sparrows: 'assets/snd/sparrows.mp3',
+  bells: 'assets/snd/bells.mp3',
+  horses: 'assets/snd/horses.mp3',
+  steps: 'assets/snd/steps_stone.mp3',
 } as const;
 type Key = keyof typeof FILES;
 

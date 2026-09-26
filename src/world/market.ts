@@ -239,8 +239,8 @@ async function loadPeople(): Promise<Look[]> {
     }
   };
   const looks = await Promise.all([
-    make('/assets/char/man.glb', MEN, 'Man_Idle', 'Man_Walk'),
-    make('/assets/char/woman.glb', WOMEN, 'Female_Idle', 'Female_Walk'),
+    make('assets/char/man.glb', MEN, 'Man_Idle', 'Man_Walk'),
+    make('assets/char/woman.glb', WOMEN, 'Female_Idle', 'Female_Walk'),
   ]);
   return looks.filter((l): l is Look => !!l);
 }

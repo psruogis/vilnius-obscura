@@ -17,7 +17,7 @@ export interface CharacterSpec {
 
 // Plain townsman: dark brown coat, fawn waistcoat, grey-brown breeches, black shoes, dull brass.
 export const TOWNSMAN: CharacterSpec = {
-  url: '/assets/char/adventurer.glb',
+  url: 'assets/char/adventurer.glb',
   height: 1.74,
   hide: ['Backpack'],
   palette: {
@@ -29,7 +29,7 @@ export const TOWNSMAN: CharacterSpec = {
 // Hooded traveller: brown wool hood and coat; the model's shoulder guards, dyed to match, read as the
 // shoulder cape of a c.1800 caped greatcoat. Breeches and boots.
 export const TRAVELLER: CharacterSpec = {
-  url: '/assets/char/hooded_adventurer.glb',
+  url: 'assets/char/hooded_adventurer.glb',
   height: 1.72,
   hide: ['Sword'],
   soften: { materials: ['Metal', 'Metal_Dark'], xScale: 0.8, yDrop: 0.3 },
