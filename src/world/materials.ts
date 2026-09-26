@@ -38,6 +38,87 @@ export function createWoodMaterial(anisotropy: number): THREE.MeshStandardMateri
   return new THREE.MeshStandardMaterial({ ...pbrSet('weathered_planks', anisotropy), roughness: 1 });
 }
 
+function worldTex(id: string, map: string, srgb: boolean, anisotropy: number, tile: number): THREE.Texture {
+  const t = tex(`/assets/tex/${id}/${map}.jpg`, srgb, anisotropy);
+  t.repeat.set(1 / tile, 1 / tile);
+  return t;
+}
+
+/** Small-paned casement glass, drawn once to a canvas. */
+function windowPaneTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 96; c.height = 160;
+  const g = c.getContext('2d')!;
+  const grad = g.createLinearGradient(0, 0, 96, 160);
+  grad.addColorStop(0, '#2a3238'); grad.addColorStop(1, '#161b1f');
+  g.fillStyle = grad; g.fillRect(0, 0, 96, 160);
+  g.strokeStyle = '#e9e4d8'; g.lineWidth = 4; g.strokeRect(2, 2, 92, 156);
+  g.lineWidth = 3;
+  for (let i = 1; i < 3; i++) { g.beginPath(); g.moveTo((96 * i) / 3, 0); g.lineTo((96 * i) / 3, 160); g.stroke(); }
+  for (let j = 1; j < 4; j++) { g.beginPath(); g.moveTo(0, (160 * j) / 4); g.lineTo(96, (160 * j) / 4); g.stroke(); }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** Materials for the Town Hall model (UVs in metres). */
+export function createTownHallMaterials(anisotropy: number) {
+  // The plaster texture only modulates the tint (its own mean brightness is divided out).
+  const PLASTER_DETAIL = `{
+    float lum = dot(sampledDiffuseColor.rgb, vec3(0.3333)) / 0.42;
+    diffuseColor.rgb = diffuse * clamp(lum, 0.82, 1.12);
+  }`;
+  const plaster = (tint: string, tile = 2.5) => {
+    const m = new THREE.MeshStandardMaterial({
+      color: tint, roughness: 1,
+      map: worldTex('plastered_wall_04', 'diff', true, anisotropy, tile),
+      normalMap: worldTex('plastered_wall_04', 'nor', false, anisotropy, tile),
+      roughnessMap: worldTex('plastered_wall_04', 'rough', false, anisotropy, tile),
+    });
+    m.onBeforeCompile = shader => {
+      shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>\n${PLASTER_DETAIL}`);
+    };
+    return m;
+  };
+  // Rusticated plaster: horizontal courses with staggered joints, pressed into the render.
+  const wall = plaster('#efe5cf');
+  wall.normalScale.set(0.5, 0.5);
+  wall.onBeforeCompile = shader => {
+    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>\n${PLASTER_DETAIL}\n#include <map_fragment_rust>`);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vMetres;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMetres = uv;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vMetres;')
+      .replace('#include <map_fragment_rust>', `
+        {
+          float course = 0.62, block = 1.5;
+          float row = floor(vMetres.y / course);
+          float fy = fract(vMetres.y / course);
+          float fx = fract((vMetres.x + mod(row, 2.0) * block * 0.5) / block);
+          float gy = 1.0 - smoothstep(0.0, 0.035, fy) * smoothstep(1.0, 0.965, fy);
+          float gx = 1.0 - smoothstep(0.0, 0.012, fx) * smoothstep(1.0, 0.988, fx);
+          diffuseColor.rgb *= 1.0 - 0.2 * max(gy, gx * 0.8);
+        }`);
+  };
+  const stone = plaster('#f4efe4');
+  const plinth = plaster('#b3aea4', 1.6);
+  const roof = new THREE.MeshStandardMaterial({
+    roughness: 1,
+    map: worldTex('clay_roof_tiles', 'diff', true, anisotropy, 2.2),
+    normalMap: worldTex('clay_roof_tiles', 'nor', false, anisotropy, 2.2),
+    roughnessMap: worldTex('clay_roof_tiles', 'rough', false, anisotropy, 2.2),
+    side: THREE.DoubleSide,
+  });
+  const glass = new THREE.MeshStandardMaterial({ map: windowPaneTexture(), roughness: 0.25, metalness: 0 });
+  const wood = new THREE.MeshStandardMaterial({
+    color: '#6b5240', roughness: 1,
+    map: worldTex('weathered_planks', 'diff', true, anisotropy, 1.2),
+    normalMap: worldTex('weathered_planks', 'nor', false, anisotropy, 1.2),
+  });
+  return { wall, stone, plinth, roof, glass, wood };
+}
+
 /** Hand-made clay tile roofs. */
 export function createRoofMaterial(anisotropy: number): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ ...pbrSet('clay_roof_tiles', anisotropy), vertexColors: true, roughness: 1 });

@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { loadArea } from './world/area';
 import { buildWalls, buildRoofs } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createWoodMaterial } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createWoodMaterial } from './world/materials';
 import { buildBarriers } from './world/props';
+import { buildTownHall } from './world/townhall';
 import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
@@ -47,7 +48,7 @@ async function main(): Promise<void> {
   const envScene = new THREE.Scene();
   envScene.add(createSky(sunDir, 500));
   scene.environment = pmrem.fromScene(envScene, 0, 0.1, 1000).texture;
-  scene.environmentIntensity = 0.32;
+  scene.environmentIntensity = 0.38;
   pmrem.dispose();
   scene.fog = new THREE.Fog('#c9d3db', 180, 1100);
 
@@ -60,7 +61,8 @@ async function main(): Promise<void> {
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.04;
   scene.add(sun, sun.target);
-  scene.add(new THREE.HemisphereLight('#bcd3ea', '#6b5d4a', 0.15));
+  // Warm bounce from sunlit cobbles and façades into the shade.
+  scene.add(new THREE.HemisphereLight('#c3d5e8', '#a88f6c', 0.45));
 
   // Ground: LiDAR terrain with fieldstone cobbles
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
@@ -71,6 +73,8 @@ async function main(): Promise<void> {
   const wallMesh = new THREE.Mesh(buildWalls(data), createFacadeMaterial(aniso));
   const roofMesh = new THREE.Mesh(buildRoofs(data), createRoofMaterial(aniso));
   for (const m of [wallMesh, roofMesh]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+  const townHallData = data.buildings.find(b => b.role === 'townhall');
+  if (townHallData) scene.add(buildTownHall(townHallData, createTownHallMaterials(aniso)));
   const walls = new WallGrid(data);
   const barriers = buildBarriers(data, terrain, thx, thz, data.meta.walkRadius, createWoodMaterial(aniso));
   if (barriers) scene.add(barriers);

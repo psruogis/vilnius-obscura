@@ -4,3 +4,4 @@ dist/
 *.log
 .screens/
 tools/reconstruction/src/
+reference/
