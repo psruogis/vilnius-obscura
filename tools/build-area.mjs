@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { toLks94 } from './lks94.mjs';
+import polygonClipping from './vendor/polygon-clipping/index.mjs';
 
 // straight-skeleton (MIT; CGAL via Wasm) is a browser bundle: give it the globals it checks for.
 globalThis.self ??= globalThis;
@@ -156,6 +157,34 @@ for (const f of grpk.features) {
   const th = { E: ringCentroid(townHallRing || [[0, 0]]).E, N: ringCentroid(townHallRing || [[0, 0]]).N };
   if (townHallRing && pointInRing(th, outer)) role = 'townhall';
   else if (stCasimirRing && pointInRing(ringCentroid(stCasimirRing), outer)) role = 'stcasimir';
+
+  // GRPK merges St Casimir's with the Jesuit house: split the church (OSM outline) off.
+  if (role === 'stcasimir') {
+    const close = r => [...r, r[0]];
+    const rest = polygonClipping.difference([rings.map(close)], [close(stCasimirRing)]);
+    const h = lidar?.[id];
+    rest.forEach((poly, i) => {
+      const rr = poly.map(dropClosing);
+      const a = ringArea(rr[0]);
+      if (a < 30) return;
+      const cap = a > LARGE_FOOTPRINT ? CAP_LARGE : CAP_ORDINARY;
+      const e = h ? Math.min(h.eave - h.ground, cap) : DEFAULT_EAVE;
+      buildings.push({
+        id: `${id}-rest${i}`, role: 'ordinary', area: Math.round(a), dist: Math.round(dist(ringCentroid(rr[0]), TOWN_HALL)),
+        walk: dist(ringCentroid(rr[0]), TOWN_HALL) <= WALK_RADIUS + 40,
+        eave: round(e), heightSource: h ? 'lidar' : 'default', capped: !!h && h.eave - h.ground > cap, ground: h ? round(h.ground) : 0,
+        rings: rr.map(r => r.map(local)),
+      });
+    });
+    buildings.push({
+      id: `${id}-church`, role: 'stcasimir', area: Math.round(ringArea(stCasimirRing)), dist: Math.round(d),
+      walk: d <= WALK_RADIUS + 40, eave: h ? round(h.eave - h.ground) : 17.8,
+      heightSource: h ? 'lidar' : 'default', capped: false, ground: h ? round(h.ground) : 0,
+      rings: [dropClosing(stCasimirRing).map(local)],
+    });
+    stats.lidar++;
+    continue;
+  }
 
   let eave = null, source = null, ground = 0;
   if (lidar && lidar[id] && isFinite(lidar[id].eave)) {

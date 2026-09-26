@@ -67,7 +67,7 @@ export function buildWalls(data: AreaData): THREE.BufferGeometry {
   const n = new THREE.Vector3();
   const tint = new THREE.Color();
   for (const bd of data.buildings) {
-    if (bd.role === 'townhall') continue; // modelled separately (townhall.ts)
+    if (bd.role === 'townhall' || bd.role === 'stcasimir') continue; // modelled separately
     const seed = hashString(bd.id);
     if (bd.role === 'stcasimir') tint.set('#efe8da');
     else tint.set(LIMEWASH[seed % LIMEWASH.length]);
@@ -136,7 +136,7 @@ export function buildRoofs(data: AreaData): THREE.BufferGeometry {
   const pa = new THREE.Vector3(), pb = new THREE.Vector3(), pc = new THREE.Vector3();
   const none = [0, 0, 0, 0];
   for (const bd of data.buildings) {
-    if (bd.role === 'townhall') continue;
+    if (bd.role === 'townhall' || bd.role === 'stcasimir') continue;
     const seed = hashString(bd.id);
     tint.set(ROOF_TINTS[(seed >>> 3) % ROOF_TINTS.length]);
     const roof = bd.roof;

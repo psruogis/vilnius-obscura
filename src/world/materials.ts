@@ -61,14 +61,12 @@ function windowPaneTexture(): THREE.CanvasTexture {
   return t;
 }
 
-/** Materials for the Town Hall model (UVs in metres). */
-export function createTownHallMaterials(anisotropy: number) {
   // The plaster texture only modulates the tint (its own mean brightness is divided out).
-  const PLASTER_DETAIL = `{
+const PLASTER_DETAIL = `{
     float lum = dot(sampledDiffuseColor.rgb, vec3(0.3333)) / 0.42;
     diffuseColor.rgb = diffuse * clamp(lum, 0.82, 1.12);
   }`;
-  const plaster = (tint: string, tile = 2.5) => {
+function plasterMaterial(tint: string, anisotropy: number, tile = 2.5): THREE.MeshStandardMaterial {
     const m = new THREE.MeshStandardMaterial({
       color: tint, roughness: 1,
       map: worldTex('plastered_wall_04', 'diff', true, anisotropy, tile),
@@ -79,7 +77,11 @@ export function createTownHallMaterials(anisotropy: number) {
       shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>\n${PLASTER_DETAIL}`);
     };
     return m;
-  };
+}
+
+/** Materials for the Town Hall model (UVs in metres). */
+export function createTownHallMaterials(anisotropy: number) {
+  const plaster = (tint: string, tile = 2.5) => plasterMaterial(tint, anisotropy, tile);
   // Rusticated plaster: horizontal courses with staggered joints, pressed into the render.
   const wall = plaster('#efe5cf');
   wall.normalScale.set(0.5, 0.5);
@@ -117,6 +119,18 @@ export function createTownHallMaterials(anisotropy: number) {
     normalMap: worldTex('weathered_planks', 'nor', false, anisotropy, 1.2),
   });
   return { wall, stone, plinth, roof, glass, wood };
+}
+
+/** Materials for St Casimir's (simplified): plaster, lead-grey sheet roofs, copper cupolas, gilt crown. */
+export function createChurchMaterials(anisotropy: number) {
+  return {
+    wall: plasterMaterial('#ebdfc6', anisotropy),
+    stone: plasterMaterial('#f3eee3', anisotropy),
+    roof: new THREE.MeshStandardMaterial({ color: '#6c7277', metalness: 0.45, roughness: 0.55, side: THREE.DoubleSide }),
+    dome: new THREE.MeshStandardMaterial({ color: '#5c8574', metalness: 0.35, roughness: 0.6, side: THREE.DoubleSide }),
+    gilt: new THREE.MeshStandardMaterial({ color: '#c9a44e', metalness: 1, roughness: 0.35 }),
+    dark: new THREE.MeshStandardMaterial({ color: '#1d1b19', roughness: 0.9, side: THREE.DoubleSide }),
+  };
 }
 
 /** Hand-made clay tile roofs. */
