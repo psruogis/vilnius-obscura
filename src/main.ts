@@ -17,7 +17,8 @@ import { Character, TOWNSMAN, TRAVELLER } from './player/character';
 import { Ambience } from './audio/ambience';
 import { Post } from './render/post';
 import { SunShadows } from './render/shadows';
-import { installHeightFog, createOvercastSky, createRain, wet, WET, RAIN_TIME } from './render/weather';
+import { installHeightFog, createOvercastSky, createRain, wet, WET, RAIN_TIME, FLOW } from './render/weather';
+import { buildFlowMap } from './world/flow';
 import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
@@ -93,8 +94,12 @@ async function main(force = false): Promise<void> {
   // Ground: LiDAR terrain with fieldstone cobbles
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const terrain = new Terrain(data);
+  // Streets: mud in the joints and along the walls always; in rain, water running in the gutters
+  const flow = buildFlowMap(terrain, openGround(data, thx, thz, 200), thx, thz, 200);
+  FLOW.map.value = flow.tex;
+  FLOW.box.value.copy(flow.box);
   const groundMat = createGroundMaterial(aniso);
-  if (RAIN) wet(groundMat, 'ground');
+  wet(groundMat, 'ground');
   scene.add(terrain.buildMesh(groundMat, thx, thz, 1000, 4, 3.4));
 
   // Buildings: plastered walls with period windows, and skeleton roofs in clay tile
@@ -253,7 +258,7 @@ async function main(force = false): Promise<void> {
       get character() { return character; },
       get ambience() { return ambience; },
       get crowd() { return crowd; }, get traffic() { return traffic; },
-      post, shadows, facadeStats: facades.stats,
+      post, shadows, facadeStats: facades.stats, flowStats: flow.stats, flowTex: flow.tex, flowBox: flow.box,
       // Saves the current frame to .screens/<name>.jpg via the dev server.
       snapshot: async (name: string) => {
         post.render(0);
