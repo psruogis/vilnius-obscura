@@ -11,5 +11,8 @@
     "dev:local": "node tools/dev-server.mjs",
     "vendor": "node tools/vendor.mjs",
     "build:static": "node tools/build-static.mjs"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
