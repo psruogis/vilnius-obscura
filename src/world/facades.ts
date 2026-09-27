@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { AreaData, Building, XZ } from './area';
 import type { Terrain } from './terrain';
-import { hashString, LIMEWASH, hasTileRoof } from './buildings';
+import { hashString, LIMEWASH, hasTileRoof, EAVE, roofModel, roofCaps } from './buildings';
 import type { HouseMaterials } from './houseMaterials';
 import type { LampSpot } from './lamps';
 
@@ -11,12 +11,17 @@ import type { LampSpot } from './lamps';
  * arched doors and carriage gateways, a moulded cornice that tucks under the overhanging roof, plinth
  * and string-course bands, corner pilasters and chimneys. Party walls (against a neighbour) stay blank.
  * Everything casts and receives the sun's shadows; the wall shader adds weathering from the same layout.
+ * Nothing is a sharp box: stone and plaster pieces have chamfered arrises, cornices and courses are run
+ * profiles (cyma, ovolo, cavetto) with smooth curves, surrounds are stepped architraves, quoins dressed
+ * stones of uneven size. Half-round gutters hang from the eaves and drain through swan-necked downpipes.
+ * The walls are not ruler-straight either: each bellies and sags a little between its corners (Edge warp).
  */
 
 const GROUND_F = 4.4;   // ground-floor height, m (c.1900 shop floors; matches the painted façades and the data)
 const UPPER_F = 3.7;    // upper floors
 const WIN_DEPTH = 0.26; // window glass set back from the wall face
 const DOOR_DEPTH = 0.42;
+const CHUNK = 150;      // m: façade geometry is merged per square of this size (culling vs draw calls)
 
 const SHUTTERS = ['#3d4f3f', '#5b3b2b', '#6b675b', '#3f4b55', '#4a5a48', '#6a4a36'];
 const DOORS = ['#7a5436', '#6a4a30', '#86603f', '#6b665a', '#72563a', '#5d6b5a'];
@@ -28,16 +33,22 @@ class GeoBuilder {
   extra = new Map<string, number[]>();
   private readonly e1 = new THREE.Vector3(); private readonly e2 = new THREE.Vector3(); private readonly fn = new THREE.Vector3();
 
-  constructor(private readonly extras: string[] = []) { for (const k of extras) this.extra.set(k, []); }
+  /** bevel: scale of the chamfer box() gives this builder's pieces (0 = sharp, e.g. thin ironwork). */
+  constructor(private readonly extras: string[] = [], readonly bevel = 1) { for (const k of extras) this.extra.set(k, []); }
 
-  /** One triangle, wound to face along n. `ex` holds per-vertex extras: ex[k][vertex] = 4 numbers. */
-  tri(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, n: THREE.Vector3, ua: number[], ub: number[], uc: number[], color: THREE.Color, ex?: number[][][]): void {
+  /**
+   * One triangle, wound to face along n (or along its per-vertex normals ns, which are then stored).
+   * `ex` holds per-vertex extras: ex[k][vertex] = 4 numbers.
+   */
+  tri(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, n: THREE.Vector3, ua: number[], ub: number[], uc: number[], color: THREE.Color, ex?: number[][][], ns?: THREE.Vector3[]): void {
     this.fn.crossVectors(this.e1.subVectors(b, a), this.e2.subVectors(c, a));
+    const facing = ns ? this.e1.copy(ns[0]).add(ns[1]).add(ns[2]) : n;
     let vs = [a, b, c], us = [ua, ub, uc], order = [0, 1, 2];
-    if (this.fn.dot(n) < 0) { vs = [a, c, b]; us = [ua, uc, ub]; order = [0, 2, 1]; }
+    if (this.fn.dot(facing) < 0) { vs = [a, c, b]; us = [ua, uc, ub]; order = [0, 2, 1]; }
     for (let i = 0; i < 3; i++) {
+      const nv = ns ? ns[order[i]] : n;
       this.pos.push(vs[i].x, vs[i].y, vs[i].z);
-      this.nor.push(n.x, n.y, n.z);
+      this.nor.push(nv.x, nv.y, nv.z);
       this.uv.push(us[i][0], us[i][1]);
       this.col.push(color.r, color.g, color.b);
       this.extras.forEach((k, j) => this.extra.get(k)!.push(...(ex ? ex[j][order[i]] : [0, 0, 0, 0])));
@@ -64,31 +75,81 @@ class GeoBuilder {
 
 // --- Edge frames --------------------------------------------------------------------------------------
 
-/** A wall edge: origin at its start, t along it, n out of the building, heights from the house's ground. */
+/**
+ * A wall edge: origin at its start, t along it, n out of the building, heights from the house's ground.
+ * knots/wo/wv: the wall's irregularity, piecewise linear in u between the knots (zero at both corners):
+ * wo bellies it out of plumb, wv lets it sag. Everything placed with P() on the edge moves with it.
+ */
 interface Edge {
   ax: number; az: number; tx: number; tz: number; nx: number; nz: number; L: number; gy: number;
   party: boolean;
+  knots?: number[]; wo?: number[]; wv?: number[];
 }
 const UP = new THREE.Vector3(0, 1, 0);
 
+function warpAt(e: Edge, u: number): [number, number] {
+  const K = e.knots!;
+  if (u <= K[0] || u >= K[K.length - 1]) return [0, 0];
+  let i = 1;
+  while (i < K.length - 1 && K[i] < u) i++;
+  const f = (u - K[i - 1]) / (K[i] - K[i - 1] || 1);
+  return [e.wo![i - 1] + (e.wo![i] - e.wo![i - 1]) * f, e.wv![i - 1] + (e.wv![i] - e.wv![i - 1]) * f];
+}
+
 function P(e: Edge, u: number, h: number, d: number): THREE.Vector3 {
+  if (e.knots) { const [o, v] = warpAt(e, u); d += o; h -= v; }
   return new THREE.Vector3(e.ax + e.tx * u + e.nx * d, e.gy + h, e.az + e.tz * u + e.nz * d);
 }
 const vT = (e: Edge, s = 1) => new THREE.Vector3(e.tx * s, 0, e.tz * s);
 const vN = (e: Edge, s = 1) => new THREE.Vector3(e.nx * s, 0, e.nz * s);
 
-/** A box in an edge frame: centre (u, h, d), half-sizes along t, up and n. UVs in metres. */
-function box(g: GeoBuilder, e: Edge, u: number, h: number, d: number, su: number, sh: number, sd: number, color: THREE.Color, onWall = false): void {
-  const c = (i: number, j: number, k: number) => P(e, u + i * su, h + j * sh, d + k * sd);
-  const faces: [THREE.Vector3, number[][], number[][]][] = [
-    [vN(e), [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]], [[0, 0], [2 * su, 0], [2 * su, 2 * sh], [0, 2 * sh]]],
-    [vN(e, -1), [[1, -1, -1], [-1, -1, -1], [-1, 1, -1], [1, 1, -1]], [[0, 0], [2 * su, 0], [2 * su, 2 * sh], [0, 2 * sh]]],
-    [UP, [[-1, 1, 1], [1, 1, 1], [1, 1, -1], [-1, 1, -1]], [[0, 0], [2 * su, 0], [2 * su, 2 * sd], [0, 2 * sd]]],
-    [UP.clone().negate(), [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]], [[0, 0], [2 * su, 0], [2 * su, 2 * sd], [0, 2 * sd]]],
-    [vT(e), [[1, -1, 1], [1, -1, -1], [1, 1, -1], [1, 1, 1]], [[0, 0], [2 * sd, 0], [2 * sd, 2 * sh], [0, 2 * sh]]],
-    [vT(e, -1), [[-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-1, 1, -1]], [[0, 0], [2 * sd, 0], [2 * sd, 2 * sh], [0, 2 * sh]]],
-  ];
-  faces.forEach(([n, cs, uvs], fi) => { if (onWall && fi === 1) return; g.quad(c(...cs[0] as [number, number, number]), c(...cs[1] as [number, number, number]), c(...cs[2] as [number, number, number]), c(...cs[3] as [number, number, number]), n, uvs, color); });
+/**
+ * A box with chamfered arrises, flat-shaded so every edge catches the light as dressed stone and run
+ * plaster do. at(x, y, z) maps offsets from the centre (along the axes ax) to world space; s: half-sizes.
+ * back: the -z face lies on a wall, so it is left out and its edges (and the short ones running into the
+ * wall) stay square: the piece sits flush. ch = 0 gives a plain box.
+ */
+function bev(g: GeoBuilder, at: (x: number, y: number, z: number) => THREE.Vector3, ax: THREE.Vector3[], s: number[], color: THREE.Color, back: boolean, ch: number): void {
+  ch = Math.min(ch, 0.45 * Math.min(s[0], s[1], s[2]));
+  const cut = (i: number, si: number, j: number, sj: number) => (ch <= 0 || (back && ((i === 2 && si < 0) || (j === 2 && sj < 0) || (i !== 2 && j !== 2))) ? 0 : ch);
+  // a corner of the box as seen from face i: pulled in by the chamfers of the face's edges
+  const corner = (i: number, sg: number[]) => {
+    const c = [0, 0, 0];
+    for (let j = 0; j < 3; j++) c[j] = j === i ? sg[j] * s[j] : sg[j] * (s[j] - cut(i, sg[i], j, sg[j]));
+    return at(c[0], c[1], c[2]);
+  };
+  const others = [[1, 2], [2, 0], [0, 1]];
+  for (let i = 0; i < 3; i++) for (const si of [-1, 1]) {
+    if (back && i === 2 && si < 0) continue;
+    const [j, k] = others[i];
+    const sg = (a: number, b: number) => { const v = [0, 0, 0]; v[i] = si; v[j] = a; v[k] = b; return v; };
+    const q = [sg(-1, -1), sg(1, -1), sg(1, 1), sg(-1, 1)].map(v => corner(i, v));
+    const W = 2 * s[j], H = 2 * s[k];
+    g.quad(q[0], q[1], q[2], q[3], ax[i].clone().multiplyScalar(si), [[0, 0], [W, 0], [W, H], [0, H]], color);
+  }
+  if (ch <= 0) return;
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) for (const si of [-1, 1]) for (const sj of [-1, 1]) {
+    if (!cut(i, si, j, sj)) continue;
+    const k = 3 - i - j, L = 2 * s[k];
+    const sg = (sk: number) => { const v = [0, 0, 0]; v[i] = si; v[j] = sj; v[k] = sk; return v; };
+    const n = ax[i].clone().multiplyScalar(si).addScaledVector(ax[j], sj).normalize();
+    g.quad(corner(i, sg(-1)), corner(i, sg(1)), corner(j, sg(1)), corner(j, sg(-1)), n, [[0, 0], [L, 0], [L, ch], [0, ch]], color);
+  }
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+    if (!cut(0, sx, 1, sy) || !cut(0, sx, 2, sz) || !cut(1, sy, 2, sz)) continue;
+    const sg = [sx, sy, sz];
+    const n = ax[0].clone().multiplyScalar(sx).addScaledVector(ax[1], sy).addScaledVector(ax[2], sz).normalize();
+    g.tri(corner(0, sg), corner(1, sg), corner(2, sg), n, [0, 0], [ch, 0], [0, ch], color);
+  }
+}
+
+/**
+ * A bevelled box in an edge frame: centre (u, h, d), half-sizes along t, up and n. UVs in metres.
+ * The chamfer scales with the piece (about a third of its thinnest side, 6 to 35 mm) unless given.
+ */
+function box(g: GeoBuilder, e: Edge, u: number, h: number, d: number, su: number, sh: number, sd: number, color: THREE.Color, onWall = false, ch?: number): void {
+  const c = ch ?? g.bevel * Math.min(0.035, 0.6 * Math.min(su, sh, sd));
+  bev(g, (x, y, z) => P(e, u + x, h + y, d + z), [vT(e), UP, vN(e)], [su, sh, sd], color, onWall, c < 0.006 ? 0 : c);
 }
 
 /** Places geometry built in an edge-local frame (x along the wall, y up, z out) at (u, h) on the wall. */
@@ -96,38 +157,98 @@ function onEdge(g: GeoBuilder, geo: THREE.BufferGeometry, e: Edge, u: number, h:
   const m = new THREE.Matrix4().makeBasis(vT(e), UP, vN(e)).setPosition(P(e, u, h, 0));
   const src = (geo.index ? geo.toNonIndexed() : geo).applyMatrix4(m);
   const pos = src.getAttribute('position'), nor = src.getAttribute('normal');
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+  const v = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, i: number) => new THREE.Vector3().fromBufferAttribute(a as THREE.BufferAttribute, i);
   for (let i = 0; i < pos.count; i += 3) {
-    a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
-    n.fromBufferAttribute(nor, i);
-    g.tri(a.clone(), b.clone(), c.clone(), n.clone(), [0, 0], [0.3, 0], [0.3, 0.3], color);
+    const ns = [v(nor, i), v(nor, i + 1), v(nor, i + 2)];
+    g.tri(v(pos, i), v(pos, i + 1), v(pos, i + 2), ns[0], [0, 0], [0.3, 0], [0.3, 0.3], color, undefined, ns);
   }
+}
+
+/** A pipe between two points (h, d) in the plane across the wall at u, overlapping its ends a little so bends close. */
+function pipe(g: GeoBuilder, e: Edge, u: number, a: number[], b: number[], r: number, color: THREE.Color): void {
+  const dir = new THREE.Vector3(0, b[0] - a[0], b[1] - a[1]), len = dir.length();
+  dir.normalize();
+  const geo = new THREE.CylinderGeometry(r, r, len + r, 7, 1, true)
+    .applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, dir))
+    .translate(0, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+  onEdge(g, geo, e, u, 0, color);
+}
+
+// --- Mouldings ----------------------------------------------------------------------------------------
+
+/**
+ * Moulding profiles drawn from the bottom up as (d out of the wall, h up), or for surrounds (w out from
+ * the opening, d off the wall). Curved members are smooth-shaded (a third value of 1 marks a smooth point);
+ * the fillets between them stay crisp, as a plasterer's running mould leaves them.
+ */
+class Mould {
+  readonly p: number[][];
+  constructor(x: number, y: number) { this.p = [[x, y]]; }
+  private get end(): number[] { return this.p[this.p.length - 1]; }
+  to(x: number, y: number): this { this.p.push([x, y]); return this; }
+  up(dy: number): this { return this.to(this.end[0], this.end[1] + dy); }
+  out(dx: number): this { return this.to(this.end[0] + dx, this.end[1]); }
+  private run(n: number, f: (s: number) => number[]): this {
+    const [x0, y0] = this.end;
+    for (let i = 1; i <= n; i++) { const [x, y] = f(i / n); this.p.push([x0 + x, y0 + y, i < n ? 1 : 0]); }
+    return this;
+  }
+  /** Quarter round, convex (ovolo: out first, then up). */
+  ovolo(dx: number, dy: number, n = 3): this { return this.run(n, s => [dx * Math.sin((s * Math.PI) / 2), dy * (1 - Math.cos((s * Math.PI) / 2))]); }
+  /** Quarter hollow (cavetto: up first, then out). */
+  cavetto(dx: number, dy: number, n = 3): this { return this.run(n, s => [dx * (1 - Math.cos((s * Math.PI) / 2)), dy * Math.sin((s * Math.PI) / 2)]); }
+  /** Cyma recta: round below, hollow above, level at both ends (the crowning sima). */
+  recta(dx: number, dy: number, n = 4): this { return this.run(n, s => [dx * s, (dy * (1 - Math.cos(s * Math.PI))) / 2]); }
+  /** Cyma reversa: hollow below, round above, upright at both ends (the bed moulding). */
+  reversa(dx: number, dy: number, n = 4): this { return this.run(n, s => [(dx * (1 - Math.cos(s * Math.PI))) / 2, dy * s]); }
+  /** Half-round bead (torus) standing out of an upright face. */
+  torus(r: number, n = 5): this { return this.run(n, s => [r * Math.sin(s * Math.PI), r * (1 - Math.cos(s * Math.PI))]); }
+}
+
+/** Per-segment normals (start, end) of a profile, turned clockwise or anticlockwise from its direction. */
+function segNormals(prof: number[][], cw: boolean): number[][][] {
+  const seg = prof.slice(0, -1).map((p, i) => {
+    const q = prof[i + 1], dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1;
+    return cw ? [dy / l, -dx / l] : [-dy / l, dx / l];
+  });
+  const avg = (n: number[], m: number[] | undefined, smooth: boolean) => {
+    if (!m || !smooth) return n;
+    const x = n[0] + m[0], y = n[1] + m[1], l = Math.hypot(x, y) || 1;
+    return [x / l, y / l];
+  };
+  return seg.map((n, i) => [avg(n, seg[i - 1], prof[i][2] === 1), avg(n, seg[i + 1], prof[i + 1][2] === 1)]);
 }
 
 /**
  * Extrudes a cross-section profile [(d, h)] (from the wall face out and back) along an edge from ua to ub.
  * At ring corners the ends are mitred (startMiter/endMiter give the corner's offset direction per metre of d);
- * elsewhere they are square and capped.
+ * elsewhere they are square and capped. Split at the wall's knots so it follows the wall's irregularity.
  */
 function extrude(g: GeoBuilder, e: Edge, ua: number, ub: number, prof: number[][], color: THREE.Color,
-  startMiter: [number, number] | null, endMiter: [number, number] | null): void {
+  startMiter: [number, number] | null, endMiter: [number, number] | null, caps = true): void {
   if (ub - ua < 0.05) return;
   const at = (u: number, miter: [number, number] | null, d: number, h: number) => {
     if (!miter) return P(e, u, h, d);
     const bx = e.ax + e.tx * u, bz = e.az + e.tz * u;
     return new THREE.Vector3(bx + miter[0] * d, e.gy + h, bz + miter[1] * d);
   };
-  let s = 0;
-  for (let i = 0; i + 1 < prof.length; i++) {
-    const [d0, h0] = prof[i], [d1, h1] = prof[i + 1];
-    const len = Math.hypot(d1 - d0, h1 - h0);
-    if (len < 1e-4) continue;
-    const nd = (h1 - h0) / len, nh = -(d1 - d0) / len;
-    const n = new THREE.Vector3(e.nx * nd, nh, e.nz * nd);
-    g.quad(at(ua, startMiter, d0, h0), at(ub, endMiter, d0, h0), at(ub, endMiter, d1, h1), at(ua, startMiter, d1, h1), n,
-      [[ua, s], [ub, s], [ub, s + len], [ua, s + len]], color);
-    s += len;
+  const ns = segNormals(prof, true).map(([a, b]) => [new THREE.Vector3(e.nx * a[0], a[1], e.nz * a[0]), new THREE.Vector3(e.nx * b[0], b[1], e.nz * b[0])]);
+  const cuts = [ua, ...(e.knots ?? []).filter(k => k > ua + 1e-3 && k < ub - 1e-3), ub];
+  for (let c = 0; c + 1 < cuts.length; c++) {
+    const u0 = cuts[c], u1 = cuts[c + 1], m0 = c === 0 ? startMiter : null, m1 = c === cuts.length - 2 ? endMiter : null;
+    let s = 0;
+    for (let i = 0; i + 1 < prof.length; i++) {
+      const [d0, h0] = prof[i], [d1, h1] = prof[i + 1];
+      const len = Math.hypot(d1 - d0, h1 - h0);
+      if (len < 1e-4) continue;
+      const [na, nb] = ns[i];
+      const A = at(u0, m0, d0, h0), B = at(u1, m1, d0, h0), C = at(u1, m1, d1, h1), D = at(u0, m0, d1, h1);
+      g.tri(A, B, C, na, [u0, s], [u1, s], [u1, s + len], color, undefined, [na, na, nb]);
+      g.tri(A, C, D, na, [u0, s], [u1, s + len], [u0, s + len], color, undefined, [na, nb, nb]);
+      s += len;
+    }
   }
+  if (!caps) return;
   // Caps on square ends
   const shape = prof.map(([d, h]) => new THREE.Vector2(d, h));
   const tris = THREE.ShapeUtils.triangulateShape(shape, []);
@@ -140,6 +261,52 @@ function extrude(g: GeoBuilder, e: Edge, ua: number, ub: number, prof: number[][
     }
   }
 }
+
+/**
+ * A moulded surround run along a path in the wall plane: points (u, h) going clockwise round an opening
+ * (up the left jamb, over the head, down the right), mitred at every bend. prof: (w, d) from the opening's
+ * edge outwards and off the wall, starting and ending on the wall. caps closes the two open ends.
+ */
+function frame(g: GeoBuilder, e: Edge, path: number[][], prof: number[][], color: THREE.Color, caps = false): void {
+  const n = path.length;
+  const sn = path.slice(0, -1).map((p, i) => { const q = path[i + 1], du = q[0] - p[0], dh = q[1] - p[1], l = Math.hypot(du, dh) || 1; return [-dh / l, du / l]; });
+  const off = path.map((_, i) => {
+    if (i === 0) return sn[0];
+    if (i === n - 1) return sn[n - 2];
+    const a = sn[i - 1], b = sn[i], l = Math.hypot(a[0] + b[0], a[1] + b[1]) || 1, x = (a[0] + b[0]) / l, y = (a[1] + b[1]) / l;
+    const c = Math.max(0.3, x * b[0] + y * b[1]);
+    return [x / c, y / c];
+  });
+  const Q = (i: number, w: number, d: number) => P(e, path[i][0] + off[i][0] * w, path[i][1] + off[i][1] * w, d);
+  const pn = segNormals(prof, false);
+  for (let i = 0; i + 1 < n; i++) {
+    const S = vT(e, sn[i][0]).addScaledVector(UP, sn[i][1]), N0 = vN(e);
+    let s = 0;
+    for (let j = 0; j + 1 < prof.length; j++) {
+      const [w0, d0] = prof[j], [w1, d1] = prof[j + 1], len = Math.hypot(w1 - w0, d1 - d0);
+      if (len < 1e-4) continue;
+      const na = S.clone().multiplyScalar(pn[j][0][0]).addScaledVector(N0, pn[j][0][1]), nb = S.clone().multiplyScalar(pn[j][1][0]).addScaledVector(N0, pn[j][1][1]);
+      const A = Q(i, w0, d0), B = Q(i + 1, w0, d0), C = Q(i + 1, w1, d1), D = Q(i, w1, d1), L = Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+      g.tri(A, B, C, na, [0, s], [L, s], [L, s + len], color, undefined, [na, na, nb]);
+      g.tri(A, C, D, na, [0, s], [L, s + len], [0, s + len], color, undefined, [na, nb, nb]);
+      s += len;
+    }
+  }
+  if (!caps) return;
+  const tris = THREE.ShapeUtils.triangulateShape(prof.map(([w, d]) => new THREE.Vector2(w, d)), []);
+  for (const [i, j, sg] of [[0, 1, -1], [n - 1, n - 2, -1]]) {
+    const du = path[j][0] - path[i][0], dh = path[j][1] - path[i][1], l = Math.hypot(du, dh) || 1;
+    const nn = vT(e, (sg * du) / l).addScaledVector(UP, (sg * dh) / l);
+    for (const [a, b, c] of tris) g.tri(Q(i, prof[a][0], prof[a][1]), Q(i, prof[b][0], prof[b][1]), Q(i, prof[c][0], prof[c][1]), nn, [0, 0], [0.1, 0], [0.1, 0.1], color);
+  }
+}
+
+// Surround profiles (w, d): a stepped architrave with a raised inner bead, chamfered outer arris
+const architrave = (w: number, d = 0.038) => [[0, 0], [0, d + 0.012], [0.018, d + 0.012], [0.026, d], [w - 0.014, d], [w, d - 0.014], [w, 0]];
+// raking cornice of a pediment: a fillet under a crowning cyma
+const rake = (w: number, d: number) => new Mould(0, 0).up(d * 0.6).out(0.012).up(0.012).recta(w - 0.03, d * 0.4 - 0.012, 3).out(0.018).to(w, 0).p;
+// string course: a hollow under a plain band with a weathered top, projecting `out`
+const course = (y: number, h: number, out: number) => new Mould(0, y).out(out * 0.25).cavetto(out * 0.5, h * 0.3).out(out * 0.25).up(h * 0.5).to(out * 0.7, y + h * 0.9).to(0, y + h).p;
 
 // --- Buildings ----------------------------------------------------------------------------------------
 
@@ -174,6 +341,15 @@ function openingPolygon(o: Opening): THREE.Vector2[] {
   for (let i = 0; i <= N; i++) { const a = (Math.PI * i) / N; pts.push(new THREE.Vector2(o.u + Math.cos(a) * R, o.spring + Math.sin(a) * R)); }
   return pts;
 }
+
+/** Points along a segmental arc over (uc, y) spanning ±span, radius span * rk, left to right. */
+function segmentArc(uc: number, y: number, span: number, rk: number, n = 8): number[][] {
+  const R = span * rk, cy = y - Math.sqrt(R * R - span * span), a0 = Math.asin(span / R);
+  return Array.from({ length: n + 1 }, (_, k) => { const t = -a0 + (2 * a0 * k) / n; return [uc + Math.sin(t) * R, cy + Math.cos(t) * R]; });
+}
+
+/** Plinth: a plain, slightly battered base `out` proud, finished at `top` with a cyma weathering back to the wall. */
+const plinthProfile = (h0: number, out: number, top: number) => new Mould(0, h0).out(out).to(out, top).reversa(-out * 0.6, 0.08).up(0.02).to(0, top + 0.1).p;
 
 /**
  * Wall with openings, triangulated column by column between the given cut lines (each column is a
@@ -235,19 +411,22 @@ function heroFacade(e: Edge, topH: number, h0: number, terrain: Terrain,
       G.flat.quad(P(e, p.x, p.y, 0), P(e, q.x, q.y, 0), P(e, q.x, q.y, -depth), P(e, p.x, p.y, -depth), nIn, [[0, 0], [len, 0], [len, depth], [0, depth]], wallC);
     }
   }
-  const band = (y: number, h: number, out: number) => extrude(G.trim, e, 0, e.L, [[0, y], [out * 0.6, y], [out, y + h * 0.35], [out, y + h], [0, y + h]], trimC, null, null);
+  const band = (y: number, h: number, out: number) => extrude(G.trim, e, 0, e.L, course(y, h, out), trimC, null, null);
   // ground-floor rusticated piers between shopfronts, first-floor sill band, storey cornices
   for (let p = 0; p <= nPairs; p++) {
     const u = u0 + p * pairW;
     for (let y = 0.3; y < F0 - 0.4; y += 0.55) box(G.flat, e, u, y + 0.25, 0.05, 0.55, 0.24, 0.05, trimC, true);
   }
-  extrude(G.trim, e, 0, e.L, [[0, h0], [0.1, h0], [0.1, 0.5], [0, 0.6]], new THREE.Color('#8f8577'), null, null);
+  extrude(G.trim, e, 0, e.L, plinthProfile(h0, 0.1, 0.5), new THREE.Color('#8f8577'), null, null);
   band(F0 - 0.25, 0.45, 0.32);
   band(F1 - 0.15, 0.3, 0.2);
-  // main cornice with dentils and modillions
-  extrude(G.trim, e, 0, e.L, [[0, F2], [0.12, F2], [0.12, F2 + 0.25], [0.3, F2 + 0.35], [0.3, F2 + 0.5], [0.75, F2 + 0.62], [0.78, F2 + 0.8], [0, F2 + 0.9]], trimC, null, null);
+  // main cornice: architrave band, cyma reversa bed moulding, frieze with dentils, ovolo, a corona on
+  // modillions and a crowning cyma recta
+  const main = new Mould(0, F2).out(0.1).up(0.06).reversa(0.05, 0.12).out(0.012).up(0.012).up(0.256)
+    .ovolo(0.1, 0.07).up(0.01).out(0.478).up(0.14).out(0.015).up(0.015).recta(0.06, 0.11).up(0.015).to(0, F2 + 0.9);
+  extrude(G.trim, e, 0, e.L, main.p, trimC, null, null);
   for (let u = 0.3; u < e.L - 0.2; u += 0.32) box(G.flat, e, u, F2 + 0.4, 0.22, 0.07, 0.06, 0.1, trimC, true);
-  for (let u = 0.5; u < e.L - 0.3; u += 1.1) box(G.trim, e, u, F2 + 0.55, 0.45, 0.09, 0.07, 0.3, trimC, true);
+  for (let u = 0.5; u < e.L - 0.3; u += 1.1) box(G.trim, e, u, F2 + 0.49, 0.43, 0.09, 0.05, 0.27, trimC, true);
   // ornamental pilaster strips between the window pairs on both upper floors, and a frieze of panels
   for (let p = 0; p <= nPairs; p++) {
     const u = u0 + p * pairW;
@@ -291,25 +470,25 @@ function heroFacade(e: Edge, topH: number, h0: number, terrain: Terrain,
     const top = o.spring !== undefined ? o.spring : o.top;
     G.glass.quad(P(e, l, o.bottom, d), P(e, r, o.bottom, d), P(e, r, top, d), P(e, l, top, d), nOut, [[vx, vy], [vx + 0.5, vy], [vx + 0.5, vy + 0.5], [vx, vy + 0.5]], white);
     if (o.spring !== undefined) {
-      // arched head: glass fan and a moulded archivolt with a keystone cartouche
+      // arched head: glass fan and a moulded archivolt, run down the jambs, with a keystone cartouche
       const R = o.w / 2, N = 10;
       for (let k = 0; k < N; k++) {
         const a0 = (Math.PI * k) / N, a1 = (Math.PI * (k + 1)) / N;
         const q = (a: number, rr: number, dd: number) => P(e, o.u + Math.cos(a) * rr, o.spring! + Math.sin(a) * rr, dd);
         G.glass.tri(P(e, o.u, o.spring!, d), q(a0, R, d), q(a1, R, d), nOut, [vx + 0.25, vy + 0.4], [vx + 0.5, vy + 0.5], [vx + 0.25, vy + 0.5], white);
-        G.flat.quad(q(a0, R + 0.02, 0.06), q(a0, R + 0.2, 0.06), q(a1, R + 0.2, 0.06), q(a1, R + 0.02, 0.06), nOut, [[0, 0], [0.2, 0], [0.2, 0.2], [0, 0.2]], trimC);
       }
+      const arc = openingPolygon(o).slice(2).reverse().map(p => [p.x, p.y]);
+      frame(G.flat, e, [[l, o.bottom], ...arc, [r, o.bottom]], architrave(0.2, 0.06), trimC);
       box(G.trim, e, o.u, o.spring + R + 0.15, 0.1, 0.16, 0.24, 0.1, trimC, true);
-      for (const sd of [-1, 1]) box(G.flat, e, o.u + sd * (o.w / 2 + 0.11), (o.bottom + o.spring) / 2, 0.05, 0.09, (o.spring - o.bottom) / 2, 0.05, trimC, true);
     } else {
       // eared architrave and a cornice hood on consoles
-      for (const sd of [-1, 1]) box(G.flat, e, o.u + sd * (o.w / 2 + 0.1), (o.bottom + o.top) / 2, 0.05, 0.1, (o.top - o.bottom) / 2 + 0.1, 0.05, trimC, true);
-      box(G.flat, e, o.u, o.top + 0.12, 0.05, o.w / 2 + 0.2, 0.1, 0.05, trimC, true);
+      frame(G.flat, e, [[l, o.bottom], [l, o.top], [r, o.top], [r, o.bottom]], architrave(0.2, 0.07), trimC);
+      for (const sd of [-1, 1]) box(G.flat, e, o.u + sd * (o.w / 2 + 0.25), o.top + 0.12, 0.04, 0.07, 0.1, 0.04, trimC, true); // ears
       box(G.trim, e, o.u, o.top + 0.35, 0.12, o.w / 2 + 0.35, 0.07, 0.12, trimC, true);
       box(G.flat, e, o.u, o.top + 0.24, 0.07, o.w / 2 - 0.1, 0.05, 0.04, trimC, true); // frieze
     }
     // sill with an apron panel
-    box(G.trim, e, o.u, o.bottom - 0.05, 0.08, o.w / 2 + 0.15, 0.05, 0.1, trimC, true);
+    box(G.trim, e, o.u, o.bottom - 0.05, 0.08, o.w / 2 + 0.24, 0.05, 0.1, trimC, true);
     if (!o.balcony) box(G.flat, e, o.u, o.bottom - 0.45, 0.03, o.w / 2 - 0.05, 0.3, 0.03, trimC, true);
   }
   // balcony on consoles over the gable pair
@@ -379,11 +558,17 @@ function hotelFacade(e: Edge, topH: number, h0: number, terrain: Terrain,
       G.flat.quad(P(e, p.x, p.y, 0), P(e, q.x, q.y, 0), P(e, q.x, q.y, -depth), P(e, p.x, p.y, -depth), nIn, [[0, 0], [len, 0], [len, depth], [0, depth]], wallC);
     }
   }
-  const band = (y: number, h: number, out: number) => extrude(G.trim, e, 0, e.L, [[0, y], [out * 0.6, y], [out, y + h * 0.35], [out, y + h], [0, y + h]], trimC, null, null);
-  extrude(G.trim, e, 0, e.L, [[0, h0], [0.1, h0], [0.1, 0.5], [0, 0.6]], new THREE.Color('#8f8577'), null, null);
+  const band = (y: number, h: number, out: number) => extrude(G.trim, e, 0, e.L, course(y, h, out), trimC, null, null);
+  extrude(G.trim, e, 0, e.L, plinthProfile(h0, 0.1, 0.5), new THREE.Color('#8f8577'), null, null);
   band(F[0] - 0.3, 0.5, 0.32); band(F[1] - 0.15, 0.25, 0.18); band(F[2] - 0.15, 0.25, 0.18);
-  extrude(G.trim, e, 0, e.L, [[0, FC], [0.12, FC], [0.12, FC + 0.3], [0.35, FC + 0.4], [0.35, FC + 0.55], [0.85, FC + 0.7], [0.88, FC + 0.88], [0, FC + 0.95]], trimC, null, null);
-  for (let u = 0.45; u < e.L - 0.3; u += 0.9) box(G.trim, e, u, FC + 0.5, 0.5, 0.09, 0.12, 0.34, trimC, true);    // cornice brackets
+  // bracketed cornice: bed moulding, frieze, ovolo, corona on scrolled consoles, crowning cyma
+  const main = new Mould(0, FC).out(0.12).up(0.08).reversa(0.06, 0.14).out(0.012).up(0.012).up(0.288)
+    .ovolo(0.108, 0.08).up(0.012).out(0.568).up(0.148).out(0.015).up(0.015).recta(0.055, 0.1).up(0.012).to(0, FC + 0.95);
+  extrude(G.trim, e, 0, e.L, main.p, trimC, null, null);
+  for (let u = 0.45; u < e.L - 0.3; u += 0.9) {                                                                 // cornice brackets
+    box(G.trim, e, u, FC + 0.51, 0.49, 0.085, 0.1, 0.34, trimC, true);
+    box(G.trim, e, u, FC + 0.36, 0.13, 0.07, 0.06, 0.1, trimC, true);
+  }
   for (let p = 0; p <= nPairs; p++) {                                                                          // rusticated piers, pilasters
     const u = u0 + p * pairW;
     for (let y = 0.3; y < F[0] - 0.45; y += 0.5) box(G.flat, e, u, y + 0.22, 0.05, 0.5, 0.22, 0.05, trimC, true);
@@ -421,22 +606,15 @@ function hotelFacade(e: Edge, topH: number, h0: number, terrain: Terrain,
     stats.windows++;
     const d = -0.28, vx = (o.variant % 2) * 0.5, vy = 1 - (Math.floor(o.variant / 2) + 1) * 0.5;
     G.glass.quad(P(e, l, o.bottom, d), P(e, r, o.bottom, d), P(e, r, o.top, d), P(e, l, o.top, d), nOut, [[vx, vy], [vx + 0.5, vy], [vx + 0.5, vy + 0.5], [vx, vy + 0.5]], white);
-    for (const sd of [-1, 1]) box(G.flat, e, o.u + sd * (o.w / 2 + 0.1), (o.bottom + o.top) / 2, 0.05, 0.1, (o.top - o.bottom) / 2 + 0.1, 0.05, trimC, true);
-    box(G.flat, e, o.u, o.top + 0.1, 0.05, o.w / 2 + 0.2, 0.1, 0.05, trimC, true);
-    box(G.trim, e, o.u, o.bottom - 0.05, 0.08, o.w / 2 + 0.15, 0.05, 0.1, trimC, true);
+    frame(G.flat, e, [[l, o.bottom], [l, o.top], [r, o.top], [r, o.bottom]], architrave(0.2, 0.07), trimC);
+    box(G.trim, e, o.u, o.bottom - 0.05, 0.08, o.w / 2 + 0.24, 0.05, 0.1, trimC, true);
     const span = o.w / 2 + 0.3, yb = o.top + 0.22;
     if (o.pediment === 1) {
       box(G.trim, e, o.u, yb, 0.08, span, 0.05, 0.08, trimC, true);
-      const rise = 0.4, len = Math.hypot(span, rise), ang = Math.atan2(rise, span);
-      for (const sd of [-1, 1]) onEdge(G.trim, new THREE.BoxGeometry(len, 0.09, 0.14).rotateZ(-sd * ang).translate(sd * span / 2, rise / 2, 0.07), e, o.u, yb + 0.05, trimC);
+      frame(G.trim, e, [[o.u - span, yb + 0.05], [o.u, yb + 0.45], [o.u + span, yb + 0.05]], rake(0.1, 0.15), trimC, true);
     } else if (o.pediment === 2) {
       box(G.trim, e, o.u, yb, 0.08, span, 0.05, 0.08, trimC, true);
-      const R = span * 1.3, cy0 = -Math.sqrt(R * R - span * span), a0 = Math.asin(span / R);
-      for (let k = 0; k < 8; k++) {
-        const t0 = -a0 + (2 * a0 * k) / 8, t1 = -a0 + (2 * a0 * (k + 1)) / 8;
-        const x0 = Math.sin(t0) * R, y0 = Math.cos(t0) * R + cy0, x1 = Math.sin(t1) * R, y1 = Math.cos(t1) * R + cy0;
-        onEdge(G.trim, new THREE.BoxGeometry(Math.hypot(x1 - x0, y1 - y0) + 0.01, 0.09, 0.14).rotateZ(Math.atan2(y1 - y0, x1 - x0)).translate((x0 + x1) / 2, (y0 + y1) / 2, 0.07), e, o.u, yb + 0.05, trimC);
-      }
+      frame(G.trim, e, segmentArc(o.u, yb + 0.05, span, 1.3, 6), rake(0.1, 0.15), trimC, true);
     } else {
       box(G.trim, e, o.u, yb + 0.02, 0.1, span - 0.05, 0.06, 0.1, trimC, true);
     }
@@ -510,7 +688,7 @@ function signQuad(b: GeoBuilder, e: Edge, u: number, y0: number, y1: number, hw:
   // lettering must read left to right for someone facing the wall: run it along the viewer's right (up x n)
   const n = vN(e), right = new THREE.Vector3().crossVectors(UP, n).normalize();
   const c = P(e, u, 0, d);
-  const at = (s: number, y: number) => new THREE.Vector3(c.x + right.x * s, e.gy + y, c.z + right.z * s);
+  const at = (s: number, y: number) => new THREE.Vector3(c.x + right.x * s, c.y + y, c.z + right.z * s);
   b.quad(at(-hw, y0), at(hw, y0), at(hw, y1), at(-hw, y1), n, signRow(k), new THREE.Color('#ffffff'));
 }
 
@@ -529,10 +707,15 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
     return { b, x0, z0, x1, z1 };
   });
 
-  const wall = new GeoBuilder(['aWall', 'aLayout', 'aLayout2']);
+  // One set of builders per CHUNK-metre square of the town, so the camera and each shadow cascade skip the
+  // blocks they can't see; every set is merged into one mesh per material.
   // flat: thin mouldings whose shadows are too small to matter (AO shades them); kept out of the shadow maps
-  const trim = new GeoBuilder(), flat = new GeoBuilder(), glass = new GeoBuilder(), wood = new GeoBuilder();
-  const canvas = new GeoBuilder(), iron = new GeoBuilder(), metal = new GeoBuilder(), shop = new GeoBuilder(), sign = new GeoBuilder();
+  const builders = () => ({
+    wall: new GeoBuilder(['aWall', 'aLayout', 'aLayout2']), trim: new GeoBuilder(), flat: new GeoBuilder(), glass: new GeoBuilder(), wood: new GeoBuilder([], 0.4),
+    canvas: new GeoBuilder(), iron: new GeoBuilder([], 0), metal: new GeoBuilder([], 0.5), shop: new GeoBuilder(), sign: new GeoBuilder(),
+  });
+  const chunks = new Map<string, ReturnType<typeof builders>>();
+  let { wall, trim, flat, glass, wood, canvas, iron, metal, shop, sign } = builders();
   const extras: THREE.Object3D[] = [];
   const lamps: LampSpot[] = [];
   const signMat = houses.some(h => h.style === 'hotel') ? hotelSign() : null;
@@ -547,6 +730,9 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
   const cWhite = new THREE.Color();
 
   for (const b of houses) {
+    const me0 = boxes.find(o => o.b === b)!, ck = `${Math.floor((me0.x0 + me0.x1) / 2 / CHUNK)},${Math.floor((me0.z0 + me0.z1) / 2 / CHUNK)}`;
+    if (!chunks.has(ck)) chunks.set(ck, builders());
+    ({ wall, trim, flat, glass, wood, canvas, iron, metal, shop, sign } = chunks.get(ck)!);
     const seed = hashString(b.id);
     const tint = new THREE.Color(LIMEWASH[seed % LIMEWASH.length]);
     const trimStyle = (seed >>> 5) % 3;
@@ -668,22 +854,42 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
           const o = openings[k];
           if (o.bottom < h0 + 0.05 || o.top + (o.spring !== undefined ? 0.3 : 0.2) > topH - 0.85 || o.u - o.w / 2 < 0.35 || o.u + o.w / 2 > e.L - 0.35) openings.splice(k, 1);
         }
-        const contour = [new THREE.Vector2(0, h0), new THREE.Vector2(e.L, h0), new THREE.Vector2(e.L, topH), new THREE.Vector2(0, topH)];
-        let holes = openings.map(openingPolygon);
-        let tris = THREE.ShapeUtils.triangulateShape(contour, holes);
-        // Check the cut wall's area; if triangulation went wrong, fall back to a blank wall
-        const areaOf = (pts: THREE.Vector2[]) => Math.abs(THREE.ShapeUtils.area(pts));
-        const expect = e.L * (topH - h0) - holes.reduce((a, h) => a + areaOf(h), 0);
-        const got = (() => { const allPts = contour.concat(...holes); return tris.reduce((a, [i0, i1, i2]) => a + areaOf([allPts[i0], allPts[i1], allPts[i2]]), 0); })();
-        if (!tris.length || Math.abs(got - expect) > 0.01 * expect + 0.05) {
-          openings.length = 0; holes = [];
-          tris = THREE.ShapeUtils.triangulateShape(contour, []);
+        // Old walls are not ruler-straight: between its corners this one bellies out and sags by a centimetre
+        // or three. The offsets are piecewise linear between knots on the piers, so each bay moves as one and
+        // nothing set into it parts from the wall; the corners stay put for the neighbouring walls.
+        const knots = [0];
+        for (const u of nb > 0 ? Array.from({ length: nb - 1 }, (_, k) => u0 + (k + 1) * bayW) : [e.L / 2]) if (u - knots[knots.length - 1] >= 4.5 && e.L - u >= 3) knots.push(u);
+        knots.push(e.L);
+        if (!e.party && knots.length > 2) {
+          const A = 0.012 + 0.03 * rnd(eseed, 61), B = 0.008 + 0.024 * rnd(eseed, 62);   // (the eave leaves room for both)
+          e.knots = knots;
+          e.wo = knots.map((u, k) => A * Math.sin((Math.PI * u) / e.L) * (0.65 + 0.35 * rnd(eseed, 63 + k)));
+          e.wv = knots.map((u, k) => B * Math.sin((Math.PI * u) / e.L) * (0.6 + 0.4 * rnd(eseed, 83 + k)));
         }
-        const all = contour.concat(...holes);
+        // cut column by column between the knots; if a triangulation goes wrong, fall back to a blank wall
+        const areaOf = (pts: THREE.Vector2[]) => Math.abs(THREE.ShapeUtils.area(pts));
+        const cutWall = (ops: Opening[]): THREE.Vector2[][] | null => {
+          const out: THREE.Vector2[][] = [];
+          for (let c = 0; c + 1 < knots.length; c++) {
+            const x0 = knots[c], x1 = knots[c + 1];
+            if (x1 - x0 < 1e-3) continue;
+            // (the wall head stops 5 cm under the roof line, inside the eave, so a bellied wall never shows through the roof)
+            const contour = [new THREE.Vector2(x0, h0), new THREE.Vector2(x1, h0), new THREE.Vector2(x1, topH - 0.05), new THREE.Vector2(x0, topH - 0.05)];
+            const hs = ops.filter(o => o.u > x0 && o.u < x1).map(openingPolygon), all = contour.concat(...hs);
+            const tris = THREE.ShapeUtils.triangulateShape(contour, hs);
+            const expect = (x1 - x0) * (topH - 0.05 - h0) - hs.reduce((a, h) => a + areaOf(h), 0);
+            const got = tris.reduce((a, [i0, i1, i2]) => a + areaOf([all[i0], all[i1], all[i2]]), 0);
+            if (!tris.length || Math.abs(got - expect) > 0.01 * expect + 0.05) return null;
+            for (const [i0, i1, i2] of tris) out.push([all[i0], all[i1], all[i2]]);
+          }
+          return out;
+        };
+        let wallTris = cutWall(openings);
+        if (!wallTris) { openings.length = 0; wallTris = cutWall([])!; }
+        const holes = openings.map(openingPolygon);
         const layout = [u0, bayW, openings.some(o => o.kind === "window") ? nb : 0, halfW], layout2 = [nUp, 0, 0, 0];
         const nOut = vN(e);
-        for (const [a, bb, c] of tris) {
-          const va = all[a], vb = all[bb], vc = all[c];
+        for (const [va, vb, vc] of wallTris) {
           const ex = [[[va.x, va.y, topH, (seed % 997) / 997], [vb.x, vb.y, topH, (seed % 997) / 997], [vc.x, vc.y, topH, (seed % 997) / 997]],
             [layout, layout, layout], [layout2, layout2, layout2]];
           wall.tri(P(e, va.x, va.y, 0), P(e, vb.x, vb.y, 0), P(e, vc.x, vc.y, 0), nOut,
@@ -711,33 +917,17 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
             const vx = (o.variant % 2) * 0.5, vy = 1 - (Math.floor(o.variant / 2) + 1) * 0.5;
             glass.quad(P(e, l, o.bottom, -depth), P(e, r, o.bottom, -depth), P(e, r, o.top, -depth), P(e, l, o.top, -depth), nOut,
               [[vx, vy], [vx + 0.5, vy], [vx + 0.5, vy + 0.5], [vx, vy + 0.5]], cWhite.set('#ffffff'));
-            // Sill, surround and (upper floors) a hood moulding and open shutters
-            box(trim, e, o.u, o.bottom - 0.04, (0.09 - depth + 0.02) / 2, o.w / 2 + 0.12, 0.04, (0.09 + depth - 0.02) / 2, trimC, true);
+            // Sill, a stepped architrave with a raised bead, and (upper floors) a hood moulding and open shutters
             const sw = o.kind === 'window' ? 0.14 : 0.11;
-            box(flat, e, l - sw / 2, (o.bottom + o.top + sw) / 2, 0.0175, sw / 2, (o.top + sw - o.bottom) / 2, 0.0175, trimC, true);
-            box(flat, e, r + sw / 2, (o.bottom + o.top + sw) / 2, 0.0175, sw / 2, (o.top + sw - o.bottom) / 2, 0.0175, trimC, true);
-            box(flat, e, o.u, o.top + sw / 2, 0.0175, o.w / 2, sw / 2, 0.0175, trimC, true);
+            box(trim, e, o.u, o.bottom - 0.04, (0.09 - depth + 0.02) / 2, o.w / 2 + sw + 0.04, 0.04, (0.09 + depth - 0.02) / 2, trimC, true);
+            frame(flat, e, [[l, o.bottom], [l, o.top], [r, o.top], [r, o.bottom]], architrave(sw), trimC);
             if (o.kind === 'window' && o.pediment) {
               // triangular (1) or segmental (2) pediment on consoles
               const span = o.w / 2 + 0.3, yb = o.top + sw + 0.02;
               box(trim, e, o.u, yb + 0.06, 0.07, span, 0.06, 0.07, trimC, true);
-              if (o.pediment === 1) {
-                const rise = 0.42, len = Math.hypot(span, rise), ang = Math.atan2(rise, span);
-                for (const sd of [-1, 1]) {
-                  const g = new THREE.BoxGeometry(len, 0.09, 0.14).rotateZ(-sd * ang).translate(sd * span / 2, rise / 2, 0.07);
-                  onEdge(trim, g, e, o.u, yb + 0.12, trimC);
-                }
-              } else {
-                const R = span * 1.25, cy = yb + 0.12 - Math.sqrt(R * R - span * span);
-                const a0 = Math.asin(span / R);
-                for (let k = 0; k < 8; k++) {
-                  const t0 = -a0 + (2 * a0 * k) / 8, t1 = -a0 + (2 * a0 * (k + 1)) / 8;
-                  const x0 = Math.sin(t0) * R, y0 = Math.cos(t0) * R, x1 = Math.sin(t1) * R, y1 = Math.cos(t1) * R;
-                  const len = Math.hypot(x1 - x0, y1 - y0);
-                  const g = new THREE.BoxGeometry(len + 0.01, 0.09, 0.14).rotateZ(Math.atan2(y1 - y0, x1 - x0)).translate((x0 + x1) / 2, (y0 + y1) / 2 + cy - yb - 0.12, 0.07);
-                  onEdge(trim, g, e, o.u, yb + 0.12, trimC);
-                }
-              }
+              // raking cornices with a crowning cyma, run up from the base cornice
+              if (o.pediment === 1) frame(trim, e, [[o.u - span, yb + 0.12], [o.u, yb + 0.54], [o.u + span, yb + 0.12]], rake(0.1, 0.14), trimC, true);
+              else frame(trim, e, segmentArc(o.u, yb + 0.12, span, 1.25, 6), rake(0.1, 0.14), trimC, true);
               for (const sd of [-1, 1]) box(trim, e, o.u + sd * (o.w / 2 + 0.12), o.top + sw - 0.12, 0.06, 0.07, 0.14, 0.06, trimC, true); // consoles
             } else if (o.kind === 'window' && hasHoods) {
               box(trim, e, o.u, o.top + sw + 0.07, 0.055, o.w / 2 + 0.22, 0.05, 0.055, trimC, true);
@@ -796,16 +986,14 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
               for (let k = 0; k + 1 < poly.length; k++) {
                 const p0 = poly[k], p1 = poly[k + 1];
                 shop.tri(P(e, o.u, sTop, d - 0.01), P(e, p0.x, p0.y, d - 0.01), P(e, p1.x, p1.y, d - 0.01), nOut, uvAt(o.u, sTop), uvAt(p0.x, p0.y), uvAt(p1.x, p1.y), tintC);
-                const mid = new THREE.Vector2((p0.x + p1.x) / 2 - o.u, (p0.y + p1.y) / 2 - sTop), len = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-                const nR = mid.clone().normalize();
-                const q = (x: number, y: number, k2: number, dd: number) => P(e, x + nR.x * k2, y + nR.y * k2, dd);
-                flat.quad(q(p0.x, p0.y, 0.02, 0.05), q(p0.x, p0.y, 0.22, 0.05), q(p1.x, p1.y, 0.22, 0.05), q(p1.x, p1.y, 0.02, 0.05), nOut, [[0, 0], [0.2, 0], [0.2, len], [0, len]], trimC);
                 if (R(25) < 0.4 && k % 2 === 0) {
                   const ang = Math.atan2(p0.y - sTop, p0.x - o.u), rl = Math.hypot(p0.x - o.u, p0.y - sTop);
                   onEdge(wood, new THREE.BoxGeometry(rl, 0.014, 0.015).translate(rl / 2, 0, 0).rotateZ(ang), e, o.u, sTop, frameC);
                 }
               }
               box(wood, e, o.u, sTop, d + 0.02, o.w / 2, 0.035, 0.025, frameC, true);
+              // moulded stone archivolt and keystone
+              frame(flat, e, [...poly].reverse().map(p => [p.x, p.y]), [[0.02, 0], [0.02, 0.05], [0.036, 0.062], [0.2, 0.062], [0.22, 0.046], [0.22, 0]], trimC, true);
               box(trim, e, o.u, headTop + 0.08, 0.07, 0.09, 0.14, 0.07, trimC, true);   // keystone
             }
             if (doorAt !== null) {
@@ -905,20 +1093,10 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
               wood.tri(P(e, shape[a].x, shape[a].y, -depth), P(e, shape[bb].x, shape[bb].y, -depth), P(e, shape[c].x, shape[c].y, -depth), nOut,
                 [shape[a].x, shape[a].y], [shape[bb].x, shape[bb].y], [shape[c].x, shape[c].y], doorC);
             }
-            // Stone surround: jambs, an arch band and a keystone
-            const jw = o.kind === 'gate' ? 0.28 : 0.2, pd = 0.045;
-            box(flat, e, l - jw / 2, (o.bottom + o.spring!) / 2, pd / 2, jw / 2, (o.spring! - o.bottom) / 2, pd / 2, trimC, true);
-            box(flat, e, r + jw / 2, (o.bottom + o.spring!) / 2, pd / 2, jw / 2, (o.spring! - o.bottom) / 2, pd / 2, trimC, true);
-            const R0 = o.w / 2, R1 = R0 + jw, N = 10;
-            for (let j = 0; j < N; j++) {
-              const a0 = (Math.PI * j) / N, a1 = (Math.PI * (j + 1)) / N;
-              const q = (a: number, R: number, d: number) => P(e, o.u + Math.cos(a) * R, o.spring! + Math.sin(a) * R, d);
-              flat.quad(q(a0, R0, pd), q(a0, R1, pd), q(a1, R1, pd), q(a1, R0, pd), nOut, [[0, 0], [jw, 0], [jw, 0.3], [0, 0.3]], trimC);
-              const am = (a0 + a1) / 2;
-              const nRad = vT(e, Math.cos(am)).add(UP.clone().multiplyScalar(Math.sin(am)));
-              flat.quad(q(a0, R1, 0), q(a1, R1, 0), q(a1, R1, pd), q(a0, R1, pd), nRad, [[0, 0], [0.3, 0], [0.3, pd], [0, pd]], trimC);
-            }
-            box(flat, e, o.u, o.spring! + R0 + jw * 0.4, pd, 0.14, jw * 0.7, pd, trimC, true); // keystone
+            // Stone surround: moulded jambs and arch in one run, and a keystone
+            const jw = o.kind === 'gate' ? 0.28 : 0.2, pd = 0.045, R0 = o.w / 2;
+            frame(flat, e, [[l, o.bottom], ...shape.slice(2).reverse().map(p => [p.x, p.y]), [r, o.bottom]], architrave(jw, pd), trimC, true);
+            box(trim, e, o.u, o.spring! + R0 + jw * 0.4, pd, 0.14, jw * 0.7, pd, trimC, true); // keystone
             // Leaves: meeting stile, lock rail and bottom rail standing proud of the boards
             const lb = -depth + 0.02;
             box(wood, e, o.u, (o.bottom + o.spring! + R0 * 0.6) / 2, lb, 0.05, (o.spring! + R0 * 0.6 - o.bottom) / 2, 0.02, doorC, true);
@@ -930,7 +1108,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
         if (!e.party) {
           const mStart = miterAt(i), mEnd = miterAt((i + 1) % n);
           const doorSpans = openings.filter(o => o.kind === 'door' || o.kind === 'gate' || o.kind === 'shop').map(o => [o.u - o.w / 2 - (o.kind === 'gate' ? 0.3 : 0.22), o.u + o.w / 2 + (o.kind === 'gate' ? 0.3 : 0.22)]);
-          const plinth = [[0, h0], [0.07, h0], [0.07, 0.55], [0.03, 0.62], [0, 0.62]];
+          const plinth = front >= 5 ? plinthProfile(h0, 0.075, 0.52) : [[0, h0], [0.07, h0], [0.07, 0.55], [0.03, 0.62], [0, 0.62]];
           let ua = 0;
           for (const [s0, s1] of doorSpans.sort((p, q) => p[0] - q[0])) {
             extrude(trim, e, ua, s0, plinth, plinthC, ua === 0 ? mStart : null, null);
@@ -939,33 +1117,46 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
           extrude(trim, e, ua, e.L, plinth, plinthC, ua === 0 ? mStart : null, mEnd);
           if (topH > GROUND_F + 2) {
             // Broken where a tall arch rises through it
-            const course = [[0, GROUND_F - 0.12], [0.05, GROUND_F - 0.12], [0.05, GROUND_F + 0.02], [0.08, GROUND_F + 0.05], [0.08, GROUND_F + 0.12], [0, GROUND_F + 0.12]];
+            const sc = front >= 5 ? new Mould(0, GROUND_F - 0.13).out(0.02).cavetto(0.045, 0.045).out(0.012).up(0.14).to(0.055, GROUND_F + 0.085).to(0, GROUND_F + 0.1).p
+              : [[0, GROUND_F - 0.12], [0.07, GROUND_F - 0.08], [0.07, GROUND_F + 0.08], [0, GROUND_F + 0.12]];
             const cuts = openings.filter(o => o.spring !== undefined && o.top + 0.3 > GROUND_F - 0.14).map(o => [o.u - o.w / 2 - 0.32, o.u + o.w / 2 + 0.32]).sort((p, q) => p[0] - q[0]);
             let ca = 0;
-            for (const [c0, c1] of cuts) { extrude(trim, e, ca, c0, course, trimC, ca === 0 ? mStart : null, null); ca = c1; }
-            extrude(trim, e, ca, e.L, course, trimC, ca === 0 ? mStart : null, mEnd);
+            for (const [c0, c1] of cuts) { extrude(trim, e, ca, c0, sc, trimC, ca === 0 ? mStart : null, null); ca = c1; }
+            extrude(trim, e, ca, e.L, sc, trimC, ca === 0 ? mStart : null, mEnd);
           }
-          const topOut = ov > 0 ? Math.max(-0.43, -0.34 * k - 0.03) : 0;
-          const cornice = [[0, -0.78], [0.05, -0.78], [0.05, -0.62], [0.13, -0.56], [0.13, -0.48], [0.3, -0.44], [0.34, -0.44], [0.34, topOut], [0, ov > 0 ? -0.03 : 0]]
-            .map(([d, h]) => [d, topH + h]);
+          // Main cornice, tucked under the eave's soffit (buildings.ts): a band, a cyma reversa bed moulding,
+          // the frieze (with brackets), an ovolo, the corona and a crowning cyma recta. Its top runs on up
+          // inside the eave, so the cornice stays closed against the soffit even where the wall sags.
+          const T = ov > 0 ? -EAVE.fasciaDetail - 0.25 * k : -0.06;   // the soffit over the cornice's front
+          const cm = front >= 5
+            ? new Mould(0, -0.78).out(0.035).to(0.035, T - 0.37).reversa(0.04, 0.06, 3).out(0.01).up(0.01)
+              .to(0.085, T - 0.205).ovolo(0.04, 0.035).up(0.01).out(0.055).up(0.06).out(0.01).up(0.01).recta(0.06, 0.08).up(0.05)
+            : new Mould(0, -0.78).out(0.04).to(0.04, T - 0.3).to(0.1, T - 0.25).to(0.1, T - 0.16).to(0.24, T - 0.12).to(0.24, T + 0.04);   // courtyards: plain
+          const cornice = [...cm.p, [0, ov > 0 ? -EAVE.fasciaDetail + 0.05 : 0]].map(([d, h, sm]) => [d, topH + h, sm ?? 0]);
           extrude(trim, e, 0, e.L, cornice, trimC, mStart, mEnd);
           // Corner pilasters on convex street corners
           if (hasPilasters) {
             const ep = edges[(i - 1 + n) % n], en = edges[(i + 1) % n];
             const convex = (a: Edge, c: Edge) => c.tx * a.nx + c.tz * a.nz < -0.3;
             const ph = (0.62 + topH - 0.78) / 2, phh = (topH - 0.78 - 0.62) / 2;
-            if (!ep.party && convex(ep, e) && e.L > 1.6) box(flat, e, 0.25, ph, 0.02, 0.25, phh, 0.02, trimC, true);
-            if (!en.party && convex(e, en) && e.L > 1.6) box(flat, e, e.L - 0.25, ph, 0.02, 0.25, phh, 0.02, trimC, true);
+            // (each runs 4 cm past the corner so the arris is solid)
+            if (!ep.party && convex(ep, e) && e.L > 1.6) box(flat, e, 0.23, ph, 0.02, 0.27, phh, 0.02, trimC, true);
+            if (!en.party && convex(e, en) && e.L > 1.6) box(flat, e, e.L - 0.23, ph, 0.02, 0.27, phh, 0.02, trimC, true);
           } else {
-            // rusticated quoins on convex street corners: alternating long and short blocks
+            // rusticated quoins on convex street corners: dressed stones, long and short in turn so they bond
+            // round the corner (the courses are shared by both faces), each a little different in length,
+            // height and projection, with a broad chamfer; each overlaps the corner by its depth so the arris is solid
             const ep = edges[(i - 1 + n) % n], en = edges[(i + 1) % n];
             const convex = (a: Edge, c: Edge) => c.tx * a.nx + c.tz * a.nz < -0.3;
             for (const [ok, u, sd] of [[!ep.party && convex(ep, e), 0, 1], [!en.party && convex(e, en), e.L, -1]] as [boolean, number, number][]) {
-              if (!ok || e.L < 2) continue;
-              let k = 0;
-              for (let y = 0.7; y < topH - 1.0; y += 0.42, k++) {
-                const w = k % 2 ? 0.45 : 0.8;
-                box(flat, e, u + sd * w / 2, y + 0.18, 0.03, w / 2, 0.18, 0.03, trimC, true);
+              if (!ok || e.L < 2 || front < 5) continue;   // courtyard corners keep plain arrises
+              const qs = hashString(`${b.id}:q:${(e.ax + e.tx * u).toFixed(1)},${(e.az + e.tz * u).toFixed(1)}`);
+              for (let y = 0.7, k = 0; ; k++) {
+                const hh = 0.33 + 0.05 * rnd(qs, k), gap = 0.05 + 0.02 * rnd(qs, k + 50);
+                if (y + hh > topH - 1.0) break;
+                const w = ((k + (sd < 0 ? 1 : 0)) % 2 ? 0.45 : 0.8) + 0.1 * (rnd(eseed, 200 + k) - 0.5), dq = 0.024 + 0.008 * rnd(eseed, 300 + k);
+                box(flat, e, u + (sd * (w - 2 * dq)) / 2, y + hh / 2, dq, (w + 2 * dq) / 2, hh / 2, dq, trimC, true, 0.022);
+                y += hh + gap;
               }
             }
           }
@@ -984,17 +1175,39 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
               lamps.push({ pos: P(e, uL, GROUND_F + 0.72, 0.85), ground: new THREE.Vector2(g.x, g.z) });
             }
           }
-          // cornice brackets (c.1900 houses)
-          if (bracketed) for (let u = 0.5; u < e.L - 0.3; u += 0.95) box(trim, e, u, topH - 0.62, 0.2, 0.07, 0.1, 0.18, trimC, true);
-          // downpipes at both ends with a hopper, and the eave gutter
-          if (e.L > 4 && topH > 5) {
-            const pipeC = new THREE.Color('#6f7478');
-            for (const u of [0.28, e.L - 0.28]) {
-              const cyl = new THREE.CylinderGeometry(0.055, 0.055, topH - 0.5, 6).translate(0, (topH - 0.5) / 2, 0);
-              onEdge(metal, cyl, e, u, 0.05, pipeC);
-              onEdge(metal, new THREE.CylinderGeometry(0.14, 0.06, 0.28, 6).translate(0, topH - 0.34, 0), e, u, 0.05, pipeC);
+          // cornice brackets (c.1900 houses): consoles through the frieze and bed mouldings, carrying the
+          // corona, on the street fronts
+          if (bracketed && front >= 5) for (let u = 0.5; u < e.L - 0.3; u += 0.9) {
+            box(trim, e, u, topH + T - 0.21, 0.088, 0.06, 0.05, 0.088, trimC, true);
+            box(trim, e, u, topH + T - 0.31, 0.055, 0.05, 0.05, 0.055, trimC, true);
+          }
+          // the eave gutter: half-round sheet metal hung just off the fascia, with a rolled bead, turning the
+          // corners; straight like the eave it hangs from (a copy of the edge without the wall's warp)
+          const pipeC = new THREE.Color('#6f7478'), eg: Edge = { ...e, knots: undefined };
+          const gr = 0.075, gd = ov + 0.015, gh = topH - ov * k - 0.05;
+          if (ov > 0 && b.roof) {
+            const gut = [[gd, gh]];
+            for (let j = 1; j <= 6; j++) gut.push([gd + gr - Math.cos((Math.PI * j) / 6) * gr, gh - Math.sin((Math.PI * j) / 6) * gr, j < 6 ? 1 : 0]);
+            gut.push([gd + 2 * gr + 0.011, gh + 0.007, 1], [gd + 2 * gr + 0.018, gh - 0.007]);
+            extrude(metal, eg, 0, e.L, gut, pipeC, mStart, mEnd, false);
+            for (const [u, m, sg] of [[0, mStart, -1], [e.L, mEnd, 1]] as const) {
+              if (m) continue;   // a stop end where the gutter doesn't turn a corner
+              for (let j = 0; j < 6; j++) metal.tri(P(eg, u, gh, gd + gr), P(eg, u, gut[j][1], gut[j][0]), P(eg, u, gut[j + 1][1], gut[j + 1][0]), vT(e, sg), [0, 0], [0.1, 0], [0.1, 0.1], pipeC);
             }
-            if (ov > 0) box(metal, e, e.L / 2, topH - 0.04, ov + 0.1, e.L / 2, 0.06, 0.07, pipeC);
+          }
+          // downpipes at both ends: an outlet from the gutter, down in front of the cornice, a swan neck back
+          // to the wall, then down on clips to a shoe that throws the water clear of the plinth
+          if (e.L > 4 && topH > 5) {
+            const dG = ov > 0 ? gd + gr : 0.3, hB = ov > 0 ? gh - gr : topH - 0.3, hA = topH - 0.86, hC = hA - 0.32, dP = 0.13;
+            for (const u of [0.28, e.L - 0.28]) {
+              const g0 = P(e, u, 0, 0.5), hl = Math.max(h0 + 0.2, terrain.heightAt(g0.x, g0.z) - e.gy);
+              onEdge(metal, new THREE.CylinderGeometry(0.068, 0.05, 0.1, 8, 1, true).translate(0, hB - 0.03, dG), eg, u, 0, pipeC);
+              pipe(metal, eg, u, [hB - 0.07, dG], [hA, dG], 0.05, pipeC);
+              pipe(metal, eg, u, [hA, dG], [hC, dP], 0.05, pipeC);
+              pipe(metal, e, u, [hC, dP], [hl + 0.3, dP], 0.055, pipeC);
+              pipe(metal, e, u, [hl + 0.3, dP], [hl + 0.1, dP + 0.15], 0.055, pipeC);
+              if (front >= 5) for (let y = hl + 1.5; y < hC - 0.5; y += 2.6) onEdge(iron, new THREE.CylinderGeometry(0.064, 0.064, 0.035, 6, 1, true).translate(0, 0, dP), e, u, y, cWhite.set('#ffffff'));   // pipe clips
+            }
           }
         }
         // flower boxes under some upper windows (street fronts)
@@ -1034,22 +1247,12 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
     });
 
     // --- Hero roof: low sheet-metal hip roof from the skeleton, with dormers ------------------------
+    // (sagging a little like the others, with folded caps on the hips and ridge)
     if (b.style && b.roof) {
-      const V = b.roof.v, kk = Math.min(b.roof.k, 0.42);
-      const tris: THREE.Vector3[][] = [];
-      const vy = (i: number) => b.eaveY + V[i * 3 + 2] * kk;
-      for (const face of b.roof.f) {
-        const contour = face.map(i => new THREE.Vector2(V[i * 3], V[i * 3 + 1]));
-        for (const [a, c, d] of THREE.ShapeUtils.triangulateShape(contour, [])) {
-          tris.push([face[a], face[c], face[d]].map(i => new THREE.Vector3(V[i * 3], vy(i), V[i * 3 + 1])));
-        }
-      }
-      const roofC = new THREE.Color('#7b8184');
-      for (const [a, c, d] of tris) {
-        const n = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(c, a), new THREE.Vector3().subVectors(d, a)).normalize();
-        if (n.y < 0) n.negate();
-        metal.tri(a, c, d, n, [a.x, a.z], [c.x, c.z], [d.x, d.z], roofC);
-      }
+      const m = roofModel(b, Math.min(b.roof.k, 0.42)), roofC = new THREE.Color('#7b8184');
+      const put = (p: THREE.Vector3[], nn: THREE.Vector3[], uv: number[][]) => metal.tri(p[0], p[1], p[2], nn[0], uv[0], uv[1], uv[2], roofC, undefined, nn);
+      m.eachTri((p, nn) => put(p, nn, p.map(q => [q.x, q.z])));
+      roofCaps(m, true, false, put);
     }
 
     // --- Chimneys on the ridge ----------------------------------------------------------------------
@@ -1075,8 +1278,9 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
         if (L > best) { best = L; ex.tx = (c[0] - a[0]) / L; ex.tz = (c[1] - a[1]) / L; ex.nx = ex.tz; ex.nz = -ex.tx; }
       }
       const chimC = tint.clone().multiplyScalar(0.88), capC = new THREE.Color('#857f76');
+      const rm = roofModel(b, b.style ? Math.min(k, 0.42) : k);   // stand on the (sagging) roof
       for (const [x, z, t] of picks) {
-        const ridge = b.eaveY + t * k;
+        const ridge = rm.at(x, z, t).y;
         const f = { ...ex, ax: x, az: z };
         box(trim, f, 0, ridge + 0.2, 0, 0.42, 1.2, 0.28, chimC);
         box(trim, f, 0, ridge + 1.44, 0, 0.52, 0.05, 0.38, capC);
@@ -1088,14 +1292,16 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
 
   const group = new THREE.Group();
   group.name = 'facades';
-  for (const [builder, mat, cast] of [[wall, mats.wall, true], [trim, mats.trim, true], [flat, mats.trim, false], [glass, mats.glass, false], [wood, mats.wood, true], [canvas, mats.canvas, true], [iron, mats.iron, false], [metal, mats.metal, true], [shop, mats.shopGlass, false], [sign, mats.signs, false]] as const) {
-    const g = builder.geometry();
-    if (!g) continue;
-    stats.triangles += g.getAttribute('position').count / 3;
-    const mesh = new THREE.Mesh(g, mat);
-    mesh.castShadow = cast;
-    mesh.receiveShadow = true;
-    group.add(mesh);
+  for (const c of chunks.values()) {
+    for (const [builder, mat, cast] of [[c.wall, mats.wall, true], [c.trim, mats.trim, true], [c.flat, mats.trim, false], [c.glass, mats.glass, false], [c.wood, mats.wood, true], [c.canvas, mats.canvas, true], [c.iron, mats.iron, false], [c.metal, mats.metal, true], [c.shop, mats.shopGlass, false], [c.sign, mats.signs, false]] as const) {
+      const g = builder.geometry();
+      if (!g) continue;
+      stats.triangles += g.getAttribute('position').count / 3;
+      const mesh = new THREE.Mesh(g, mat);
+      mesh.castShadow = cast;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    }
   }
   for (const x of extras) group.add(x);
   return { group, stats, lamps };
