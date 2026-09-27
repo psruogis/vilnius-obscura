@@ -5,7 +5,7 @@ import type { PromenadeMaterials } from './materials';
 import { townHallFrame, TOWN_HALL_SIZE } from './townhall';
 import { mbox, merged, trianglesToGeometry } from './geom';
 import { treeGeometry } from './trees';
-import { bevelBox, sweep, lathe, type P2 } from './classical';
+import { bevelBox, sweep, lathe, steadyAge, type P2 } from './classical';
 import { buildLawn, type LawnPanel } from './lawn';
 import { WET, RAIN_TIME } from '../render/weather';
 import { age } from './ageing';
@@ -41,6 +41,11 @@ const PANELS: LawnPanel[] = [
   { s0: 93.5, s1: 121.7, t0: -LAWN_T, t1: LAWN_T, r: 2.2, hole: [0, 0, 6.4] },
 ];
 const BASIN_S = (PANELS[2].s0 + PANELS[2].s1) / 2, BASIN_R = 4.2;
+// A cast-iron lamp standard, turned: moulded foot, fluted-looking drum, a ringed shaft, the lantern's seat
+const LAMP_POST: P2[] = [[0.27, 0], [0.27, 0.07], [0.24, 0.09], [0.24, 0.15], [0.2, 0.18], [0.22, 0.22], [0.19, 0.27], [0.16, 0.3], [0.15, 0.52],
+  [0.17, 0.55], [0.17, 0.6], [0.12, 0.66], [0.095, 0.74], [0.085, 0.8], [0.083, 1.36], [0.1, 1.39], [0.1, 1.45], [0.078, 1.49], [0.06, 3.5],
+  [0.085, 3.54], [0.085, 3.61], [0.058, 3.65], [0.055, 3.95], [0.09, 3.98], [0.125, 4.04], [0.125, 4.1], [0.1, 4.16], [0.1, 4.24],
+  [0.15, 4.27], [0.15, 4.3], [0.1, 4.31], [0, 4.31]];
 const CURB_W = 0.42, CURB_H = 0.16; // the fence curb
 
 export interface Promenade { group: THREE.Group; segments: [number, number, number, number][]; update(dt: number): void; lamps: LampSpot[] }
@@ -220,15 +225,24 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
     new THREE.CircleGeometry(0.9, 24).rotateX(-Math.PI / 2).translate(bp.x, bp.y + 1.43, bp.z),     // the bowl, brim-full
   ];
   segments.push(...ringSegments(bp, R + 0.12, 16));
+  // the fountain running: a low jet from the finial, and the bowl overflowing in a thin veil
+  const falls: THREE.BufferGeometry[] = [
+    lathe([[1.13, 1.45], [1.16, 1.36], [1.2, 1.1], [1.25, 0.75], [1.3, 0.43]], 48).translate(bp.x, bp.y, bp.z),
+    lathe([[0.03, 1.9], [0.022, 2.2], [0.012, 2.42], [0, 2.46]], 10).translate(bp.x, bp.y, bp.z),
+    lathe([[0.02, 2.4], [0.09, 2.36], [0.16, 2.2], [0.2, 1.95]], 16).translate(bp.x, bp.y, bp.z),   // falling back round it
+  ];
   // cast-iron gas lamps just outside both fences
   const iron: THREE.BufferGeometry[] = [];
   const lamps: LampSpot[] = [];
   for (let s = 10; s < S_END - 4; s += 18) {
     for (const side of [-1, 1]) {
       const lp = world(s + (side > 0 ? 9 : 0), side * (HALF + 0.9));
-      iron.push(new THREE.CylinderGeometry(0.2, 0.26, 0.6, 10).translate(lp.x, lp.y + 0.3, lp.z));
-      iron.push(new THREE.CylinderGeometry(0.06, 0.09, 3.5, 8).translate(lp.x, lp.y + 2.3, lp.z));
-      iron.push(new THREE.CylinderGeometry(0.12, 0.07, 0.25, 8).translate(lp.x, lp.y + 4.1, lp.z));
+      iron.push(lathe(LAMP_POST, 12, { hard: 50 }).translate(lp.x, lp.y, lp.z));
+      for (let k = 0; k < 6; k++) {                                                    // the lantern's glazing bars
+        const a = (k / 6) * Math.PI * 2 + Math.PI / 6, bar = bevelBox(0.022, 0.42, 0.022, 0, 0, 0, 0.006).rotateZ(-0.12);
+        iron.push(bar.rotateY(-a).translate(lp.x + Math.cos(a) * 0.125, lp.y + 4.5, lp.z + Math.sin(a) * 0.125));
+      }
+      iron.push(new THREE.SphereGeometry(0.045, 8, 6).translate(lp.x, lp.y + 5.1, lp.z)); // finial
       lamps.push({ pos: new THREE.Vector3(lp.x, lp.y + 4.5, lp.z), ground: new THREE.Vector2(lp.x - (lp.x - world(s, 0).x) * 0.12, lp.z - (lp.z - world(s, 0).z) * 0.12) }); // glass: lamps.ts
       iron.push(new THREE.ConeGeometry(0.3, 0.3, 6).translate(lp.x, lp.y + 4.93, lp.z));
       iron.push(mbox(0.5, 0.04, 0.04, 0, 3.7, 0).applyMatrix4(new THREE.Matrix4().makeTranslation(lp.x, lp.y, lp.z))); // ladder bar
@@ -261,10 +275,11 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
 
   // --- Materials of our own: granite kerbs, bare earth, wet gravel -------------------------------
   const granite = new THREE.MeshStandardMaterial({ color: '#aaa397', roughness: 0.9, map: (mats.stone as THREE.MeshStandardMaterial).map });
-  const kerbMat = damp(age(granite, { strength: 1.2, seed: 9 }) as THREE.MeshStandardMaterial, 0.6); // worn grey granite
+  const kerbMat = damp(steadyAge(age(granite, { strength: 1.2, seed: 9 })) as THREE.MeshStandardMaterial, 0.6); // worn grey granite
   const soilMat = damp(new THREE.MeshStandardMaterial({ color: '#4a3b2c', roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), 0.55);
   damp(mats.gravel, 0.75, 'gravel');
   damp(mats.water, 1, 'water');
+  steadyAge(mats.stone);                       // the basin, fountain and posts are turned or small
   const barkMat = mats.bark.clone() as THREE.MeshStandardMaterial;
   barkMat.color.set('#71675b');               // linden bark: grey-brown, not black
 
@@ -288,6 +303,7 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
   add(gravel, mats.gravel, false, 'promenade-gravel');
   add(soil, soilMat, false);
   add(water, mats.water, false);
+  add(falls, fallingWater((mats.leaves.userData.time ?? { value: 0 }) as { value: number }), false);
   add(iron, mats.iron);
   group.add(lawns);
   const clock = (mats.leaves.userData.time ?? { value: 0 }) as { value: number };
@@ -360,6 +376,29 @@ function damp(m: THREE.MeshStandardMaterial, dark: number, kind: 'plain' | 'grav
   };
   m.customProgramCacheKey = () => `${ownKey}|damp-${kind}${dark}`;
   m.needsUpdate = true;
+  return m;
+}
+
+/** Thin falling water: translucent, streaked, the streaks running down (uv.y runs down the sheet). */
+function fallingWater(clock: { value: number }): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ color: '#dfe6e2', roughness: 0.08, metalness: 0, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  m.onBeforeCompile = shader => {
+    shader.uniforms.uFallTime = clock;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vFallUv;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvFallUv = uv;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        varying vec2 vFallUv; uniform float uFallTime;
+        float fw_h(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+        float fw_n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(fw_h(i), fw_h(i + vec2(1, 0)), f.x), mix(fw_h(i + vec2(0, 1)), fw_h(i + vec2(1, 1)), f.x), f.y); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        // streaks falling, broken up as the sheet thins towards the bottom
+        float fwS = fw_n(vec2(vFallUv.x * 14.0, vFallUv.y * 2.5 - uFallTime * 3.2)) * 0.6 + fw_n(vec2(vFallUv.x * 37.0, vFallUv.y * 6.0 - uFallTime * 4.5)) * 0.4;
+        diffuseColor.a = clamp(0.1 + 0.55 * smoothstep(0.35, 0.8, fwS), 0.0, 1.0) * (1.0 - 0.5 * smoothstep(0.4, 1.0, vFallUv.y));`);
+  };
+  m.customProgramCacheKey = () => 'falling-water';
   return m;
 }
 

@@ -334,6 +334,31 @@ export function overhangOcclusion(g: THREE.BufferGeometry, ySoffit: number | ((x
   g.setAttribute('aOcc', new THREE.Float32BufferAttribute(out, 1));
 }
 
+/**
+ * age() (ageing.ts) lays its stains along a wall using the direction of the surface normal; on turned
+ * work far from the world origin that coordinate spins round with the normal and the pattern
+ * shatters into chevrons. Where the surface curves (the normal turns faster than 1/25 m⁻¹), use a
+ * plain horizontal world coordinate instead; flat faces are unchanged. A no-op if age() isn't on the material.
+ */
+export function steadyAge(m: THREE.Material): THREE.Material {
+  const own = m.onBeforeCompile;
+  const ownKey = m.customProgramCacheKey();
+  // the stain coordinate, and the one for the bumps of the hand-laid render
+  const AGE_Q = 'vec2 q = vertical > 0.5 ? vec2(dot(p.xz, normalize(vec2(-n.z, n.x) + 1e-5)), p.y) : p.xz;';
+  const AGE_QQ = 'vec2 qq = abs(nw.y) < 0.7 ? vec2(dot(pw.xz, normalize(vec2(-nw.z, nw.x) + 1e-5)), pw.y) : pw.xz;';
+  m.onBeforeCompile = (shader, renderer) => {
+    own.call(m, shader, renderer);
+    shader.fragmentShader = shader.fragmentShader
+      .replace(AGE_Q, `${AGE_Q}
+        if (vertical > 0.5 && length(fwidth(n)) > 0.04 * length(fwidth(p))) q = vec2((p.x + p.z) * 0.7071, p.y); // radius under 25 m`)
+      .replace(AGE_QQ, `${AGE_QQ}
+        if (abs(nw.y) < 0.7 && length(fwidth(nw)) > 0.04 * length(fwidth(pw))) qq = vec2((pw.x + pw.z) * 0.7071, pw.y);`);
+  };
+  m.customProgramCacheKey = () => `${ownKey}|steadyage`;
+  m.needsUpdate = true;
+  return m;
+}
+
 /** Lets a material use the baked `aOcc`: sky and bounce light are cut, direct sun is left alone. */
 export function occlusion(m: THREE.Material): THREE.Material {
   const own = m.onBeforeCompile;

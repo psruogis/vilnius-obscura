@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { trianglesToGeometry } from './geom';
-import { bevelBox, sweep, lathe, grid, mergeParts, bakeOcclusion, overhangOcclusion, occlusion, type P2, type Occluder } from './classical';
+import { bevelBox, sweep, lathe, grid, mergeParts, bakeOcclusion, overhangOcclusion, occlusion, steadyAge, type P2, type Occluder } from './classical';
 import type { Building } from './area';
 
 /*
@@ -452,6 +452,7 @@ export function buildTownHall(b: Building, mats: TownHallMaterials): THREE.Group
     group.add(mesh);
   };
   for (const m of [mats.wall, mats.stone, mats.plinth, mats.wood, mats.glass]) occlusion(m);
+  steadyAge(mats.stone);
   // the order and its dressings in a paler, cooler stone than the honey render, as in the elevations
   (mats.stone as THREE.MeshStandardMaterial).color.set('#e7d6b2');
   add(wall, mats.wall);

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Building, XZ } from './area';
 import { mbox, merged, trianglesToGeometry } from './geom';
-import { bevelBox, sweep, lathe, type P2 } from './classical';
+import { bevelBox, sweep, lathe, steadyAge, type P2 } from './classical';
 
 /*
  * St Casimir's Church. West front after the c.1900 photographs (the owner's reference), or with
@@ -440,6 +440,7 @@ export function buildStCasimir(b: Building, mats: ChurchMaterials, variant: 'pho
     mesh.receiveShadow = true;
     group.add(mesh);
   };
+  steadyAge(mats.wall); steadyAge(mats.stone);
   add(wall, mats.wall);
   add(stone, mats.stone);
   add(roof, mats.roof);
