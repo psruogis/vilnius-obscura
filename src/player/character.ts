@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { loadFolk, dress, figure, figureMaterial, measureGait, type Outfit, type Palette } from '../world/folk';
 
 /** Low-poly models ship flat-shaded; weld shared vertices and recompute normals for smooth, rounded forms. */
 export function smoothShade(root: THREE.Object3D): void {
@@ -16,67 +16,39 @@ export function smoothShade(root: THREE.Object3D): void {
 }
 
 /**
- * The walker's body: a CC0 Quaternius figure (Poly Pizza) recoloured in dull c.1800 cloth colours,
- * blending idle / walk / run by ground speed.
+ * The walker's body: one of the townsfolk (Quaternius' CC0 Universal Base Characters and Animation
+ * Library, dressed in folk.ts), blending idle / walk / jog by ground speed with stride-matched feet.
+ * Out in the rain without an umbrella: his hat and shoulders darken and shine as they soak.
  */
 
 export interface CharacterSpec {
-  url: string;
-  height: number;                      // metres, feet to crown
-  hide: string[];                      // node names to hide (props that don't belong in 1800)
-  palette: Record<string, string>;     // material name -> sRGB colour
-  /** Pull the parts using these materials towards the spine (softens fantasy shoulder guards into a cape). */
-  soften?: { materials: string[]; xScale: number; yDrop: number }; // yDrop: fraction of the part's height lost at its top
+  outfit: Outfit;
+  palette: Palette;
+  height: number;                                             // metres, feet to crown
+  clips: { idle: string; alt?: string; walk: string; run: string };
 }
 
-// Plain townsman: dark brown coat, fawn waistcoat, grey-brown breeches, black shoes, dull brass.
-export const TOWNSMAN: CharacterSpec = {
-  url: 'assets/char/adventurer.glb',
-  height: 1.74,
-  hide: ['Backpack'],
-  palette: {
-    Green: '#4a3b2d', LightGreen: '#8a7658', Brown: '#3a2c20', Brown2: '#2a2019', Grey: '#5d5852',
-    Black: '#1b1917', Gold: '#7d6c4e', Hair: '#3b2a1d',
-  },
-};
-
-// Hooded traveller: brown wool hood and coat; the model's shoulder guards, dyed to match, read as the
-// shoulder cape of a c.1800 caped greatcoat. Breeches and boots.
+// A traveller come to town: a caped greatcoat (the cape for the rain), bowler, full beard.
 export const TRAVELLER: CharacterSpec = {
-  url: 'assets/char/hooded_adventurer.glb',
-  height: 1.72,
-  hide: ['Sword'],
-  soften: { materials: ['Metal', 'Metal_Dark'], xScale: 0.8, yDrop: 0.3 },
+  outfit: { sex: 'm', coat: 'caped', hat: 'bowler', beard: 'full', hair: 'parted' },
   palette: {
-    LightBrown: '#5a4634', DarkBrown: '#34271d', Brown2: '#4a3a2c', Brown: '#2a1f17',
-    White: '#3a2a1e', // the model's hair
-    Black: '#1b1917', Metal: '#4a3b2d', Metal_Dark: '#3b2f24', Gold: '#6d5f47',
+    skin: '#fff4ec', hair: '#3b2a1d', coat: '#3a3128', lower: '#2c2824', linen: '#e8e2d4', hat: '#1a1714', leather: '#17120e',
+    accent: '#4a3e30', lining: '#1a1512', brolly: '#161616', wood: '#3a2a1e',
   },
+  height: 1.76,
+  clips: { idle: 'Idle_Loop', alt: 'Idle_FoldArms_Loop', walk: 'Walk_Loop', run: 'Jog_Fwd_Loop' },
 };
 
-/** Scales the vertices drawn with the given materials towards the model's centre line, in bind pose. */
-function softenParts(mesh: THREE.Mesh, mats: THREE.Material[], opt: NonNullable<CharacterSpec['soften']>): void {
-  const g = mesh.geometry;
-  const pos = g.getAttribute('position') as THREE.BufferAttribute;
-  const index = g.getIndex();
-  const hit = new Set<number>();
-  const groups = g.groups.length ? g.groups : [{ start: 0, count: index ? index.count : pos.count, materialIndex: 0 }];
-  for (const grp of groups) {
-    const m = mats[grp.materialIndex ?? 0];
-    if (!m || !opt.materials.includes(m.name)) continue;
-    for (let i = grp.start; i < grp.start + grp.count; i++) hit.add(index ? index.getX(i) : i);
-  }
-  if (!hit.size) return;
-  let yMax = -Infinity, yMin = Infinity;
-  for (const v of hit) { yMax = Math.max(yMax, pos.getY(v)); yMin = Math.min(yMin, pos.getY(v)); }
-  const span = Math.max(1e-6, yMax - yMin);
-  for (const v of hit) {
-    pos.setX(v, pos.getX(v) * opt.xScale);
-    pos.setY(v, pos.getY(v) - opt.yDrop * span * ((pos.getY(v) - yMin) / span)); // flatten the raised tips
-  }
-  pos.needsUpdate = true;
-  g.computeVertexNormals();
-}
+// A townsman: black frock coat, top hat, moustache; the formal walk.
+export const TOWNSMAN: CharacterSpec = {
+  outfit: { sex: 'm', coat: 'frock', hat: 'top', beard: 'moustache', hair: 'parted' },
+  palette: {
+    skin: '#fff6f0', hair: '#2e241b', coat: '#1d1c1b', lower: '#34312d', linen: '#ece7da', hat: '#121110', leather: '#141210',
+    accent: '#3a3228', lining: '#0e0d0c', brolly: '#161616', wood: '#3a2a1e',
+  },
+  height: 1.76,
+  clips: { idle: 'Idle_Loop', alt: 'Idle_FoldArms_Loop', walk: 'Walk_Formal_Loop', run: 'Jog_Fwd_Loop' },
+};
 
 /** What the animation needs from the walker each frame. */
 export interface Motion { speed: number; angularVelocity: number; forwardAccel: number; facing: number; lookYaw: number; lookPitch: number }
@@ -101,91 +73,39 @@ export class Character {
   /** Called when a foot touches the ground while moving (0 = left, 1 = right), with the speed. */
   onStep: ((foot: number, speed: number) => void) | null = null;
 
-  private constructor(private readonly root: THREE.Object3D, clips: THREE.AnimationClip[]) {
-    const find = (name: string) => clips.find(k => k.name === name || k.name.endsWith(`|${name}`)) ?? null;
-    const need = (name: string) => { const c = find(name); if (!c) throw new Error(`clip ${name} missing`); return c; };
+  private constructor(private readonly root: THREE.Object3D, clips: Record<string, THREE.AnimationClip>, spec: CharacterSpec) {
+    const need = (name: string) => { const c = clips[name]; if (!c) throw new Error(`clip ${name} missing`); return c; };
     this.lean.add(root);
     this.object.add(this.lean);
     this.mixer = new THREE.AnimationMixer(root);
-    this.idle = this.mixer.clipAction(need('Idle'));
-    const alt = find('Idle_Neutral');
-    this.idleAlt = alt ? this.mixer.clipAction(alt) : null;
-    const bone = (n: string) => root.getObjectByName(n) ?? root.getObjectByName(n.replace('.', '')) ?? null;
-    this.neck = bone('Neck'); this.head = bone('Head');
-    this.footL = bone('LowerLeg.L_end') ?? bone('LowerLegL_end'); this.footR = bone('LowerLeg.R_end') ?? bone('LowerLegR_end');
-    this.walk = this.gait(need('Walk'));
-    this.run = this.gait(need('Run'));
+    this.idle = this.mixer.clipAction(need(spec.clips.idle));
+    this.idleAlt = spec.clips.alt ? this.mixer.clipAction(need(spec.clips.alt)) : null;
+    const bone = (n: string) => root.getObjectByName(n) ?? null;
+    this.neck = bone('neck_01'); this.head = bone('Head');
+    this.footL = bone('ball_l'); this.footR = bone('ball_r');
+    this.walk = this.gait(need(spec.clips.walk), 1.45);
+    this.run = this.gait(need(spec.clips.run), 2.6);
     for (const a of [this.idle, this.idleAlt, this.walk.action, this.run.action]) { if (!a) continue; a.play(); a.setEffectiveWeight(0); }
     this.idle.setEffectiveWeight(1);
     this.walk.action.timeScale = 0; this.run.action.timeScale = 0;   // their time is driven by the shared stride phase
   }
 
-  /**
-   * Measures a locomotion clip: how far the body travels per cycle (from the planted foot sliding back
-   * in the in-place animation) and when the left foot lands, so walk and run can share one phase.
-   */
-  private gait(clip: THREE.AnimationClip): Gait {
+  /** Measures a locomotion clip, so walk and run can share one stride phase. */
+  private gait(clip: THREE.AnimationClip, fallback: number): Gait {
     const action = this.mixer.clipAction(clip);
-    const foot = this.footL, N = 60, dur = clip.duration;
-    let cycleDist = clip.name.includes('Run') ? 2.6 : 1.45, offset = 0;
-    if (foot) {
-      const probe = new THREE.AnimationMixer(this.root);
-      const pa = probe.clipAction(clip); pa.play();
-      const ys: number[] = [], zs: number[] = [];
-      const v = new THREE.Vector3();
-      for (let i = 0; i <= N; i++) {
-        probe.setTime((i / N) * dur);
-        this.root.updateMatrixWorld(true);
-        foot.getWorldPosition(v);
-        this.object.worldToLocal(v);
-        ys.push(v.y); zs.push(v.z);
-      }
-      probe.stopAllAction(); probe.uncacheRoot(this.root);
-      const yMin = Math.min(...ys);
-      let dz = 0, n = 0, land = -1;
-      for (let i = 0; i < N; i++) {
-        if (ys[i] < yMin + 0.03 && ys[i + 1] < yMin + 0.03) { dz += Math.abs(zs[i + 1] - zs[i]); n++; if (land < 0 && (i === 0 || ys[i - 1] >= yMin + 0.03)) land = i; }
-      }
-      if (n > 3) {
-        const stanceSpeed = (dz / n) / (dur / N);   // m/s the planted foot slides back = ground speed
-        cycleDist = THREE.MathUtils.clamp(stanceSpeed * dur, 0.6, 4);
-      }
-      offset = land >= 0 ? land / N : 0;
-    }
-    return { action, duration: dur, cycleDist, offset };
+    const g = this.footL ? measureGait(this.root, this.object, clip, this.footL, fallback) : { cycleDist: fallback, offset: 0 };
+    return { action, duration: clip.duration, ...g };
   }
 
   static async load(spec: CharacterSpec): Promise<Character> {
-    const gltf = await new GLTFLoader().loadAsync(spec.url);
-    const root = gltf.scene;
-    smoothShade(root);
-    for (const name of spec.hide) {
-      const n = root.getObjectByName(name);
-      if (n) n.visible = false;
-    }
-    root.traverse(o => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.frustumCulled = false; // skinned bounds don't follow the animation
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      if (spec.soften) softenParts(mesh, mats, spec.soften);
-      for (const m of mats as THREE.MeshStandardMaterial[]) {
-        const c = spec.palette[m.name];
-        if (c) m.color.set(c);
-        m.roughness = 0.9;
-        m.metalness = m.name === 'Gold' ? 0.4 : 0; // the 'Metal' parts are dyed wool now
-      }
-    });
-    // Scale to the wanted height, feet on the ground, facing -Z (the models face +Z).
-    root.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(root);
-    const s = spec.height / (box.max.y - box.min.y);
-    root.scale.setScalar(s);
-    root.position.y = -box.min.y * s;
-    root.rotation.y = Math.PI;
-    return new Character(root, gltf.animations);
+    const folk = await loadFolk();
+    const F = folk[spec.outfit.sex];
+    const geo = dress(F, spec.outfit);
+    const fig = figure(F, geo, figureMaterial(F, spec.palette, { exposed: 1, paint: geo.paint, outfit: spec.outfit }));
+    // to the wanted height, facing -Z (the figures face +Z)
+    fig.root.scale.setScalar(spec.height / F.height);
+    fig.root.rotation.y = Math.PI;
+    return new Character(fig.root, F.clips, spec);
   }
 
   /** Blend space by speed with phase-synced, stride-matched walk/run; leaning; head look; footsteps. */
@@ -225,7 +145,7 @@ export class Character {
     let off = m.lookYaw - m.facing;
     off = Math.atan2(Math.sin(off), Math.cos(off));
     const yawT = Math.abs(off) > 2.3 ? 0 : THREE.MathUtils.clamp(off, -1.1, 1.1);   // don't twist to look behind
-    const pitchH = THREE.MathUtils.clamp(-(m.lookPitch - 0.18) * 0.5, -0.35, 0.25);
+    const pitchH = THREE.MathUtils.clamp(-(m.lookPitch - 0.18) * 0.5, -0.25, 0.2);
     this.headYaw += (yawT - this.headYaw) * (1 - Math.exp(-5 * dt));
     this.headPitch += (pitchH - this.headPitch) * (1 - Math.exp(-5 * dt));
     this.turnBone(this.neck, this.headYaw * 0.35, this.headPitch * 0.3);
