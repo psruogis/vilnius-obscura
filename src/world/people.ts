@@ -1,166 +1,48 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { WallGrid } from './collision';
 import type { Terrain } from './terrain';
 import { twoBoneIK } from '../player/ik';
+import { loadFolk, dress, figure, figureMaterial, measureGait, type FolkBody, type Outfit, type Palette, type MaleCoat, type MaleHat, type FemaleHat } from './folk';
 
 /**
  * Townsfolk filling the square and streets as in the period views: strollers who walk between points
- * they can see, pause, and move on; small groups standing and talking. Each figure is one skinned mesh
- * with one material (parts coloured by vertex colour), so a crowd of dozens stays cheap to draw.
- * Clothes in period cloth colours, drawn from a few palettes per model.
+ * they can see, pause, and move on; small groups standing and talking. c.1900 dress after the
+ * photographs and paintings of Vilnius: dark frock coats, greatcoats and caped coats, a worker's
+ * jacket and cap, top hats, bowlers and soft felt hats; women in floor-length skirts with shawls,
+ * short capes or aprons, big trimmed hats, bonnets and kerchiefs. In the rain many carry umbrellas.
+ * Each figure is one skinned mesh and one draw (folk.ts), with three levels of detail by distance.
  */
 
-interface Base {
-  geometry: THREE.BufferGeometry;       // merged, smooth-shaded, colour attribute per part
-  partOf: Float32Array;                 // part index per vertex
-  parts: string[];                      // material name per part index
-  scene: THREE.Object3D;                // skeleton source
-  idle: THREE.AnimationClip; walk: THREE.AnimationClip;
-  height: number; palettes: Record<string, string>[];
-  restHeight: number;                   // model height in rest pose, scene units
-  restTop: number;
-  female: boolean;
-}
-
-// c.1900 townsfolk after the period views: dark, full clothes, hats (coat = the model's shirt and sleeves)
-const MEN = [
-  { Shirt: '#1c1b1a', Pants: '#2a2826', TieTexture: '#e8e3d6', Details: '#161514', Hair: '#2b2118', Skin: '#c79a7a', Coat: '#1c1b1a', Hat: '#141312' },
-  { Shirt: '#26221e', Pants: '#3a3632', TieTexture: '#efe9dc', Details: '#1c1a18', Hair: '#4a3727', Skin: '#d2a888', Coat: '#26221e', Hat: '#1a1816' },
-  { Shirt: '#2e2a24', Pants: '#23201d', TieTexture: '#ddd5c4', Details: '#211e1b', Hair: '#1f1a15', Skin: '#bb8c6a', Coat: '#2e2a24', Hat: '#3a3530' },
-  { Shirt: '#1f2428', Pants: '#2c2c2a', TieTexture: '#e2dccd', Details: '#1a1c1e', Hair: '#6a5238', Skin: '#cfa283', Coat: '#1f2428', Hat: '#161819' },
-  { Shirt: '#3a3026', Pants: '#2e2a26', TieTexture: '#f0ead8', Details: '#2a241e', Hair: '#3b2c20', Skin: '#c49276', Coat: '#3a3026', Hat: '#2a2520' },
-  { Shirt: '#232a22', Pants: '#262420', TieTexture: '#e8e2d2', Details: '#1c201a', Hair: '#2e241b', Skin: '#c89a7c', Coat: '#232a22', Hat: '#1c1c1a' },
+// Cloth after the period views: near-black, bottle green, brown and grey wool; off-white linen.
+const MEN: Omit<Palette, 'skin' | 'hair' | 'brolly' | 'wood'>[] = [
+  { coat: '#1c1b1a', lower: '#2a2826', linen: '#e8e3d6', hat: '#121110', leather: '#161311', accent: '#2e2a25', lining: '#0e0d0c' },
+  { coat: '#26221e', lower: '#3a3632', linen: '#efe9dc', hat: '#1a1816', leather: '#1a1512', accent: '#4a4034', lining: '#141210' },
+  { coat: '#2e2a24', lower: '#23201d', linen: '#ddd5c4', hat: '#2a2622', leather: '#15120f', accent: '#5a4a38', lining: '#161411' },
+  { coat: '#1f2428', lower: '#2c2c2a', linen: '#e2dccd', hat: '#161819', leather: '#141414', accent: '#34302a', lining: '#101214' },
+  { coat: '#3a3026', lower: '#2e2a26', linen: '#f0ead8', hat: '#2a2520', leather: '#1c1611', accent: '#6a5a44', lining: '#1a1510' },
+  { coat: '#232a22', lower: '#262420', linen: '#e8e2d2', hat: '#1c1c1a', leather: '#161410', accent: '#3a3a30', lining: '#101410' },
+  { coat: '#3c3a36', lower: '#2a2826', linen: '#e4ddcc', hat: '#1e1d1b', leather: '#181614', accent: '#2a2622', lining: '#141312' },
 ];
-const WOMEN = [
-  { Dress: '#1e1c1b', Shoes: '#1a1614', Hair: '#3a2a1d', Skin: '#d4a98a', Shawl: '#ece6d8', Hat: '#ece6d8' },
-  { Dress: '#2a2420', Shoes: '#1a1614', Hair: '#5a4128', Skin: '#caa085', Shawl: '#3a3530', Hat: '#221f1c' },
-  { Dress: '#232830', Shoes: '#1a1614', Hair: '#2a1f16', Skin: '#d8b096', Shawl: '#e2dccb', Hat: '#e2dccb' },
-  { Dress: '#3a2420', Shoes: '#1a1614', Hair: '#4a3522', Skin: '#c59478', Shawl: '#5a4e40', Hat: '#2a2320' },
-  { Dress: '#26291f', Shoes: '#1a1614', Hair: '#6b4c30', Skin: '#d2a488', Shawl: '#d8cfbc', Hat: '#d8cfbc' },
-  { Dress: '#4a4236', Shoes: '#1a1614', Hair: '#1e1712', Skin: '#c89a7c', Shawl: '#efe9dc', Hat: '#1e1c1a' },
-  { Dress: '#161616', Shoes: '#141210', Hair: '#3a2a1d', Skin: '#d4a98a', Shawl: '#8a7a64', Hat: '#161616' },
+const WOMEN: Omit<Palette, 'skin' | 'hair' | 'brolly' | 'wood'>[] = [
+  { coat: '#1e1c1b', lower: '#1e1c1b', linen: '#ece6d8', hat: '#1a1817', leather: '#141210', accent: '#5a4e40', lining: '#121110' },
+  { coat: '#2a2420', lower: '#2a2420', linen: '#3a3530', hat: '#221f1c', leather: '#161311', accent: '#6b5a48', lining: '#141210' },
+  { coat: '#232830', lower: '#232830', linen: '#e2dccb', hat: '#1c2026', leather: '#141414', accent: '#3a3f4a', lining: '#111318' },
+  { coat: '#3a2420', lower: '#2e201c', linen: '#e8dfcf', hat: '#2a2320', leather: '#18120f', accent: '#5a4e40', lining: '#1a1210' },
+  { coat: '#26291f', lower: '#26291f', linen: '#d8cfbc', hat: '#2a2b24', leather: '#151510', accent: '#8a7a64', lining: '#121410' },
+  { coat: '#4a4236', lower: '#3a342c', linen: '#efe9dc', hat: '#1e1c1a', leather: '#1a1612', accent: '#6a3a30', lining: '#1a1814' },
+  { coat: '#161616', lower: '#161616', linen: '#161616', hat: '#161616', leather: '#121212', accent: '#2a2828', lining: '#0e0e0e' },   // mourning
+  { coat: '#3a3530', lower: '#2e2a26', linen: '#e8e2d2', hat: '#6a4a36', leather: '#1a1511', accent: '#7a6a52', lining: '#161411' },   // kerchief, market woman
 ];
-
-// --- Period dress: hats, coat skirts, full skirts, shawls, umbrellas (attached to the bones) --------------
-function colored(g: THREE.BufferGeometry, c: THREE.ColorRepresentation): THREE.BufferGeometry {
-  const src = g.index ? g.toNonIndexed() : g;
-  const n = src.getAttribute('position').count, arr = new Float32Array(n * 3), col = new THREE.Color(c);
-  for (let i = 0; i < n; i++) { arr[i * 3] = col.r; arr[i * 3 + 1] = col.g; arr[i * 3 + 2] = col.b; }
-  src.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-  if (src.getAttribute('uv')) src.deleteAttribute('uv');
-  return src;
-}
-const lathe = (pts: [number, number][], seg = 18) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
-
-function hatGeometry(kind: number, c: string): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  if (kind === 0) {        // top hat
-    parts.push(lathe([[0, 0.2], [0.098, 0.2], [0.092, 0.03], [0.095, 0]], 16), new THREE.CylinderGeometry(0.098, 0.098, 0.005, 16).translate(0, 0.2, 0));
-    parts.push(new THREE.CylinderGeometry(0.17, 0.17, 0.012, 20).translate(0, 0.012, 0));
-  } else if (kind === 1) { // bowler
-    parts.push(new THREE.SphereGeometry(0.1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.05, 1.1).translate(0, 0.01, 0));
-    parts.push(lathe([[0.1, 0.01], [0.155, 0.012], [0.165, 0.03]], 20));
-  } else if (kind === 2) { // peaked cap
-    parts.push(new THREE.CylinderGeometry(0.115, 0.1, 0.075, 14).translate(0, 0.04, 0));
-    parts.push(new THREE.BoxGeometry(0.16, 0.012, 0.09).rotateX(0.25).translate(0, 0.012, 0.13));
-  } else if (kind === 3) { // bonnet
-    parts.push(new THREE.SphereGeometry(0.115, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.62).scale(1, 1.05, 1.15).translate(0, -0.03, -0.02));
-    parts.push(new THREE.TorusGeometry(0.12, 0.025, 6, 14, Math.PI).rotateX(-0.35).translate(0, -0.03, 0.05));
-  } else {                 // headscarf, knotted under the chin
-    parts.push(new THREE.SphereGeometry(0.118, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.6).scale(1, 1.1, 1.12).translate(0, -0.04, -0.01));
-    parts.push(new THREE.ConeGeometry(0.1, 0.16, 6).rotateX(Math.PI).translate(0, -0.1, -0.1));
-  }
-  return mergeGeometries(parts.map(p => colored(p, c)), false)!;
-}
-
-/** A proper umbrella: eight ribs, the fabric sagging between them, ferrule, shaft and crook handle (y up, 0 = hand). */
-function umbrellaGeometry(fabric: string, shaftLen: number): THREE.BufferGeometry {
-  const R = 0.52, Hd = 0.2, RINGS = 7, SEG = 48, pos: number[] = [];
-  const pt = (t: number, th: number) => {
-    const sag = 1 - Math.abs(Math.cos(4 * th));            // 0 on a rib, 1 midway between ribs
-    const r = R * Math.sin(t * Math.PI / 2) * (1 - 0.07 * sag * t);
-    const y = Hd * Math.cos(t * Math.PI / 2) + 0.045 * sag * t * t - 0.02 * t;
-    return new THREE.Vector3(Math.cos(th) * r, shaftLen + y, Math.sin(th) * r);
-  };
-  for (let j = 0; j < RINGS; j++) for (let k = 0; k < SEG; k++) {
-    const t0 = j / RINGS, t1 = (j + 1) / RINGS, a0 = (k / SEG) * Math.PI * 2, a1 = ((k + 1) / SEG) * Math.PI * 2;
-    const A = pt(t0, a0), B = pt(t0, a1), C = pt(t1, a1), D = pt(t1, a0);
-    pos.push(A.x, A.y, A.z, D.x, D.y, D.z, C.x, C.y, C.z, A.x, A.y, A.z, C.x, C.y, C.z, B.x, B.y, B.z);
-  }
-  const canopy = new THREE.BufferGeometry();
-  canopy.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  canopy.computeVertexNormals();
-  const parts = [colored(canopy, fabric)];
-  // ribs just under the fabric, and stretchers down to the runner on the shaft
-  for (let k = 0; k < 8; k++) {
-    const th = (k / 8) * Math.PI * 2;
-    for (let j = 0; j < 6; j++) {
-      const p0 = pt(j / 6, th), p1 = pt((j + 1) / 6, th);
-      p0.y -= 0.008; p1.y -= 0.008;
-      const len = p0.distanceTo(p1);
-      const g = new THREE.CylinderGeometry(0.004, 0.004, len, 3);
-      g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), p1.clone().sub(p0).normalize()));
-      g.translate((p0.x + p1.x) / 2, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2);
-      parts.push(colored(g, '#2a2622'));
-    }
-    const m = pt(0.55, th); m.y -= 0.01;
-    const runner = new THREE.Vector3(0, shaftLen - 0.28, 0);
-    const g = new THREE.CylinderGeometry(0.003, 0.003, m.distanceTo(runner), 3);
-    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), m.clone().sub(runner).normalize()));
-    g.translate((m.x + runner.x) / 2, (m.y + runner.y) / 2, (m.z + runner.z) / 2);
-    parts.push(colored(g, '#2a2622'));
-  }
-  parts.push(colored(new THREE.CylinderGeometry(0.008, 0.008, shaftLen + 0.3, 6).translate(0, (shaftLen + 0.3) / 2 - 0.1, 0), '#3a3028'));
-  parts.push(colored(new THREE.ConeGeometry(0.012, 0.09, 6).translate(0, shaftLen + Hd + 0.045, 0), '#8a7a5a'));          // ferrule
-  parts.push(colored(new THREE.CylinderGeometry(0.016, 0.016, 0.06, 6).translate(0, shaftLen - 0.28, 0), '#2a2622'));    // runner
-  parts.push(colored(new THREE.TorusGeometry(0.04, 0.011, 5, 10, Math.PI).rotateZ(Math.PI).translate(0.04, -0.1, 0), '#4a3424')); // crook
-  return mergeGeometries(parts, false)!;
-}
-
-async function loadBase(url: string, idleName: string, walkName: string, palettes: Record<string, string>[], height: number): Promise<Base> {
-  const gltf = await new GLTFLoader().loadAsync(url);
-  const scene = gltf.scene;
-  const meshes: THREE.SkinnedMesh[] = [];
-  scene.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(o as THREE.SkinnedMesh); });
-  const parts: string[] = [];
-  const geos: THREE.BufferGeometry[] = [];
-  for (const m of meshes) {
-    const mats = Array.isArray(m.material) ? m.material : [m.material];
-    const src = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
-    const groups = m.geometry.groups.length ? m.geometry.groups : [{ start: 0, count: src.getAttribute('position').count, materialIndex: 0 }];
-    for (const g of groups) {
-      const mat = mats[g.materialIndex ?? 0] as THREE.MeshStandardMaterial;
-      let pi = parts.indexOf(mat.name);
-      if (pi < 0) { parts.push(mat.name); pi = parts.length - 1; }
-      const piece = new THREE.BufferGeometry();
-      for (const name of ['position', 'normal', 'skinIndex', 'skinWeight']) {
-        const a = src.getAttribute(name) as THREE.BufferAttribute;
-        piece.setAttribute(name, new THREE.BufferAttribute((a.array as Float32Array).slice(g.start * a.itemSize, (g.start + g.count) * a.itemSize), a.itemSize, a.normalized));
-      }
-      piece.setAttribute('part', new THREE.BufferAttribute(new Float32Array(g.count).fill(pi), 1));
-      geos.push(piece);
-    }
-  }
-  let geometry = mergeGeometries(geos, false)!;
-  geometry.deleteAttribute('normal');
-  geometry = mergeVertices(geometry, 1e-4);
-  geometry.computeVertexNormals();
-  const partOf = geometry.getAttribute('part').array as Float32Array;
-  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(partOf.length * 3), 3));
-  const find = (n: string) => gltf.animations.find(a => a.name.endsWith(n))!;
-  scene.updateMatrixWorld(true);
-  const rb = new THREE.Box3().setFromObject(scene);
-  return { geometry, partOf, parts, scene, idle: find(idleName), walk: find(walkName), height, palettes, restHeight: rb.max.y - rb.min.y, restTop: rb.max.y, female: parts.includes('Dress') };
-}
+const SKIN = ['#fff6f0', '#fff1e8', '#fbeee6', '#fff8f4', '#f6e6dc', '#fff3ea'];
+const HAIR = ['#2b2118', '#4a3727', '#1f1a15', '#6a5238', '#3b2c20', '#2e241b', '#5a5450', '#8a8680', '#3a2a1d', '#7a5a38'];
+const BROLLY = ['#141414', '#1a1a1c', '#1c2220', '#241c18', '#161a22'];
 
 interface Person {
-  root: THREE.Group; mesh: THREE.SkinnedMesh; mixer: THREE.AnimationMixer;
-  idle: THREE.AnimationAction; walk: THREE.AnimationAction;
+  root: THREE.Group; fig: ReturnType<typeof figure>; mixer: THREE.AnimationMixer;
+  idle: THREE.AnimationAction; walk: THREE.AnimationAction; natural: number;   // walk speed at timeScale 1 (m/s, this figure's size)
   mode: 'stand' | 'walk' | 'pause';
-  target: THREE.Vector2; speed: number; timer: number; yaw: number; wIdle: number;
+  target: THREE.Vector2; speed: number; timer: number; yaw: number; wIdle: number; acc: number;
+  stoop: number;                                        // the old walk a little bent
   job?: LampJob;
   hold?: { upper: THREE.Object3D; lower: THREE.Object3D; hand: THREE.Object3D; grip: THREE.Vector3; side: number };
 }
@@ -180,130 +62,86 @@ export async function buildCrowd(opts: {
   walls: WallGrid; terrain: Terrain; centre: THREE.Vector2; radius: number;
   free: (x: number, z: number) => boolean;           // open ground (not inside a building)
   groups: THREE.Vector2[];                            // spots where people stand in knots
-  strollers: number; material: THREE.MeshStandardMaterial; accessories: THREE.MeshStandardMaterial; umbrellas: boolean;
+  strollers: number; umbrellas: boolean;
+  material?: THREE.Material; accessories?: THREE.Material;   // unused: each figure has its own palette material
 }): Promise<Crowd> {
-  const bases = (await Promise.all([
-    loadBase('assets/char/man.glb', 'Man_Idle', 'Man_Walk', MEN, 1.72),
-    loadBase('assets/char/woman.glb', 'Female_Idle', 'Female_Walk', WOMEN, 1.62),
-  ].map(p => p.catch(e => { console.warn('crowd', e); return null; })))).filter((b): b is Base => !!b);
   const group = new THREE.Group();
   group.name = 'crowd';
   const people: Person[] = [];
-  if (!bases.length) return { group, update: () => {}, count: 0 };
+  let folk: { m: FolkBody; f: FolkBody };
+  try { folk = await loadFolk(); } catch (e) { console.warn('crowd', e); return { group, update: () => {}, count: 0, addLamplighter: () => {} }; }
   let seed = 12345;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const tint = new THREE.Color(), skinVar = new THREE.Color();
+  const pick = <T>(a: readonly T[]) => a[Math.floor(rnd() * a.length)];
+  // stride per body and clip, measured once on a probe figure
+  const gaits = new Map<string, number>();
+  const natural = (F: FolkBody, clip: string) => {
+    const k = F.sex + clip;
+    if (!gaits.has(k)) {
+      const probe = figure(F, dress(F, { sex: F.sex, hat: F.sex === 'm' ? 'bowler' : 'toque', coat: 'frock' }), new THREE.MeshBasicMaterial());
+      const frame = new THREE.Group(); frame.add(probe.root); frame.updateMatrixWorld(true);
+      const g = measureGait(probe.root, frame, F.clips[clip], probe.bone('ball_l'), 1.4);
+      gaits.set(k, g.cycleDist / F.clips[clip].duration);
+    }
+    return gaits.get(k)!;
+  };
+
+  const outfit = (female: boolean, lamplighter: boolean, umbrella: boolean): Outfit => {
+    if (lamplighter) return { sex: 'm', coat: 'jacket', hat: 'cap', beard: 'moustache', hair: 'buzzed', pole: true };
+    if (female) {
+      const hat = pick<FemaleHat>(['brim', 'brim', 'toque', 'toque', 'bonnet', 'scarf', 'scarf']);
+      const working = hat === 'scarf';
+      return { sex: 'f', hat, wrap: working ? pick(['shawl', 'shawl', 'none'] as const) : pick(['cape', 'none', 'shawl', 'none'] as const), apron: working && rnd() < 0.6, umbrella };
+    }
+    const coat = pick<MaleCoat>(['frock', 'frock', 'great', 'great', 'caped', 'jacket', 'long']);
+    const hat: MaleHat = coat === 'jacket' ? pick(['cap', 'flatcap'] as const) : coat === 'long' ? pick(['wide', 'cap'] as const) : pick(['top', 'bowler', 'bowler', 'felt'] as const);
+    return {
+      sex: 'm', coat, hat, beard: coat === 'long' ? 'full' : pick(['full', 'moustache', 'moustache', 'none'] as const), hair: coat === 'jacket' ? 'buzzed' : 'parted',
+      stout: coat !== 'jacket' && rnd() < 0.25, apron: coat === 'jacket' && rnd() < 0.5, umbrella,
+    };
+  };
 
   const spawn = (x: number, z: number, mode: Person['mode'], yaw: number, lamplighter = false): Person | null => {
-    const base = lamplighter ? (bases.find(b => !b.female) ?? bases[0]) : bases[people.length % bases.length === 0 && rnd() < 0.5 ? 0 : Math.floor(rnd() * bases.length)];
-    const skel = cloneSkinned(base.scene);
-    let skinned: THREE.SkinnedMesh | null = null;
-    skel.traverse(o => { if (!skinned && (o as THREE.SkinnedMesh).isSkinnedMesh) skinned = o as THREE.SkinnedMesh; });
-    if (!skinned) return null;
-    const src = skinned as THREE.SkinnedMesh;
-    // one mesh, one material: our merged geometry bound to this clone's skeleton
-    const geo = base.geometry.clone();
-    const pal = base.palettes[Math.floor(rnd() * base.palettes.length)];
-    const col = geo.getAttribute('color') as THREE.BufferAttribute;
-    const jitter = 0.9 + rnd() * 0.2;
-    for (let i = 0; i < col.count; i++) {
-      const name = base.parts[base.partOf[i]];
-      tint.set(pal[name] ?? '#6b5e50');
-      if (name === 'Skin') { skinVar.set(pal.Skin ?? '#c99c7c'); tint.copy(skinVar); }
-      else tint.multiplyScalar(jitter);
-      col.setXYZ(i, tint.r, tint.g, tint.b);
-    }
-    const mesh = new THREE.SkinnedMesh(geo, opts.material);
-    mesh.bind(src.skeleton, src.bindMatrix);
-    mesh.frustumCulled = false;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    src.parent!.add(mesh);
-    skel.traverse(o => { if ((o as THREE.Mesh).isMesh && o !== mesh) o.visible = false; });
-    // scale to height (from the rest-pose size of the whole model, as the market figures do)
-    const s = (base.height * (0.94 + rnd() * 0.1)) / Math.max(1e-3, base.restHeight);
-    skel.scale.multiplyScalar(s);
-    // dress: hat on the head, coat skirt or full skirt on the hips, shawl on the shoulders
-    skel.updateMatrixWorld(true);
-    const H = base.restHeight * s, top = base.restTop * s;
-    const bone = (n: string) => skel.getObjectByName(n);
-    const attach = (b: THREE.Object3D | undefined, geo: THREE.BufferGeometry, at: THREE.Vector3) => {
-      if (!b) return;
-      const m = new THREE.Mesh(geo, opts.accessories);
-      new THREE.Matrix4().copy(b.matrixWorld).invert().multiply(new THREE.Matrix4().makeTranslation(at.x, at.y, at.z)).decompose(m.position, m.quaternion, m.scale);
-      m.castShadow = true; m.frustumCulled = false;
-      b.add(m);
-    };
-    const attachM = (b: THREE.Object3D | undefined, geo: THREE.BufferGeometry, world: THREE.Matrix4) => {
-      if (!b) return;
-      const m = new THREE.Mesh(geo, opts.accessories);
-      new THREE.Matrix4().copy(b.matrixWorld).invert().multiply(world).decompose(m.position, m.quaternion, m.scale);
-      m.castShadow = true; m.frustumCulled = false;
-      b.add(m);
-    };
-    const head = bone('Head'), hips = bone('Hips'), torso = bone('Torso');
-    const palm = bone('PalmR') ?? bone('Palm.R');
-    const umbrellaHand = !lamplighter && opts.umbrellas && palm && rnd() < 0.4;
-    let holdGrip: THREE.Vector3 | null = null;
-    const umbrellaTop = top;
-    const hp = new THREE.Vector3(), tp = new THREE.Vector3();
-    if (head) head.getWorldPosition(hp);
-    if (hips) hips.getWorldPosition(tp);
-    // which side of the body the right hand is on (the models face +Z, so usually -x)
-    const sx = palm ? Math.sign(palm.getWorldPosition(new THREE.Vector3()).x - hp.x) || -1 : -1;
-    const P = pal as Record<string, string>;
-    if (!base.female) {
-      const hatKind = lamplighter ? 2 : rnd() < 0.42 ? 0 : rnd() < 0.62 ? 1 : 2;
-      attach(head, hatGeometry(hatKind, P.Hat ?? '#161514'), new THREE.Vector3(hp.x, top - (hatKind === 2 ? 0.06 : 0.07), hp.z + 0.01));
-      // frock coat or greatcoat skirt, waist to knee (or calf)
-      const knee = H * (rnd() < 0.4 ? 0.2 : 0.3);
-      attach(hips, colored(lathe([[0.165, H * 0.6], [0.19, H * 0.5], [0.23, H * 0.38], [0.27, knee]], 16), new THREE.Color(P.Coat ?? '#1c1b1a').multiplyScalar(0.95)), new THREE.Vector3(tp.x, 0, tp.z));
-    } else {
-      // full skirt to the ground
-      const w0 = 0.15, w1 = 0.36 + rnd() * 0.1;
-      attach(hips, colored(lathe([[w0, H * 0.6], [w0 + 0.05, H * 0.5], [w1 * 0.8, H * 0.25], [w1, 0.03], [w1 * 0.95, 0.0]], 20), P.Dress ?? '#1e1c1b'), new THREE.Vector3(tp.x, 0, tp.z));
-      // shawl over the shoulders (most women), bonnet or headscarf
-      if (rnd() < 0.75) attach(torso ?? hips, colored(lathe([[0.075, H * 0.84], [0.17, H * 0.8], [0.25, H * 0.7], [0.24, H * 0.6]], 18), P.Shawl ?? '#ece6d8'), new THREE.Vector3(tp.x, 0, tp.z));
-      const hatKind = rnd() < 0.55 ? 4 : 3;
-      attach(head, hatGeometry(hatKind, P.Hat ?? '#ece6d8'), new THREE.Vector3(hp.x, top - 0.1, hp.z));
-    }
+    const female = !lamplighter && rnd() < 0.45;
+    const F = female ? folk.f : folk.m;
+    const umbrella = !lamplighter && opts.umbrellas && rnd() < 0.5;
+    const o = outfit(female, lamplighter, umbrella);
+    const geo = dress(F, o);
+    const cloth = pick(female ? WOMEN : MEN);
+    const grey = !lamplighter && rnd() < 0.18;
+    const hairC = new THREE.Color(grey ? pick(['#8a8680', '#a8a49c', '#6e6a64']) : pick(HAIR));
+    const pal: Palette = { ...cloth, skin: pick(SKIN), hair: `#${hairC.getHexString()}`, brolly: lamplighter ? '#ffcf7a' : pick(BROLLY), wood: '#3a2a1e' };
+    // a little variety within a palette: the same cloth never quite matches
+    const j = 0.88 + rnd() * 0.24;
+    for (const k of ['coat', 'lower', 'accent'] as const) pal[k] = `#${new THREE.Color(pal[k]).multiplyScalar(j).getHexString()}`;
+    // kerchiefs printed with flowers or checked; shawls checked or with a striped border
+    const pattern: [number, number] = [o.hat === 'scarf' ? pick([2, 2, 1, 0]) : 0, o.wrap === 'shawl' ? pick([1, 1, 0]) : 0];
+    const mat = figureMaterial(F, pal, { exposed: umbrella ? 0.12 : 1, paint: geo.paint, outfit: o, pattern });
+    const fig = figure(F, geo, mat);
+    // height from the rest pose (men ~1.72 m, women ~1.62 m), and build: a little broader or slighter
+    const s = ((female ? 1.62 : 1.72) * (0.94 + rnd() * 0.1)) / F.height, build = 0.95 + rnd() * 0.1 + (o.stout ? 0.04 : 0);
+    fig.root.scale.set(s * build, s, s * build);
     const root = new THREE.Group();
-    root.add(skel);
+    root.add(fig.root);
     root.position.set(x, opts.terrain.heightAt(x, z), z);
     root.rotation.y = yaw;
-    if (lamplighter) {
-      // the lighting pole, held upright: a hook and a small burning wick at the top
-      const pole = new THREE.Mesh(mergeGeometries([
-        colored(new THREE.CylinderGeometry(0.016, 0.02, 3.6, 6).translate(0, 2.35, 0), '#5a4430'),
-        colored(new THREE.TorusGeometry(0.06, 0.008, 4, 8, Math.PI).translate(0, 4.2, 0), '#2a2622'),
-        colored(new THREE.SphereGeometry(0.03, 6, 4).translate(0.03, 4.13, 0), '#ffcf7a'),
-      ], false)!, opts.accessories);
-      pole.position.set(sx * 0.25, 0, 0.2);
-      root.add(pole);
-      holdGrip = new THREE.Vector3(sx * 0.25, H * 0.62, 0.2);
-    } else if (opts.umbrellas && umbrellaHand) {
-      // umbrella held upright in front of the right shoulder; the arm is posed onto the shaft each frame (IK)
-      const grip = new THREE.Vector3(sx * 0.2 * H / 1.7, H * 0.66, 0.26 * H / 1.7);
-      const shaftLen = umbrellaTop + 0.18 - grip.y;
-      const fabric = ['#141414', '#1a1a1c', '#1c2220', '#241c18', '#161a22'][Math.floor(rnd() * 5)];
-      const u = new THREE.Mesh(umbrellaGeometry(fabric, shaftLen), opts.accessories);
-      u.position.copy(grip);
-      u.rotation.set(-0.06, 0, 0.05 * sx);   // tipped a little back and in, over the head
-      u.castShadow = true;
-      root.add(u);
-      holdGrip = grip;
-    }
+    root.userData = { umbrella, lamplighter, female };
     group.add(root);
-    const mixer = new THREE.AnimationMixer(skel);
-    const idle = mixer.clipAction(base.idle), walk = mixer.clipAction(base.walk);
+    const mixer = new THREE.AnimationMixer(fig.root);
+    const talk = mode === 'stand' ? pick(['Idle_Talking_Loop', 'Idle_Talking_Loop', 'Idle_Talking_Loop', 'Idle_Loop', female ? 'Idle_Loop' : 'Idle_FoldArms_Loop', 'Yes']) : 'Idle_Loop';
+    const walkClip = !female && !lamplighter && rnd() < 0.5 ? 'Walk_Formal_Loop' : 'Walk_Loop';
+    const idle = mixer.clipAction(F.clips[talk]), walk = mixer.clipAction(F.clips[walkClip]);
     idle.play(); walk.play();
-    idle.time = rnd() * base.idle.duration; walk.time = rnd() * base.walk.duration;
+    idle.time = rnd() * idle.getClip().duration; walk.time = rnd() * walk.getClip().duration;
     const walking = mode === 'walk';
     idle.setEffectiveWeight(walking ? 0 : 1); walk.setEffectiveWeight(walking ? 1 : 0);
-    idle.timeScale = 0.8 + rnd() * 0.4;
-    const person: Person = { root, mesh, mixer, idle, walk, mode, target: new THREE.Vector2(x, z), speed: 1.05 + rnd() * 0.35, timer: rnd() * 6, yaw, wIdle: walking ? 0 : 1 };
-    const ua = bone('UpperArmR'), la = bone('LowerArmR');
-    if (holdGrip && ua && la && palm) person.hold = { upper: ua, lower: la, hand: palm, grip: holdGrip, side: sx };
+    idle.timeScale = 0.85 + rnd() * 0.3;
+    const person: Person = {
+      root, fig, mixer, idle, walk, natural: natural(F, walkClip) * s, mode, target: new THREE.Vector2(x, z),
+      speed: ((female ? 1.0 : 1.1) + rnd() * 0.3) * (grey ? 0.8 : 1), timer: rnd() * 6, yaw, wIdle: walking ? 0 : 1, acc: 0,
+      stoop: grey ? 0.1 + rnd() * 0.1 : 0,
+    };
+    if (geo.grip) person.hold = { upper: fig.bone('upperarm_r'), lower: fig.bone('lowerarm_r'), hand: fig.bone('hand_r'), grip: geo.grip, side: -1 };
     people.push(person);
     return person;
   };
@@ -312,7 +150,7 @@ export async function buildCrowd(opts: {
   for (const g of opts.groups) {
     const n = 2 + Math.floor(rnd() * 3);
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + rnd() * 0.5, r = 0.7 + rnd() * 0.3;
+      const a = (i / n) * Math.PI * 2 + rnd() * 0.35, r = 0.85 + rnd() * 0.3;
       const x = g.x + Math.cos(a) * r, z = g.y + Math.sin(a) * r;
       if (!opts.free(x, z)) continue;
       spawn(x, z, 'stand', Math.atan2(g.x - x, g.y - z));
@@ -342,6 +180,16 @@ export async function buildCrowd(opts: {
   };
 
   const tmp = new THREE.Vector2(), ikT = new THREE.Vector3(), ikP = new THREE.Vector3();
+  const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), qp = new THREE.Quaternion(), side = new THREE.Vector3();
+  /** Pitches a bone forward (about the figure's side axis) on top of the animated pose. */
+  const bend = (b: THREE.Object3D, root: THREE.Object3D, a: number) => {
+    root.getWorldQuaternion(qp);
+    qa.setFromAxisAngle(side.set(1, 0, 0).applyQuaternion(qp), a);
+    b.getWorldQuaternion(qb).premultiply(qa);
+    b.parent!.getWorldQuaternion(qp);
+    b.quaternion.copy(qb.premultiply(qp.invert()));
+    b.updateMatrixWorld(true);
+  };
   return {
     group, count: people.length,
     addLamplighter(o) {
@@ -355,7 +203,10 @@ export async function buildCrowd(opts: {
         const dist = Math.hypot(p.root.position.x - walker.x, p.root.position.z - walker.z);
         const far = dist > 140;
         p.root.visible = !far;
-        p.mesh.castShadow = dist < 45;
+        p.fig.mesh.castShadow = dist < 45;
+        // detail by distance (a little hysteresis so nobody flickers between levels)
+        const lod = p.fig.lod;
+        p.fig.setLod(dist < (lod === 0 ? 17 : 15) ? 0 : dist < (lod === 2 ? 42 : 45) ? 1 : 2);
         const j = p.job;
         if (j) {
           if (j.state === 'seek') {
@@ -390,7 +241,14 @@ export async function buildCrowd(opts: {
             // step aside for the walker
             const wx = p.root.position.x - walker.x, wz = p.root.position.z - walker.z, wd = Math.hypot(wx, wz);
             if (wd < 1.6 && wd > 1e-3) { tmp.x += (wx / wd) * 0.8; tmp.y += (wz / wd) * 0.8; tmp.normalize(); }
-            const step = p.speed * dt;
+            // and for one another (nobody walks through anybody)
+            for (const q of people) {
+              if (q === p) continue;
+              const ox = p.root.position.x - q.root.position.x, oz = p.root.position.z - q.root.position.z, od = ox * ox + oz * oz;
+              if (od < 0.81 && od > 1e-6) { const k = (0.9 - Math.sqrt(od)) / 0.9 * 1.5 / Math.sqrt(od); tmp.x += ox * k; tmp.y += oz * k; }
+            }
+            tmp.normalize();
+            const step = p.speed * (1 - p.wIdle) * dt;
             const nx = p.root.position.x + tmp.x * step, nz = p.root.position.z + tmp.y * step;
             if (opts.free(nx, nz)) { p.root.position.x = nx; p.root.position.z = nz; }
             else { p.mode = 'pause'; p.timer = 0.5; }
@@ -405,15 +263,26 @@ export async function buildCrowd(opts: {
         p.wIdle += (wantIdle - p.wIdle) * (1 - Math.exp(-6 * dt));
         p.idle.setEffectiveWeight(p.wIdle);
         p.walk.setEffectiveWeight(1 - p.wIdle);
-        if (!far) {
-          p.mixer.update(dt);
-          if (p.hold && dist < 60) {
-            // right hand on the umbrella shaft (or the lamplighter's pole)
-            p.root.updateMatrixWorld(true);
-            p.root.localToWorld(ikT.copy(p.hold.grip));
-            p.root.localToWorld(ikP.set(p.hold.side * 0.6, -0.5, -0.6)).sub(p.root.position);   // elbow out, down, back
-            twoBoneIK(p.hold.upper, p.hold.lower, p.hold.hand, ikT, ikP);
-          }
+        // the feet keep pace with the ground: the walk clip runs at the speed actually walked
+        p.walk.timeScale = (p.speed * (1 - p.wIdle) + 0.2 * p.wIdle) / p.natural;
+        if (far) continue;
+        // far figures animate at a lower rate
+        p.acc += dt;
+        if (p.acc < (dist < 25 ? 0 : dist < 60 ? 1 / 30 : 1 / 15)) continue;
+        p.mixer.update(p.acc);
+        p.acc = 0;
+        if (p.stoop && dist < 45) {
+          // bent at the back, the head raised again to look ahead
+          p.root.updateMatrixWorld(true);
+          bend(p.fig.bone('spine_02'), p.root, p.stoop);
+          bend(p.fig.bone('neck_01'), p.root, -p.stoop * 0.8);
+        }
+        if (p.hold && dist < 60) {
+          // right hand on the umbrella shaft (or the lamplighter's pole)
+          p.root.updateMatrixWorld(true);
+          p.fig.root.localToWorld(ikT.copy(p.hold.grip));
+          p.root.localToWorld(ikP.set(p.hold.side * 0.6, -0.5, -0.6)).sub(p.root.position);   // elbow out, down, back
+          twoBoneIK(p.hold.upper, p.hold.lower, p.hold.hand, ikT, ikP);
         }
       }
     },

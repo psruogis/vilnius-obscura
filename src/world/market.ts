@@ -1,16 +1,14 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { AreaData, Building } from './area';
 import type { Terrain } from './terrain';
 import { townHallFrame } from './townhall';
 import { mbox, merged } from './geom';
-import { smoothShade } from '../player/character';
+import { loadFolk, dress, figure, figureMaterial, type Outfit } from './folk';
 
 /**
  * Market life on the square (the period views show stalls, carts and townsfolk around the Town Hall):
  * canvas-roofed stalls, two-wheeled carts, barrels, crates and sacks either side of the promenade, and
- * CC0 townsfolk (Quaternius, Poly Pizza) standing at the stalls or strolling. Every spot is checked
+ * townsfolk (folk.ts) standing at the stalls or strolling. Every spot is checked
  * against the building outlines at load time, so the layout survives changes to the data.
  */
 
@@ -176,73 +174,50 @@ interface Look {
   play(obj: THREE.Object3D, clip: 'idle' | 'walk', seed: number): THREE.AnimationMixer;
 }
 
-// Period cloth colours; each spawned figure picks one set.
-const MEN = [
-  { Shirt: '#4b3a2a', Pants: '#3b352e', TieTexture: '#e8e2d4', Details: '#6b5a40', Hair: '#2e241b' },
-  { Shirt: '#2f3a44', Pants: '#5a5146', TieTexture: '#efe9dc', Details: '#5a4a35', Hair: '#4a3727' },
-  { Shirt: '#5c4632', Pants: '#2e2a26', TieTexture: '#ddd5c4', Details: '#4a3c2c', Hair: '#1f1a15' },
-];
-const WOMEN = [
-  { Dress: '#5b4a3b', Shoes: '#2a2019', Hair: '#3a2a1d' },
-  { Dress: '#3d4a55', Shoes: '#241c16', Hair: '#5a4128' },
-  { Dress: '#7a6a55', Shoes: '#2a2019', Hair: '#2a1f16' },
-  { Dress: '#6b3b2e', Shoes: '#221a14', Hair: '#4a3522' },
+// Market folk: working clothes (jacket and cap, apron; kerchief and shawl), period cloth colours.
+const CLOTH = [
+  { coat: '#4b3a2a', lower: '#3b352e', linen: '#e8e2d4', hat: '#2a2622', leather: '#1a1512', accent: '#8a8270', lining: '#161411' },
+  { coat: '#2f3a44', lower: '#5a5146', linen: '#efe9dc', hat: '#1c2026', leather: '#161311', accent: '#6b5a48', lining: '#111318' },
+  { coat: '#5c4632', lower: '#2e2a26', linen: '#ddd5c4', hat: '#6a4a36', leather: '#1c1611', accent: '#7a6a52', lining: '#1a1510' },
+  { coat: '#3d4a55', lower: '#3d4a55', linen: '#e8dfcf', hat: '#5a3a2a', leather: '#18120f', accent: '#5a4e40', lining: '#121410' },
 ];
 
+/** The townsfolk figures (folk.ts), dressed for the market. */
 async function loadPeople(): Promise<Look[]> {
-  const loader = new GLTFLoader();
-  const make = async (url: string, palettes: Record<string, string>[], idle: string, walk: string): Promise<Look | null> => {
-    try {
-      const gltf = await loader.loadAsync(url);
-      const src = gltf.scene;
-      smoothShade(src);
-      src.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(src);
-      const scale = 1.68 / (box.max.y - box.min.y);
-      const find = (n: string) => gltf.animations.find(a => a.name.endsWith(n));
+  try {
+    const folk = await loadFolk();
+    const outfits: Outfit[] = [
+      { sex: 'm', coat: 'jacket', hat: 'cap', beard: 'moustache', hair: 'buzzed', apron: true },
+      { sex: 'f', hat: 'scarf', wrap: 'shawl', apron: true },
+      { sex: 'm', coat: 'great', hat: 'felt', beard: 'full', hair: 'parted' },
+      { sex: 'f', hat: 'bonnet', wrap: 'none', apron: true },
+    ];
+    return outfits.map((o, k) => {
+      const F = o.sex === 'm' ? folk.m : folk.f;
+      const geo = dress(F, o);
       return {
         spawn(seed) {
-          const obj = cloneSkinned(src);
-          const pal = palettes[seed % palettes.length];
-          obj.traverse(o => {
-            const mesh = o as THREE.Mesh;
-            if (!mesh.isMesh) return;
-            mesh.castShadow = true;
-            mesh.frustumCulled = false;
-            const mats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(mm => {
-              const c = (mm as THREE.MeshStandardMaterial).clone();
-              if (pal[c.name]) c.color.set(pal[c.name]);
-              c.roughness = 0.9; c.metalness = 0;
-              return c;
-            });
-            mesh.material = Array.isArray(mesh.material) ? mats : mats[0];
-          });
-          obj.scale.setScalar(scale * (0.94 + 0.1 * ((seed * 7) % 5) / 4));
+          const c = CLOTH[(seed + k) % CLOTH.length];
+          const mat = figureMaterial(F, { ...c, skin: '#fff4ec', hair: ['#3b2a1d', '#5a4128', '#2a1f16'][seed % 3], brolly: '#161616', wood: '#3a2a1e' }, { exposed: 1, paint: geo.paint, outfit: o, pattern: [o.hat === 'scarf' ? 2 : 0, o.wrap === 'shawl' ? 1 : 0] });
+          const fig = figure(F, geo, mat);
+          fig.root.scale.setScalar(((o.sex === 'm' ? 1.72 : 1.62) / F.height) * (0.94 + 0.1 * ((seed * 7) % 5) / 4));
           const wrap = new THREE.Group();
-          wrap.add(obj);
+          wrap.add(fig.root);
           return wrap;
         },
         play(obj, clip, seed) {
-          const inner = obj.children[0];
-          const mixer = new THREE.AnimationMixer(inner);
-          const c = find(clip === 'idle' ? idle : walk);
-          if (c) {
-            const a = mixer.clipAction(c);
-            a.time = (seed * 0.61) % c.duration;
-            a.timeScale = clip === 'walk' ? 0.85 : 0.9 + 0.2 * ((seed % 3) / 2);
-            a.play();
-          }
+          const mixer = new THREE.AnimationMixer(obj.children[0]);
+          const c = F.clips[clip === 'idle' ? (seed % 2 ? 'Idle_Talking_Loop' : 'Idle_Loop') : 'Walk_Loop'];
+          const a = mixer.clipAction(c);
+          a.time = (seed * 0.61) % c.duration;
+          a.timeScale = clip === 'walk' ? 0.85 : 0.9 + 0.2 * ((seed % 3) / 2);
+          a.play();
           return mixer;
         },
       };
-    } catch (e) {
-      console.warn('townsfolk', url, e);
-      return null;
-    }
-  };
-  const looks = await Promise.all([
-    make('assets/char/man.glb', MEN, 'Man_Idle', 'Man_Walk'),
-    make('assets/char/woman.glb', WOMEN, 'Female_Idle', 'Female_Walk'),
-  ]);
-  return looks.filter((l): l is Look => !!l);
+    });
+  } catch (e) {
+    console.warn('townsfolk', e);
+    return [];
+  }
 }
