@@ -1372,18 +1372,18 @@ export function buildStreetProps(opts: {
     // two small hay heaps where a cabman fed his horse, stalks sticking out all over them
     for (let k = 0; k < 2; k++) {
       const [x, z] = world(s0 + 3 + k * 7 + rr() * 2, t0 + 1 + rr() * 2), yaw = rr() * 6, R = 0.36, Hh = 0.3;
-      const heap = new THREE.SphereGeometry(R, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.3, Hh / R, 1);
+      const heap = new THREE.SphereGeometry(R, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.3, Hh / R, 1);
       // pulled about by the horse: lumps and a trampled side
       const deform = (px: number, py: number, pz: number) => {
-        const n = vnoise(px * 6 + k * 5, py * 6, pz * 6);
-        return [px * (1 + 0.25 * (n - 0.5)), py * (0.75 + 0.6 * n) * (1 - 0.35 * Math.max(0, px / (R * 1.3))), pz * (1 + 0.25 * (n - 0.5))];
+        const n = vnoise(px * 6 + k * 5, py * 6, pz * 6), f = 1 + 0.12 * (vnoise(px * 22, py * 22 + k, pz * 22) - 0.5);   // lumps, then tufts
+        return [px * (1 + 0.25 * (n - 0.5)) * f, py * (0.75 + 0.6 * n) * (1 - 0.35 * Math.max(0, px / (R * 1.3))) * f, pz * (1 + 0.25 * (n - 0.5)) * f];
       };
       const hp = heap.getAttribute('position') as THREE.BufferAttribute;
       for (let i = 0; i < hp.count; i++) hp.setXYZ(i, ...(deform(hp.getX(i), hp.getY(i), hp.getZ(i)) as [number, number, number]));
       heap.computeVertexNormals();
-      bags.add('cloth', put(paint(heap, '#c4ab6a', 0, 0, 0.35), x, G(x, z) - 0.02, z, yaw));
+      bags.add('cloth', put(paint(heap, '#cdb472', 0.08, 0.35, 0.45), x, G(x, z) - 0.02, z, yaw));
       const st: number[] = [], sc: number[] = [];
-      for (let q = 0; q < 160; q++) {
+      for (let q = 0; q < 320; q++) {
         const a = rr() * Math.PI * 2, f = Math.sqrt(rr()) * 1.05;
         const [hx, hy0, hz] = deform(Math.cos(a) * R * 1.3 * f, Hh * Math.sqrt(Math.max(0, 1 - f * f)), Math.sin(a) * R * f), hy = hy0 - 0.02 + 0.012;
         const dir = rr() * Math.PI * 2, L = 0.1 + rr() * 0.16, up = (rr() - 0.3) * 0.08, w = 0.004;
