@@ -1,29 +1,32 @@
 // Downloads CC0 PBR textures from Poly Haven into public/assets/tex/<id>/.
+// Maps: diff (colour), nor (OpenGL normal), rough (roughness) or arm (AO, roughness, metal packed in R, G, B),
+// height (Poly Haven 'Displacement', for parallax occlusion mapping: src/render/pom.ts).
 import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const OUT = path.join(ROOT, 'public', 'assets', 'tex');
 
-// id -> resolution
+const NAMES = { Diffuse: 'diff', nor_gl: 'nor', Rough: 'rough', arm: 'arm', Displacement: 'height' };
+// id -> resolution and the maps it needs.
+// 2k cobbles stay: a 4k set (+20 MB) is indistinguishable after the oil-paint pass even at 0.6 m eye height.
 const TEXTURES = {
-  cobblestone_floor_08: '2k', // rounded fieldstone cobbles (streets, square)
-  clay_roof_tiles: '1k',      // hand-made red clay tiles
-  plastered_wall_04: '1k',    // lime plaster, tinted per house
-  weathered_planks: '1k',     // doors, shutters, stalls
+  cobblestone_floor_08: { res: '2k', maps: ['Diffuse', 'nor_gl', 'arm', 'Displacement'] }, // rounded fieldstone cobbles (streets, square)
+  clay_roof_tiles: { res: '1k', maps: ['Diffuse', 'nor_gl', 'arm', 'Displacement'] },      // hand-made barrel tiles, laid at their true 4 m scale
+  plastered_wall_04: { res: '1k', maps: ['Diffuse', 'nor_gl', 'Rough'] },                   // lime plaster, tinted per house
+  weathered_planks: { res: '1k', maps: ['Diffuse', 'nor_gl', 'Rough'] },                    // doors, shutters, stalls
 };
-const MAPS = { Diffuse: 'diff', nor_gl: 'nor', Rough: 'rough' };
 
-for (const [id, res] of Object.entries(TEXTURES)) {
+for (const [id, { res, maps }] of Object.entries(TEXTURES)) {
   const files = await (await fetch(`https://api.polyhaven.com/files/${id}`)).json();
   fs.mkdirSync(path.join(OUT, id), { recursive: true });
-  for (const [key, short] of Object.entries(MAPS)) {
+  for (const key of maps) {
     const url = files[key]?.[res]?.jpg?.url;
     if (!url) { console.warn(`${id}: no ${key} ${res} jpg`); continue; }
-    const dest = path.join(OUT, id, `${short}.jpg`);
+    const dest = path.join(OUT, id, `${NAMES[key]}.jpg`);
     if (fs.existsSync(dest)) continue;
     const buf = Buffer.from(await (await fetch(url)).arrayBuffer());
     fs.writeFileSync(dest, buf);
-    console.log(`${id}/${short}.jpg ${(buf.length / 1024).toFixed(0)} KB`);
+    console.log(`${id}/${NAMES[key]}.jpg ${(buf.length / 1024).toFixed(0)} KB`);
   }
 }
