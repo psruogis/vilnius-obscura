@@ -5,6 +5,10 @@ import type { PromenadeMaterials } from './materials';
 import { townHallFrame, TOWN_HALL_SIZE } from './townhall';
 import { mbox, merged, trianglesToGeometry } from './geom';
 import { treeGeometry } from './trees';
+import { bevelBox, sweep, lathe, type P2 } from './classical';
+import { buildLawn, type LawnPanel } from './lawn';
+import { WET, RAIN_TIME } from '../render/weather';
+import { age } from './ageing';
 import type { LampSpot } from './lamps';
 
 /**
@@ -14,11 +18,16 @@ import type { LampSpot } from './lamps';
  * straight on from it up the middle of Didžioji, a row of trees inside each side fence, a rounded north
  * end with a well. Look from the period views: stone posts with timber rails, young trees (the c.1800
  * watercolour), and a long low booth with a tiled hip roof west of the portico.
+ *
+ * By c.1900 it is a municipal garden: three lawn panels in granite kerbs, cut by gravel cross walks at
+ * the side entrances, a round basin with a fountain in the northern panel, gas lamps along the fences.
+ * The fence posts stand on a low stone curb that edges the gravel. (The garden layout is conjecture in
+ * the manner of the period's town squares, grade C.)
  */
 
 const HALF = 14.3;            // fence line, either side of the axis (the portico is 28 m wide)
 const TREE_T = 12.3;          // tree rows
-const WALK_T = 11.4;          // gravel walk edge
+const LAWN_T = 8.8;           // lawn edge (a 2.6 m gravel walk on either side, then the trees)
 const LENGTH = 140;           // portico steps to the apex of the rounded north end
 const R_END = HALF;
 const S_END = LENGTH - R_END; // centre of the rounded end
@@ -26,6 +35,13 @@ const SKEW = THREE.MathUtils.degToRad(3); // the plan's axis leans ~3° west of 
 const POST_STEP = 3.0;
 const GAPS: [number, number][] = [[43, 47], [88, 92]]; // side entrances (s ranges, both sides)
 const APEX_GAP = 0.16;        // half-angle of the north entrance, radians
+const PANELS: LawnPanel[] = [
+  { s0: 7, s1: 41.5, t0: -LAWN_T, t1: LAWN_T, r: 2.2 },
+  { s0: 48.5, s1: 86.5, t0: -LAWN_T, t1: LAWN_T, r: 2.2 },
+  { s0: 93.5, s1: 121.7, t0: -LAWN_T, t1: LAWN_T, r: 2.2, hole: [0, 0, 6.4] },
+];
+const BASIN_S = (PANELS[2].s0 + PANELS[2].s1) / 2, BASIN_R = 4.2;
+const CURB_W = 0.42, CURB_H = 0.16; // the fence curb
 
 export interface Promenade { group: THREE.Group; segments: [number, number, number, number][]; update(dt: number): void; lamps: LampSpot[] }
 
@@ -49,21 +65,75 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
 
   const stone: THREE.BufferGeometry[] = [], wood: THREE.BufferGeometry[] = [], bark: THREE.BufferGeometry[] = [];
   const leaves: THREE.BufferGeometry[] = [], gravel: THREE.BufferGeometry[] = [], roof: THREE.BufferGeometry[] = [];
+  const kerbs: THREE.BufferGeometry[] = [], soil: THREE.BufferGeometry[] = [];
   const segments: [number, number, number, number][] = [];
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), Y = new THREE.Vector3(0, 1, 0);
   const place = (g: THREE.BufferGeometry, p: THREE.Vector3, yaw: number) =>
     g.applyMatrix4(m.compose(p, q.setFromAxisAngle(Y, yaw), one));
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
-  // --- Fence: runs of posts and rails, broken by the entrances ---------------------------------
+  // --- Kerbs: dressed stones about a metre long along an outline in (s, t), following the ground ----
+  // Each stone is a swept section with chamfered arrises, bedded `sink` below the ground; on curves
+  // the stones are curved (as cut kerbs are), with slight differences in height and joints between.
+  const kerb = (pts: P2[], closed: boolean, w: number, h: number, sink: number, len = 1.0) => {
+    const path = closed ? [...pts, pts[0]] : pts;
+    const cum = [0];
+    for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+    const total = cum[cum.length - 1], n = Math.max(1, Math.round(total / len));
+    const at = (d: number): P2 => {
+      let i = 1;
+      while (i < cum.length - 1 && cum[i] < d) i++;
+      const k = (d - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]);
+      return [path[i - 1][0] + (path[i][0] - path[i - 1][0]) * k, path[i - 1][1] + (path[i][1] - path[i - 1][1]) * k];
+    };
+    const cuts = Array.from({ length: n + 1 }, (_, i) => (i === 0 || i === n ? (total * i) / n : (total * (i + (rnd() - 0.5) * 0.3)) / n));
+    const b = 0.018;
+    for (let i = 0; i < n; i++) {
+      const d0 = cuts[i] + 0.004, d1 = cuts[i + 1] - 0.004;
+      const pp: P2[] = [at(d0)];
+      for (let k = 1; k < path.length - 1; k++) if (cum[k] > d0 + 0.02 && cum[k] < d1 - 0.02) pp.push(path[k]);
+      pp.push(at(d1));
+      const dy = (rnd() - 0.5) * 0.022, dt = (rnd() - 0.5) * 0.012;
+      const prof: P2[] = [[w / 2, -sink], [w / 2, h - b], [w / 2 - b, h], [-w / 2 + b, h], [-w / 2, h - b], [-w / 2, -sink]].map(([s, u]) => [s + dt, u + dy] as P2);
+      kerbs.push(sweep(pp.map(([s, t]) => world(s, t)), Y, prof, { hard: 50 }));
+    }
+  };
+  const arc = (cs: number, ct: number, r: number, a0: number, a1: number, n: number): P2[] =>
+    Array.from({ length: n + 1 }, (_, i) => { const a = a0 + ((a1 - a0) * i) / n; return [cs + Math.cos(a) * r, ct + Math.sin(a) * r] as P2; });
+  const roundedRect = (P: LawnPanel, off: number): P2[] => {
+    const r = P.r + off, s0 = P.s0 - off, s1 = P.s1 + off, t0 = P.t0 - off, t1 = P.t1 + off, n = 8;
+    return [
+      ...arc(s1 - r, t0 + r, r, -Math.PI / 2, 0, n), ...arc(s1 - r, t1 - r, r, 0, Math.PI / 2, n),
+      ...arc(s0 + r, t1 - r, r, Math.PI / 2, Math.PI, n), ...arc(s0 + r, t0 + r, r, Math.PI, Math.PI * 1.5, n),
+    ];
+  };
+
+  // --- Fence: stone posts on a low curb, two timber rails, broken by the entrances --------------
+  const curbTop = (p: THREE.Vector3) => p.clone().setY(p.y + CURB_H);
   const fenceRun = (pts: THREE.Vector3[]) => {
-    for (const p of pts) stone.push(place(mbox(0.3, 1.0, 0.3, 0, 0.5, 0), p.clone(), yawAlong));
-    for (const p of pts) stone.push(place(mbox(0.38, 0.1, 0.38, 0, 1.03, 0), p.clone(), yawAlong));
+    for (const p of pts) {
+      const post: THREE.BufferGeometry[] = [
+        bevelBox(0.38, 0.14, 0.38, 0, 0.07, 0, 0.025),          // footing
+        bevelBox(0.28, 0.8, 0.28, 0, 0.14 + 0.4, 0, 0.03),      // shaft
+        bevelBox(0.36, 0.07, 0.36, 0, 0.975, 0, 0.02),          // cap slab
+        bevelBox(0.3, 0.05, 0.3, 0, 1.035, 0, 0.015),
+      ];
+      const top = new THREE.ConeGeometry(0.2, 0.13, 4, 1).rotateY(Math.PI / 4).toNonIndexed(); // pyramidal cap
+      top.computeVertexNormals();
+      post.push(top.translate(0, 1.06 + 0.065, 0));
+      for (const g of post) stone.push(place(g, curbTop(p), yawAlong));
+    }
     for (let i = 0; i + 1 < pts.length; i++) {
       const A = pts[i], B = pts[i + 1];
       const L = Math.hypot(B.x - A.x, B.z - A.z);
       const yaw = Math.atan2(-(B.z - A.z), B.x - A.x);
-      const mid = A.clone().add(B).multiplyScalar(0.5);
-      for (const h of [0.42, 0.82]) wood.push(place(mbox(L, 0.09, 0.07, 0, h, 0), mid.clone(), yaw));
+      const mid = curbTop(A.clone().add(B).multiplyScalar(0.5));
+      const pitch = Math.atan2(B.y - A.y, L);
+      for (const h of [0.44, 0.84]) {
+        const rail = bevelBox(L - 0.26, 0.09, 0.07, 0, 0, 0, 0.014).rotateZ(pitch).translate(0, h, 0);
+        wood.push(place(rail, mid.clone(), yaw));
+      }
       segments.push([A.x, A.z, B.x, B.z]);
     }
   };
@@ -74,6 +144,7 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
       const a = cuts[k], b = cuts[k + 1];
       const n = Math.max(1, Math.round((b - a) / POST_STEP));
       fenceRun(Array.from({ length: n + 1 }, (_, i) => world(a + ((b - a) * i) / n, side * HALF)));
+      kerb([[a - 0.22, side * HALF], [b + (b === S_END ? 0 : 0.22), side * HALF]], false, CURB_W, CURB_H, 0.12, 1.3);
     }
     // Rounded north end, each half up to the entrance
     const a0 = 0, a1 = Math.PI / 2 - APEX_GAP; // angle from the side towards the apex
@@ -82,9 +153,11 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
       const a = a0 + ((a1 - a0) * i) / n;
       return world(S_END + Math.sin(a) * R_END, side * Math.cos(a) * R_END);
     }));
+    const ends = Array.from({ length: 25 }, (_, i) => { const a = a0 + ((a1 + 0.012 - a0) * i) / 24; return [S_END + Math.sin(a) * R_END, side * Math.cos(a) * R_END] as P2; });
+    kerb(ends, false, CURB_W, CURB_H, 0.12, 1.3);
   }
 
-  // --- Young lindens inside each fence (the c.1800 watercolour shows them newly planted) ------
+  // --- Lindens inside each fence, grown by c.1900, each in a ring of bare earth -------------------
   let i = 0;
   for (let s = 5; s <= S_END - 2; s += 8.5, i++) {
     if (GAPS.some(([a, b]) => s > a - 1.5 && s < b + 1.5)) continue;
@@ -94,50 +167,59 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
       const t = treeGeometry(i * 2 + (side > 0 ? 1 : 0), k * 2.05); // c.1900: grown lindens (~10 m)
       bark.push(place(t.wood, p.clone(), i));
       leaves.push(place(t.leaves, p.clone(), i * 1.7));
+      soil.push(new THREE.CircleGeometry(0.62, 20).rotateX(-Math.PI / 2).translate(p.x, p.y + 0.055, p.z));
     }
   }
 
-  // --- Gravel walk, following the ground -------------------------------------------------------
+  // --- Gravel, following the ground, from curb to curb --------------------------------------------
   const tris: THREE.Vector3[][] = [];
   const lift = (p: THREE.Vector3) => { p.y += 0.04; return p; };
-  const ds = 4, dt = WALK_T / 3;
+  const GT = HALF - CURB_W / 2 + 0.02;
+  const ds = 3, dtt = GT / 4;
   for (let s = 0; s < S_END; s += ds) {
-    for (let t = -WALK_T; t < WALK_T - 1e-6; t += dt) {
-      const a = lift(world(s, t)), b = lift(world(s, t + dt)), c = lift(world(Math.min(s + ds, S_END), t + dt)), d = lift(world(Math.min(s + ds, S_END), t));
+    for (let t = -GT; t < GT - 1e-6; t += dtt) {
+      const a = lift(world(s, t)), b = lift(world(s, t + dtt)), c = lift(world(Math.min(s + ds, S_END), t + dtt)), d = lift(world(Math.min(s + ds, S_END), t));
       tris.push([a, b, c], [a, c, d]);
     }
   }
-  const segs = 16, rw = WALK_T;
+  const segs = 24;
   for (let k = 0; k < segs; k++) {
     const a0 = -Math.PI / 2 + (Math.PI * k) / segs, a1 = -Math.PI / 2 + (Math.PI * (k + 1)) / segs;
-    const c = lift(world(S_END, 0));
-    tris.push([c, lift(world(S_END + Math.cos(a0) * rw, Math.sin(a0) * rw)), lift(world(S_END + Math.cos(a1) * rw, Math.sin(a1) * rw))]);
+    for (const [r0, r1] of [[0, GT * 0.5], [GT * 0.5, GT]]) {
+      const p = (r: number, a: number) => lift(world(S_END + Math.cos(a) * r, Math.sin(a) * r));
+      if (r0 === 0) tris.push([lift(world(S_END, 0)), p(r1, a0), p(r1, a1)]);
+      else tris.push([p(r0, a0), p(r1, a0), p(r1, a1)], [p(r0, a0), p(r1, a1), p(r0, a1)]);
+    }
   }
   gravel.push(flatGeometry(tris));
 
-  // --- c.1900 garden: lawns inside the gravel walk, a round basin with a fountain, gas lamps ----
-  const lawnTris: THREE.Vector3[][] = [];
-  const lawnT = WALK_T - 2.6, ls0 = 7, ls1 = S_END - 4, lift2 = (p: THREE.Vector3) => { p.y += 0.07; return p; };
-  const basinS = S_END - 26, basinR = 4.2;
-  for (let s = ls0; s < ls1; s += 4) {
-    for (let t = -lawnT; t < lawnT - 1e-6; t += lawnT / 2) {
-      const s1 = Math.min(s + 4, ls1), t1 = t + lawnT / 2;
-      // leave a gravel circle round the basin and a cross path through the middle
-      const cs = (s + s1) / 2, ct = (t + t1) / 2;
-      if (Math.hypot(cs - basinS, ct) < basinR + 3.2) continue;
-      if (Math.abs(ct) < 1.2 && false) continue;
-      lawnTris.push([lift2(world(s, t)), lift2(world(s, t1)), lift2(world(s1, t1))], [lift2(world(s, t)), lift2(world(s1, t1)), lift2(world(s1, t))]);
+  // --- Lawns in granite kerbs --------------------------------------------------------------------
+  const KERB_W = 0.15;
+  for (const P of PANELS) {
+    kerb(roundedRect(P, KERB_W / 2), true, KERB_W, 0.13, 0.1, 0.95);
+    if (P.hole) {
+      const [hs, ht, hr] = P.hole, cs = (P.s0 + P.s1) / 2 + hs, ct = (P.t0 + P.t1) / 2 + ht;
+      kerb(arc(cs, ct, hr - KERB_W / 2, 0, Math.PI * 2, 48).slice(0, -1), true, KERB_W, 0.13, 0.1, 0.8);
     }
   }
-  const lawn: THREE.BufferGeometry[] = [flatGeometry(lawnTris)];
-  // basin: a low stone rim, dark water, a small fountain in the middle
-  const bp = world(basinS, 0);
-  const rim = new THREE.LatheGeometry([[basinR - 0.35, 0], [basinR, 0], [basinR + 0.05, 0.45], [basinR - 0.05, 0.55], [basinR - 0.4, 0.5], [basinR - 0.4, 0.1]].map(([a, b]) => new THREE.Vector2(a, b)), 40);
-  stone.push(rim.translate(bp.x, bp.y, bp.z));
-  stone.push(new THREE.CylinderGeometry(0.35, 0.5, 1.1, 16).translate(bp.x, bp.y + 0.55, bp.z));
-  stone.push(new THREE.LatheGeometry([[0, 0], [0.9, 0.05], [1.05, 0.3], [0.95, 0.35], [0.2, 0.2]].map(([a, b]) => new THREE.Vector2(a, b)), 24).translate(bp.x, bp.y + 1.05, bp.z));
-  const water: THREE.BufferGeometry[] = [new THREE.CircleGeometry(basinR - 0.38, 40).rotateX(-Math.PI / 2).translate(bp.x, bp.y + 0.36, bp.z)];
-  segments.push(...ringSegments(bp, basinR + 0.1, 16));
+  const lawns = buildLawn(PANELS, world, mats.lawn, (mats.leaves.userData.time ?? { value: 0 }) as { value: number });
+
+  // --- Basin: a moulded stone rim round dark water, a fountain on a baluster pedestal ------------
+  const bp = world(BASIN_S, 0);
+  const R = BASIN_R;
+  const rimP: P2[] = [[R - 0.02, -0.2], [R - 0.02, 0.06], [R + 0.04, 0.09], [R + 0.04, 0.14], [R, 0.16],   // footing, plinth
+    [R - 0.03, 0.2], [R - 0.03, 0.36], [R + 0.03, 0.38], [R + 0.07, 0.42], [R + 0.08, 0.47], [R + 0.06, 0.51], [R + 0.02, 0.535], // wall, torus-nosed coping
+    [R - 0.12, 0.55], [R - 0.26, 0.545], [R - 0.3, 0.52], [R - 0.31, 0.48], [R - 0.31, 0.2]];                    // top, inner face
+  stone.push(lathe(rimP, 72, { hard: 60 }).translate(bp.x, bp.y, bp.z));
+  const pedP: P2[] = [[0.62, 0.15], [0.62, 0.34], [0.55, 0.38], [0.5, 0.42], [0.36, 0.5], [0.28, 0.62], [0.26, 0.8], [0.3, 0.95], // base, baluster
+    [0.24, 1.04], [0.2, 1.08], [0.24, 1.12], [0.62, 1.2], [0.95, 1.28], [1.08, 1.34], [1.12, 1.4], [1.08, 1.45], [0.98, 1.46], [0.9, 1.4], // bowl
+    [0.35, 1.36], [0.18, 1.42], [0.16, 1.62], [0.22, 1.7], [0.2, 1.78], [0.08, 1.9], [0, 1.94]];                                          // finial
+  stone.push(lathe(pedP, 40, { hard: 55 }).translate(bp.x, bp.y, bp.z));
+  const water: THREE.BufferGeometry[] = [
+    new THREE.CircleGeometry(R - 0.3, 64).rotateX(-Math.PI / 2).translate(bp.x, bp.y + 0.42, bp.z),
+    new THREE.CircleGeometry(0.9, 24).rotateX(-Math.PI / 2).translate(bp.x, bp.y + 1.43, bp.z),     // the bowl, brim-full
+  ];
+  segments.push(...ringSegments(bp, R + 0.12, 16));
   // cast-iron gas lamps just outside both fences
   const iron: THREE.BufferGeometry[] = [];
   const lamps: LampSpot[] = [];
@@ -177,27 +259,108 @@ export function buildPromenade(th: Building, terrain: Terrain, mats: PromenadeMa
     for (let k = 0; k < 4; k++) segments.push([corners[k].x, corners[k].z, corners[(k + 1) % 4].x, corners[(k + 1) % 4].z]);
   }
 
+  // --- Materials of our own: granite kerbs, bare earth, wet gravel -------------------------------
+  const granite = new THREE.MeshStandardMaterial({ color: '#aaa397', roughness: 0.9, map: (mats.stone as THREE.MeshStandardMaterial).map });
+  const kerbMat = damp(age(granite, { strength: 1.2, seed: 9 }) as THREE.MeshStandardMaterial, 0.6); // worn grey granite
+  const soilMat = damp(new THREE.MeshStandardMaterial({ color: '#4a3b2c', roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), 0.55);
+  damp(mats.gravel, 0.75, 'gravel');
+  damp(mats.water, 1, 'water');
+  const barkMat = mats.bark.clone() as THREE.MeshStandardMaterial;
+  barkMat.color.set('#71675b');               // linden bark: grey-brown, not black
+
   // --- Meshes ----------------------------------------------------------------------------------
   const group = new THREE.Group();
   group.name = 'promenade';
-  const add = (parts: THREE.BufferGeometry[], mat: THREE.Material, shadow = true) => {
+  const add = (parts: THREE.BufferGeometry[], mat: THREE.Material, shadow = true, name = '') => {
     if (!parts.length) return;
-    const mesh = new THREE.Mesh(merged(parts), mat);
+    const mesh = new THREE.Mesh(merged(parts.map(withUv)), mat);
+    mesh.name = name;
     mesh.castShadow = shadow;
     mesh.receiveShadow = true;
     group.add(mesh);
   };
   add(stone, mats.stone);
+  add(kerbs, kerbMat, false);
   add(wood, mats.wood);
-  add(bark, mats.bark);
+  add(bark, barkMat);
   add(leaves, mats.leaves);
   add(roof, mats.roof);
-  add(gravel, mats.gravel, false);
-  add(lawn, mats.lawn, false);
+  add(gravel, mats.gravel, false, 'promenade-gravel');
+  add(soil, soilMat, false);
   add(water, mats.water, false);
   add(iron, mats.iron);
+  group.add(lawns);
   const clock = (mats.leaves.userData.time ?? { value: 0 }) as { value: number };
   return { group, segments, lamps, update: dt => { clock.value += dt; } };
+}
+
+/**
+ * Rain on stone, earth, gravel and water (materials main.ts doesn't wet): darker and glossier with
+ * WET. Gravel also gets pebbles and, in rain, shallow puddles in the low spots; puddles and the basin
+ * water get rings from the drops.
+ */
+function damp(m: THREE.MeshStandardMaterial, dark: number, kind: 'plain' | 'gravel' | 'water' = 'plain'): THREE.MeshStandardMaterial {
+  const own = m.onBeforeCompile, ownKey = m.customProgramCacheKey();
+  m.onBeforeCompile = (shader, renderer) => {
+    own.call(m, shader, renderer);
+    shader.uniforms.uDampWet = WET;
+    shader.uniforms.uDampTime = RAIN_TIME;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vDampW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvDampW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        varying vec3 vDampW; uniform float uDampWet; uniform float uDampTime;
+        float dp_h(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+        float dp_n(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(dp_h(i), dp_h(i + vec2(1, 0)), f.x), mix(dp_h(i + vec2(0, 1)), dp_h(i + vec2(1, 1)), f.x), f.y); }`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        float dpPuddle = ${kind === 'water' ? 'uDampWet' : '0.0'}, dpPeb = 0.0;
+        ${kind === 'gravel' ? `
+        {
+          // pebbles: two sizes of jittered stones, each of its own tone, in a darker sandy matrix;
+          // faded out where they would be smaller than a pixel
+          float px = length(fwidth(vDampW.xz));
+          float peb = 0.0, tone = 0.0;
+          for (int k = 0; k < 2; k++) {
+            float sc = k == 0 ? 52.0 : 21.0;
+            vec2 q = vDampW.xz * sc + float(k) * 17.3, c = floor(q), fq = fract(q) - 0.5;
+            vec2 o = (vec2(dp_h(c), dp_h(c + 7.0)) - 0.5) * 0.5;
+            float r = 0.16 + 0.2 * dp_h(c + 3.0), e = length((fq - o) * vec2(1.0, 1.0 + 0.7 * dp_h(c + 5.0)));
+            float mk = (1.0 - smoothstep(r * 0.55, r, e)) * step(0.3, dp_h(c + 11.0)) * (1.0 - smoothstep(0.5, 1.5, px * sc));
+            if (mk > peb) { peb = mk; tone = dp_h(c + 13.0); }
+          }
+          // grey granite chips to pale limestone, in a sandy matrix that darkens more than they do in rain
+          float lum = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15));
+          vec3 stoneC = mix(vec3(lum * 0.95, lum * 0.97, lum), diffuseColor.rgb * 1.15, tone) * (0.9 + 0.35 * tone);
+          diffuseColor.rgb = mix(diffuseColor.rgb * mix(0.92, 0.72, uDampWet), stoneC, peb * 0.75);
+          dpPeb = peb;
+          diffuseColor.rgb *= 0.88 + 0.24 * dp_n(vDampW.xz * 0.35);
+          dpPuddle = smoothstep(0.64, 0.74, dp_n(vDampW.xz * 0.28) * 0.7 + dp_n(vDampW.xz * 1.3) * 0.3) * uDampWet;
+          diffuseColor.rgb *= 1.0 - 0.3 * dpPuddle;
+        }` : ''}
+        diffuseColor.rgb *= mix(1.0, ${dark.toFixed(2)}, uDampWet);`)
+      .replace('#include <metalnessmap_fragment>', `roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.55, uDampWet);
+        roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.55, dpPeb * uDampWet);   // wet pebbles glint
+        roughnessFactor = mix(roughnessFactor, 0.05, ${kind === 'water' ? '0.0' : 'dpPuddle'});
+        #include <metalnessmap_fragment>`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        if (dpPuddle > 0.01) {
+          // drop rings
+          vec2 q = vDampW.xz / 0.5, g = vec2(0.0);
+          for (int k = 0; k < 2; k++) {
+            vec2 c = floor(q + float(k) * 0.5), fq = q + float(k) * 0.5 - c;
+            float ph = fract(uDampTime * (0.9 + 0.4 * dp_h(c + 3.0)) + dp_h(c + 9.0));
+            vec2 d = fq - (vec2(dp_h(c), dp_h(c + 17.0)) * 0.6 + 0.2); float r = length(d);
+            g += normalize(d + 1e-4) * sin((r - ph * 0.45) * 55.0) * (1.0 - ph) * smoothstep(ph * 0.45 + 0.07, ph * 0.45, r) * smoothstep(ph * 0.45 - 0.12, ph * 0.45, r);
+          }
+          vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+          normal = normalize(mix(normal, upV, dpPuddle) + (viewMatrix * vec4(g.x, 0.0, g.y, 0.0)).xyz * 0.25 * dpPuddle);
+        }`);
+  };
+  m.customProgramCacheKey = () => `${ownKey}|damp-${kind}${dark}`;
+  m.needsUpdate = true;
+  return m;
 }
 
 /** Up-facing triangles with planar (x, z) UVs in metres. */
@@ -213,6 +376,13 @@ function flatGeometry(tris: THREE.Vector3[][]): THREE.BufferGeometry {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return g;
+}
+
+/** Keeps position/normal/uv only (zero UVs where missing), so mixed parts merge. */
+function withUv(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'aSway'].includes(k)) g.deleteAttribute(k);
+  if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2));
   return g;
 }
 

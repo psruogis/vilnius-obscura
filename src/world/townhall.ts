@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { trianglesToGeometry } from './geom';
-import { bevelBox, sweep, lathe, grid, mergeParts, bakeOcclusion, occlusion, type P2, type Occluder } from './classical';
+import { bevelBox, sweep, lathe, grid, mergeParts, bakeOcclusion, overhangOcclusion, occlusion, type P2, type Occluder } from './classical';
 import type { Building } from './area';
 
 /*
@@ -103,6 +103,38 @@ function column(x: number, z: number, base: number): THREE.BufferGeometry[] {
   return parts;
 }
 
+/**
+ * A carved rosette hanging from a ceiling at y = 0, radius R: twelve outer petals, eight inner ones
+ * and a boss (the portico ceiling "su reljefinėmis rozetėmis", KVR 678).
+ */
+function rosette(R: number): THREE.BufferGeometry {
+  const nr = 14, na = 96, pos: number[] = [], uv: number[] = [], idx: number[] = [];
+  const depth = (r: number, th: number) => {
+    const p1 = Math.pow(Math.abs(Math.cos(6 * th)), 0.7), R1 = 0.62 + 0.38 * p1;
+    const p2 = Math.pow(Math.abs(Math.cos(4 * th + 0.4)), 0.7), R2 = 0.3 + 0.22 * p2;
+    let y = 0.015;
+    if (r < R1) y = Math.max(y, 0.1 * Math.sqrt(1 - (r / R1) ** 2) * (0.55 + 0.45 * p1));
+    if (r < R2) y = Math.max(y, 0.1 + 0.08 * Math.sqrt(1 - (r / R2) ** 2));
+    if (r < 0.14) y = Math.max(y, 0.2 + 0.06 * Math.sqrt(1 - (r / 0.14) ** 2));
+    return y;
+  };
+  for (let i = 0; i <= nr; i++) for (let j = 0; j <= na; j++) {
+    const r = i / nr, th = (j / na) * Math.PI * 2;
+    pos.push(r * Math.cos(th) * R, i === nr ? 0 : -depth(r, th) * R, r * Math.sin(th) * R);
+    uv.push(r * Math.cos(th) * R, r * Math.sin(th) * R);
+  }
+  for (let i = 0; i < nr; i++) for (let j = 0; j < na; j++) {
+    const a = i * (na + 1) + j, b = a + 1, d = a + na + 1, c = d + 1;
+    idx.push(a, d, c, a, c, b);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 /** A hipped roof over the rectangle [x0,x1]×[z0,z1] starting at height y. */
 function hipRoof(x0: number, x1: number, z0: number, z1: number, y: number, pitch: number): THREE.BufferGeometry {
   const w = x1 - x0, d = z1 - z0;
@@ -176,13 +208,14 @@ function onWall(g: THREE.BufferGeometry, side: 'n' | 'e' | 's' | 'w'): THREE.Buf
 }
 
 /** A wall face in the wall frame (facing -Z), UVs in metres (u along the wall, v = height). */
-const wallFace = (x0: number, x1: number, y0: number, y1: number, cell = 100) =>
-  grid(v3(x0, y0, 0), v3(x1 - x0, 0, 0), v3(0, y1 - y0, 0), cell, v3(0, 0, -1), [x0, y0]);
+const wallFace = (x0: number, x1: number, y0: number, y1: number, cell = 100, cellV = cell) =>
+  grid(v3(x0, y0, 0), v3(x1 - x0, 0, 0), v3(0, y1 - y0, 0), cell, v3(0, 0, -1), [x0, y0], cellV);
 
 export function buildTownHall(b: Building, mats: TownHallMaterials): THREE.Group {
   const wall: THREE.BufferGeometry[] = [], stone: THREE.BufferGeometry[] = [], plinth: THREE.BufferGeometry[] = [];
   const roof: THREE.BufferGeometry[] = [], glass: THREE.BufferGeometry[] = [], wood: THREE.BufferGeometry[] = [];
   const px0 = PORTICO_X0, px1 = PORTICO_X1, pz = -PORTICO_DEPTH, zF = Z_FRIEZE;
+  const friezes: THREE.BufferGeometry[] = []; // faces under the cornice, shaded by its overhang (after the bake)
 
   // Column centres
   let cx = PORTICO_MID - COL_SPACING.reduce((a, s) => a + s, 0) / 2;
@@ -197,10 +230,10 @@ export function buildTownHall(b: Building, mats: TownHallMaterials): THREE.Group
     if (side === 'n') {
       wall.push(onWall(wallFace(0, px0, PLINTH, E_BASE + 0.05), side), onWall(wallFace(px1, W, PLINTH, E_BASE + 0.05), side));
       wall.push(onWall(wallFace(px0, px1, PLINTH, F_BASE + 0.02, 0.6), side)); // behind the portico, up to the ceiling: a fine grid for the baked shade
-      stone.push(onWall(wallFace(0, px0, F_BASE - 0.05, C_BASE + 0.02), side), onWall(wallFace(px1, W, F_BASE - 0.05, C_BASE + 0.02), side));
+      friezes.push(onWall(wallFace(0, px0, F_BASE - 0.05, C_BASE + 0.02, 3, 0.3), side), onWall(wallFace(px1, W, F_BASE - 0.05, C_BASE + 0.02, 3, 0.3), side));
     } else {
       wall.push(onWall(wallFace(0, L, PLINTH, E_BASE + 0.05), side));
-      stone.push(onWall(wallFace(0, L, F_BASE - 0.05, C_BASE + 0.02), side));
+      friezes.push(onWall(wallFace(0, L, F_BASE - 0.05, C_BASE + 0.02, 3, 0.3), side));
     }
   }
   // base moulding on the plinth, round the block (not behind the portico, where the doors stand on the floor)
@@ -250,10 +283,16 @@ export function buildTownHall(b: Building, mats: TownHallMaterials): THREE.Group
     const x0 = bayEdges[k], x1 = bayEdges[k + 1], z0 = zF + beamD, z1 = 0;
     stone.push(sweep([v3(x0, F_BASE, z0), v3(x1, F_BASE, z0), v3(x1, F_BASE, z1), v3(x0, F_BASE, z1)], v3(0, -1, 0), COVE_P, { closed: true }));
   }
+  // a rosette in the middle of each bay of the ceiling
+  const carved: THREE.BufferGeometry[] = [];
+  for (let k = 0; k < bayEdges.length; k += 2) {
+    const x0 = bayEdges[k], x1 = bayEdges[k + 1];
+    carved.push(rosette(Math.min(x1 - x0, -zF - beamD) * 0.17).translate((x0 + x1) / 2, F_BASE, (zF + beamD) / 2));
+  }
   // frieze faces of the portico (front and returns)
-  stone.push(grid(v3(px0, F_BASE - 0.05, zF), v3(px1 - px0, 0, 0), v3(0, FRIEZE + 0.07, 0), 100, v3(0, 0, -1), [px0, F_BASE]));
-  stone.push(grid(v3(px0, F_BASE - 0.05, 0), v3(0, 0, zF), v3(0, FRIEZE + 0.07, 0), 100, v3(-1, 0, 0), [0, F_BASE]));
-  stone.push(grid(v3(px1, F_BASE - 0.05, zF), v3(0, 0, -zF), v3(0, FRIEZE + 0.07, 0), 100, v3(1, 0, 0), [0, F_BASE]));
+  friezes.push(grid(v3(px0, F_BASE - 0.05, zF), v3(px1 - px0, 0, 0), v3(0, FRIEZE + 0.07, 0), 2, v3(0, 0, -1), [px0, F_BASE], 0.3));
+  friezes.push(grid(v3(px0, F_BASE - 0.05, 0), v3(0, 0, zF), v3(0, FRIEZE + 0.07, 0), 2, v3(-1, 0, 0), [0, F_BASE], 0.3));
+  friezes.push(grid(v3(px1, F_BASE - 0.05, zF), v3(0, 0, -zF), v3(0, FRIEZE + 0.07, 0), 2, v3(1, 0, 0), [0, F_BASE], 0.3));
 
   // triglyphs: over each column and at thirds of each bay (quarters of the wide middle one); regulae and
   // guttae under them on the architrave's taenia
@@ -292,10 +331,26 @@ export function buildTownHall(b: Building, mats: TownHallMaterials): THREE.Group
   stone.push(sweep([v3(xr, yUnder, zF), v3(PORTICO_MID, apexU, zF), v3(xl, yUnder, zF)], v3(0, 0, -1), rakeP, { startCut: v3(0, 1, 0), endCut: v3(0, 1, 0) }));
   const tx = (CORNICE_TOP - yUnder) / tanP;                   // where the rake's underside meets the cornice top
   {
+    // the tympanum as rows of vertices, so the shade under the raking corona can be laid on it
+    const rows = 8, cols = 40, yb = CORNICE_TOP - 0.02, yt = apexU + 0.05;
+    const pos: number[] = [], nor: number[] = [], uv: number[] = [], idx: number[] = [];
+    for (let j = 0; j <= rows; j++) {
+      const y = yb + ((yt - yb) * j) / rows, half = (yt - y) / tanP;
+      for (let k = 0; k <= cols; k++) {
+        const x = PORTICO_MID - half + (2 * half * k) / cols;
+        pos.push(x, y, zF); nor.push(0, 0, -1); uv.push(x, y);
+      }
+    }
+    for (let j = 0; j < rows; j++) for (let k = 0; k < cols; k++) {
+      const a = j * (cols + 1) + k, b = a + 1, c = a + cols + 2, d = a + cols + 1;
+      idx.push(a, c, b, a, d, c);
+    }
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute([xl + tx, CORNICE_TOP - 0.02, zF, PORTICO_MID, apexU + 0.05, zF, xr - tx, CORNICE_TOP - 0.02, zF], 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, -1, 0, 0, -1, 0, 0, -1], 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute([xl + tx, CORNICE_TOP, PORTICO_MID, apexU, xr - tx, CORNICE_TOP], 2));
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    overhangOcclusion(g, x => yUnder + 0.19 + Math.min(x - xl, xr - x) * tanP, 1.0, 0.8);
     stone.push(g);
   }
   // mutules under the raking corona, square to the slope
@@ -383,7 +438,9 @@ export function buildTownHall(b: Building, mats: TownHallMaterials): THREE.Group
       if (box.intersectsBox(region)) bakeOcclusion(g, occ, region);
     }
   };
-  for (const parts of [wall, stone, plinth, wood, glass]) bake(parts);
+  bake(friezes);
+  for (const parts of [wall, stone, plinth, wood, glass, carved]) bake(parts);
+  for (const g of friezes) { overhangOcclusion(g, C_BASE + 0.18, 1.0); stone.push(g); }
 
   const group = new THREE.Group();
   group.name = 'townhall';
@@ -395,8 +452,11 @@ export function buildTownHall(b: Building, mats: TownHallMaterials): THREE.Group
     group.add(mesh);
   };
   for (const m of [mats.wall, mats.stone, mats.plinth, mats.wood, mats.glass]) occlusion(m);
+  // the order and its dressings in a paler, cooler stone than the honey render, as in the elevations
+  (mats.stone as THREE.MeshStandardMaterial).color.set('#e7d6b2');
   add(wall, mats.wall);
   add(stone, mats.stone);
+  add(carved, mats.stone, false);
   add(plinth, mats.plinth);
   add(roof, mats.roof);
   add(glass, mats.glass, false);

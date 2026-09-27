@@ -206,9 +206,9 @@ export function lathe(profile0: P2[], segments = 48, o: { hard?: number; uvR?: n
 }
 
 /** A flat grid (for surfaces that need vertices inside them, e.g. for baked occlusion). UVs in metres. */
-export function grid(origin: THREE.Vector3, eu: THREE.Vector3, ev: THREE.Vector3, cell: number, normal: THREE.Vector3, uv0: P2 = [0, 0]): THREE.BufferGeometry {
+export function grid(origin: THREE.Vector3, eu: THREE.Vector3, ev: THREE.Vector3, cell: number, normal: THREE.Vector3, uv0: P2 = [0, 0], cellV = cell): THREE.BufferGeometry {
   const lu = eu.length(), lv = ev.length();
-  const nu = Math.max(1, Math.round(lu / cell)), nv = Math.max(1, Math.round(lv / cell));
+  const nu = Math.max(1, Math.round(lu / cell)), nv = Math.max(1, Math.round(lv / cellV));
   const S = new Soup(), p = new THREE.Vector3(), row: number[][] = [];
   for (let j = 0; j <= nv; j++) {
     row.push([]);
@@ -312,6 +312,24 @@ export function bakeOcclusion(g: THREE.BufferGeometry, occluders: Occluder[], re
     }
     out[i] = Math.min(1, Math.max(0, 1 - Math.pow(vis / ref, 1.4))) * strength;
     seen.set(key, out[i]);
+  }
+  g.setAttribute('aOcc', new THREE.Float32BufferAttribute(out, 1));
+}
+
+/**
+ * Sky lost under an overhang (a cornice or corona of depth `depth` whose soffit is at `ySoffit`), for
+ * wall-like faces: the cosine-weighted share of the upper view it cuts off, falling with the distance
+ * below the soffit. Combined with any baked value (the larger wins). `yAt` gives the soffit height at
+ * a point when it isn't level (a raking cornice).
+ */
+export function overhangOcclusion(g: THREE.BufferGeometry, ySoffit: number | ((x: number) => number), depth: number, k = 0.6): void {
+  const pos = g.getAttribute('position');
+  const prev = g.getAttribute('aOcc');
+  const out = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) {
+    const ys = typeof ySoffit === 'number' ? ySoffit : ySoffit(pos.getX(i));
+    const d = Math.max(0, ys - pos.getY(i));
+    out[i] = Math.max(prev ? prev.getX(i) : 0, k * (1 - Math.sin(Math.atan(d / depth))));
   }
   g.setAttribute('aOcc', new THREE.Float32BufferAttribute(out, 1));
 }
