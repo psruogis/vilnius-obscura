@@ -29,7 +29,7 @@ const WOMEN: Omit<Palette, 'skin' | 'hair' | 'brolly' | 'wood'>[] = [
   { coat: '#232830', lower: '#232830', linen: '#e2dccb', hat: '#1c2026', leather: '#141414', accent: '#3a3f4a', lining: '#111318' },
   { coat: '#3a2420', lower: '#2e201c', linen: '#e8dfcf', hat: '#2a2320', leather: '#18120f', accent: '#5a4e40', lining: '#1a1210' },
   { coat: '#26291f', lower: '#26291f', linen: '#d8cfbc', hat: '#2a2b24', leather: '#151510', accent: '#8a7a64', lining: '#121410' },
-  { coat: '#4a4236', lower: '#3a342c', linen: '#efe9dc', hat: '#1e1c1a', leather: '#1a1612', accent: '#e8e2d2', lining: '#1a1814' },
+  { coat: '#4a4236', lower: '#3a342c', linen: '#efe9dc', hat: '#1e1c1a', leather: '#1a1612', accent: '#6a3a30', lining: '#1a1814' },
   { coat: '#161616', lower: '#161616', linen: '#161616', hat: '#161616', leather: '#121212', accent: '#2a2828', lining: '#0e0e0e' },   // mourning
   { coat: '#3a3530', lower: '#2e2a26', linen: '#e8e2d2', hat: '#6a4a36', leather: '#1a1511', accent: '#7a6a52', lining: '#161411' },   // kerchief, market woman
 ];
@@ -112,7 +112,9 @@ export async function buildCrowd(opts: {
     // a little variety within a palette: the same cloth never quite matches
     const j = 0.88 + rnd() * 0.24;
     for (const k of ['coat', 'lower', 'accent'] as const) pal[k] = `#${new THREE.Color(pal[k]).multiplyScalar(j).getHexString()}`;
-    const mat = figureMaterial(F, pal, { exposed: umbrella ? 0.12 : 1, paint: geo.paint, outfit: o });
+    // kerchiefs printed with flowers or checked; shawls checked or with a striped border
+    const pattern: [number, number] = [o.hat === 'scarf' ? pick([2, 2, 1, 0]) : 0, o.wrap === 'shawl' ? pick([1, 1, 0]) : 0];
+    const mat = figureMaterial(F, pal, { exposed: umbrella ? 0.12 : 1, paint: geo.paint, outfit: o, pattern });
     const fig = figure(F, geo, mat);
     // height from the rest pose (men ~1.72 m, women ~1.62 m), and build: a little broader or slighter
     const s = ((female ? 1.62 : 1.72) * (0.94 + rnd() * 0.1)) / F.height, build = 0.95 + rnd() * 0.1 + (o.stout ? 0.04 : 0);
@@ -145,7 +147,7 @@ export async function buildCrowd(opts: {
   for (const g of opts.groups) {
     const n = 2 + Math.floor(rnd() * 3);
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + rnd() * 0.5, r = 0.75 + rnd() * 0.3;
+      const a = (i / n) * Math.PI * 2 + rnd() * 0.35, r = 0.85 + rnd() * 0.3;
       const x = g.x + Math.cos(a) * r, z = g.y + Math.sin(a) * r;
       if (!opts.free(x, z)) continue;
       spawn(x, z, 'stand', Math.atan2(g.x - x, g.y - z));
@@ -226,6 +228,13 @@ export async function buildCrowd(opts: {
             // step aside for the walker
             const wx = p.root.position.x - walker.x, wz = p.root.position.z - walker.z, wd = Math.hypot(wx, wz);
             if (wd < 1.6 && wd > 1e-3) { tmp.x += (wx / wd) * 0.8; tmp.y += (wz / wd) * 0.8; tmp.normalize(); }
+            // and for one another (nobody walks through anybody)
+            for (const q of people) {
+              if (q === p) continue;
+              const ox = p.root.position.x - q.root.position.x, oz = p.root.position.z - q.root.position.z, od = ox * ox + oz * oz;
+              if (od < 0.81 && od > 1e-6) { const k = (0.9 - Math.sqrt(od)) / 0.9 * 1.5 / Math.sqrt(od); tmp.x += ox * k; tmp.y += oz * k; }
+            }
+            tmp.normalize();
             const step = p.speed * (1 - p.wIdle) * dt;
             const nx = p.root.position.x + tmp.x * step, nz = p.root.position.z + tmp.y * step;
             if (opts.free(nx, nz)) { p.root.position.x = nx; p.root.position.z = nz; }

@@ -88,10 +88,19 @@ function body(g: { scene: THREE.Group }, sex: 'm' | 'f', anims: THREE.AnimationC
   // the animation set was made on its own mannequin: scale the pelvis track to this body's hip height
   const animPelvis = animScene.getObjectByName('pelvis')!.position.length();
   const own = sk.bones[boneNames.indexOf('pelvis')].position.length();
+  // the library's hands are balled into fists: open them halfway, towards the relaxed bind pose
+  const q = new THREE.Quaternion(), rest = new THREE.Quaternion();
   const clips: Record<string, THREE.AnimationClip> = {};
   for (const a of anims) {
     const c = a.clone();
-    for (const t of c.tracks) if (t.name === 'pelvis.position') for (let i = 0; i < t.values.length; i++) t.values[i] *= own / animPelvis;
+    for (const t of c.tracks) {
+      if (t.name === 'pelvis.position') for (let i = 0; i < t.values.length; i++) t.values[i] *= own / animPelvis;
+      const fm = /^((index|middle|ring|pinky|thumb)_0[1-3]_[lr])\.quaternion$/.exec(t.name);
+      if (!fm) continue;
+      rest.copy(sk.bones[boneNames.indexOf(fm[1])].quaternion);
+      const k = fm[2] === 'thumb' ? 0.25 : 0.45;
+      for (let i = 0; i < t.values.length; i += 4) q.fromArray(t.values, i).slerp(rest, k).toArray(t.values, i);
+    }
     clips[a.name] = c;
   }
   return { sex, template, boneNames, boneInverses: sk.boneInverses, bone: n => boneNames.indexOf(n), J, parts, tex, clips, height: top, m };
@@ -133,13 +142,21 @@ class Geo {
     for (let i = i0; i < i1; i += 3) this.tri(this.idx[i] - v0 + b0, this.idx[i + 2] - v0 + b0, this.idx[i + 1] - v0 + b0);
     this.normals(b0, i1);
   }
+  /** Compact attributes (half the memory of plain floats): byte normals and weights, half-float UVs. */
   geometry(): THREE.BufferGeometry {
-    const g = new THREE.BufferGeometry();
+    const g = new THREE.BufferGeometry(), n = this.count;
+    const nrm = new Int8Array(n * 3), wts = new Uint8Array(n * 4);
+    for (let i = 0; i < n * 3; i++) nrm[i] = Math.round(clamp(this.n[i], -1, 1) * 127);
+    for (let v = 0; v < n; v++) {
+      let sum = 0, big = 0;
+      for (let k = 0; k < 4; k++) { wts[v * 4 + k] = Math.round(this.w[v * 4 + k] * 255); sum += wts[v * 4 + k]; if (wts[v * 4 + k] > wts[v * 4 + big]) big = k; }
+      wts[v * 4 + big] += 255 - sum;   // the weights must still add up to one
+    }
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3, true));
+    g.setAttribute('uv', new THREE.Float16BufferAttribute(this.uv.map(x => THREE.DataUtils.toHalfFloat(x)), 2));
     g.setAttribute('skinIndex', new THREE.Uint8BufferAttribute(this.j, 4));
-    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.w, 4));
+    g.setAttribute('skinWeight', new THREE.BufferAttribute(wts, 4, true));
     g.setAttribute('slot', new THREE.Uint8BufferAttribute(this.s, 1));
     g.setIndex(this.count > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
     return g;
@@ -194,6 +211,7 @@ interface ShellOpts {
   offset: (x: number, y: number, z: number) => number;     // cloth thickness along the smoothed normal
   smooth: number;                                          // Taubin iterations (anatomy out, form kept)
   cut?: (p: THREE.Vector3) => void;                        // moves an edge vertex onto the intended hem line
+  keepSkin?: boolean;                                      // cut only the garment's edge, not the skin under it
   slot: number; rim: number;                               // surface slot, edge (thickness) slot
 }
 interface Shell { verts: Map<number, number>; pos: Float32Array; nrm: Float32Array }   // body vertex -> shell vertex
@@ -233,7 +251,7 @@ function shell(B: BodyGeo, o: ShellOpts, out: Geo, taken: Uint8Array): Shell {
   if (o.cut) {
     for (const w of nb.keys()) if (border[w]) { tmp.fromArray(wpos, w * 3); o.cut(tmp); tmp.toArray(wpos, w * 3); }
     // the skin meets the garment on the same line (B.P is this outfit's own copy)
-    for (const t of tris) for (let k = 0; k < 3; k++) {
+    if (!o.keepSkin) for (const t of tris) for (let k = 0; k < 3; k++) {
       const v = I[t * 3 + k], w = wid[v];
       if (!border[w]) continue;
       tmp.set(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]); o.cut(tmp); tmp.toArray(P, v * 3);
@@ -420,7 +438,7 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
   const back = (z: number) => ss(-z, -0.02, 0.07);                 // 0 at the front of the neck, 1 behind
   const neckHalf = male ? 0.075 : 0.068;
   const coatLine = (z: number) => m.neckY + (male ? 0.006 : 0.05) + (male ? 0.03 : 0.014) * back(z);
-  const collarLine = (z: number) => m.neckY + 0.052 + 0.012 * back(z);
+  const collarLine = (z: number) => Math.min(m.neckY + 0.034 + 0.03 * back(z), m.headY - 0.03);   // low under the chin, up behind
   const isHand = (x: number) => Math.abs(x) > m.wristX - (male ? 0.028 : 0.022);
   const isHeadArea = (x: number, y: number, z: number) => y > m.headY - 0.015 || (Math.abs(x) < neckHalf + 0.05 && y > coatLine(z));
   const long = o.coat === 'great' || o.coat === 'caped' || o.coat === 'long';
@@ -467,8 +485,8 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
   // shirt cuffs and collar (men); the women's high collar is part of the bodice
   if (male) {
     shell(B, {
-      inside: (x, y, z) => Math.abs(x) < neckHalf + 0.05 && y > m.neckY - 0.04 && y < collarLine(z) && y < m.headY - 0.012, offset: () => 0.006, smooth: 3, slot: SLOT.LINEN, rim: SLOT.LINEN,
-      cut: p => { if (p.y > m.neckY + 0.02) p.y = Math.min(collarLine(p.z), m.headY - 0.012); },
+      inside: (x, y, z) => Math.abs(x) < neckHalf + 0.05 && y > m.neckY - 0.04 && y < collarLine(z), offset: () => 0.006, smooth: 3, slot: SLOT.LINEN, rim: SLOT.LINEN,
+      cut: p => { if (p.y > m.neckY + 0.01) p.y = collarLine(p.z); },
     }, out, taken);
     shell(B, { inside: x => Math.abs(x) > m.wristX - 0.034 && Math.abs(x) < m.wristX - 0.012, offset: () => 0.008, smooth: 2, slot: SLOT.LINEN, rim: SLOT.LINEN, cut: p => { p.x = Math.sign(p.x) * (Math.abs(p.x) > m.wristX - 0.023 ? m.wristX - 0.012 : m.wristX - 0.034); } }, out, taken);
   }
@@ -511,18 +529,32 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
       }
     }
     smoothRows(radii, ROWS, COLS, 3);
+    const hemM = (th: number) => lowerY + (o.coat === 'frock' ? 0.03 * Math.cos(th) : 0.012 * Math.cos(th));
+    const amp = o.coat === 'jacket' ? 0.01 : 0.03;
+    const coatR = (k: number, th: number) => {   // the coat skirt's radius at a fractional row
+      const k0 = Math.min(ROWS - 1, Math.floor(k)), k1 = Math.min(ROWS - 1, k0 + 1), f = k - k0;
+      return lerp(lookup(radii, COLS, k0, th), lookup(radii, COLS, k1, th), f) * folds(th, k / (ROWS - 1), 7, amp);
+    };
     hang({
-      yTop: topY, hem: th => lowerY + (o.coat === 'frock' ? 0.03 * Math.cos(th) : 0.012 * Math.cos(th)), rows: ROWS, cols: COLS, zc,
-      radius: (k, t, th) => lookup(radii, COLS, k, th) * folds(th, t, 7, o.coat === 'jacket' ? 0.01 : 0.03),
+      yTop: topY, hem: hemM, rows: ROWS, cols: COLS, zc,
+      radius: (k, _t, th) => coatR(k, th),
       open: o.coat === 'frock' ? t => 0.07 + 0.3 * t * t : o.coat === 'jacket' ? t => 0.05 + 0.2 * t : t => 0.03 + 0.05 * t,
       vent: o.coat === 'jacket' ? undefined : t => (t > 0.25 ? 0.035 * ss(t, 0.25, 0.4) : 0),
       slot: SLOT.COAT, inner: SLOT.LINING, thick: 0.005, weights: hangW(long ? 0.5 : 0.6),
     }, out);
-    if (o.apron) hang({
-      yTop: topY - 0.02, hem: () => m.kneeY - 0.05, rows: 8, cols: COLS, zc, span: [-0.95, 0.95],
-      radius: (k, t, th) => lookup(radii, COLS, Math.round(t * (ROWS - 1)), th) * folds(th, t, 5, 0.012) + 0.012,
-      slot: SLOT.ACCENT, inner: SLOT.ACCENT, thick: 0.003, weights: hangW(0.55),
-    }, out);
+    if (o.apron) {
+      // over the coat skirt where there is one, then clear of the legs down to the knee
+      const aTop = topY - 0.02, aHem = m.kneeY - 0.05, AR = 8;
+      const legT = radialTable(B.P, zc, aTop, aHem, AR, COLS, (x, y) => Math.abs(x) < 0.3 && y < aTop + 0.05);
+      hang({
+        yTop: aTop, hem: () => aHem, rows: AR, cols: COLS, zc, span: [-0.75, 0.75],
+        radius: (k, t, th) => {
+          const y = lerp(aTop, aHem, t), kc = (topY - y) / (topY - hemM(th)) * (ROWS - 1);
+          return Math.max(kc <= ROWS - 1 ? coatR(Math.max(0, kc), th) : 0, (lookup(legT, COLS, k, th) + 0.03) * folds(th, t, 5, 0.012)) + 0.012;
+        },
+        slot: SLOT.ACCENT, inner: SLOT.ACCENT, thick: 0.003, weights: hangW(0.55),
+      }, out);
+    }
   } else {
     // bell skirt: smooth over the hips, flaring from the knee to the floor, a little train behind
     const radii = new Float32Array(ROWS * COLS);
@@ -539,16 +571,24 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
     }
     smoothRows(radii, ROWS, COLS, 4);
     const skirtFolds = (th: number, t: number) => 1 + 0.045 * Math.pow(t, 1.5) * (Math.abs(Math.sin(th * 5 + ph[0])) - 0.5 + 0.35 * Math.sin(th * 11 + ph[1]));
+    const hemF = (th: number) => 0.012 - 0.01 * Math.max(0, -Math.cos(th));
+    const skirtR = (k: number, th: number) => {
+      const k0 = Math.min(ROWS - 1, Math.floor(k)), k1 = Math.min(ROWS - 1, k0 + 1), f = k - k0;
+      return lerp(lookup(radii, COLS, k0, th), lookup(radii, COLS, k1, th), f) * skirtFolds(th, k / (ROWS - 1));
+    };
     hang({
-      yTop: topY, hem: th => 0.012 - 0.01 * Math.max(0, -Math.cos(th)), rows: ROWS, cols: COLS, zc,
-      radius: (k, t, th) => lookup(radii, COLS, k, th) * skirtFolds(th, t),
+      yTop: topY, hem: hemF, rows: ROWS, cols: COLS, zc,
+      radius: (k, _t, th) => skirtR(k, th),
       slot: SLOT.LOWER, inner: null, thick: 0, weights: hangW(0.34),
     }, out);
-    if (o.apron) hang({
-      yTop: topY - 0.01, hem: () => 0.3, rows: 10, cols: COLS, zc, span: [-1.0, 1.0],
-      radius: (k, t, th) => lookup(radii, COLS, Math.round(t * (ROWS - 1) * (topY - 0.3) / topY), th) * skirtFolds(th, t * 0.8) + 0.01,
-      slot: SLOT.ACCENT, inner: SLOT.ACCENT, thick: 0.002, weights: hangW(0.3),
-    }, out);
+    if (o.apron) {
+      const aTop = topY - 0.01;
+      hang({
+        yTop: aTop, hem: () => 0.3, rows: 10, cols: COLS, zc, span: [-1.0, 1.0],
+        radius: (_k, t, th) => skirtR(Math.max(0, (topY - lerp(aTop, 0.3, t)) / (topY - hemF(th)) * (ROWS - 1)), th) + 0.014,
+        slot: SLOT.ACCENT, inner: SLOT.ACCENT, thick: 0.002, weights: hangW(0.3),
+      }, out);
+    }
   }
   // capes and shawls hang from the shoulders
   const wrap = male ? (o.coat === 'caped' ? 'cape' : 'none') : (o.wrap ?? 'none');
@@ -623,8 +663,9 @@ function lods(g: THREE.BufferGeometry): THREE.BufferGeometry[] {
   // the slot as an attribute keeps part boundaries (face / collar / coat) where they are
   const attr = new Float32Array(slot.length);
   for (let i = 0; i < slot.length; i++) attr[i] = slot[i];
-  return ([[0.28, 0.015], [0.08, 0.06]] as const).map(([f, err]) => {
-    const [idx] = MeshoptSimplifier.simplifyWithAttributes(src, pos, 3, attr, 1, [0.5], null, Math.floor(src.length * f / 3) * 3, err, ['Prune']);
+  // errors in metres: the thin garments over one another must not cross (legs through an apron)
+  return ([[0.25, 0.007], [0.1, 0.02]] as const).map(([f, err]) => {
+    const [idx] = MeshoptSimplifier.simplifyWithAttributes(src, pos, 3, attr, 1, [0.5], null, Math.floor(src.length * f / 3) * 3, err, ['ErrorAbsolute']);
     const l = new THREE.BufferGeometry();
     for (const [k, a] of Object.entries(g.attributes)) l.setAttribute(k, a);
     l.setIndex(new THREE.BufferAttribute(pos.length / 3 > 65535 ? idx : new Uint16Array(idx), 1));
@@ -641,42 +682,49 @@ function seeded(s: string): () => number {
 /** A cape (to the elbow) or a shawl (pointed behind) laid over the shoulders from the neck. */
 function shoulderWrap(F: FolkBody, pts: Float32Array, kind: 'cape' | 'shawl', male: boolean, out: Geo, rng: () => number): void {
   const m = F.m, zc = F.J.spine_03.z - 0.01;
-  const COLS = 44, ROWS = 14;
-  // shoulder height along each ray from the neck, from the garment beneath (arms excluded)
-  const topY = m.neckY + (male ? 0.02 : 0.035);
+  const COLS = 48, ROWS = 17;
+  // the torso's top surface beneath (the T-posed arms left out: the cape hangs as if they were down)
+  const topY = m.neckY + (male ? 0.0 : 0.02);             // it sits on the shoulders, below the collar
   const hemY = kind === 'cape' ? m.armY - (male ? 0.36 : 0.3) : m.armY - 0.24;
-  const edgeR = (th: number) => { const a = m.shoulderX + (male ? 0.085 : 0.07), b = 0.19; return a * b / Math.hypot(b * Math.sin(th), a * Math.cos(th)); };
-  const neckR = (th: number) => (male ? 0.085 : 0.075) * (1 + 0.1 * Math.abs(Math.sin(th)));
-  const heightAt = (x: number, z: number) => {
+  const shY = m.armY + (male ? 0.04 : 0.035);             // the shoulder point
+  const edgeR = (th: number) => { const a = m.shoulderX + (male ? 0.06 : 0.05), b = male ? 0.17 : 0.16; return a * b / Math.hypot(b * Math.sin(th), a * Math.cos(th)); };
+  const neckR = (th: number) => (male ? 0.098 : 0.082) * (1 + 0.1 * Math.abs(Math.sin(th)));
+  const torsoTop = (x: number, z: number) => {
     let best = -1;
     for (let i = 0; i < pts.length; i += 3) {
       if (pts[i] === 0 && pts[i + 1] === 0) continue;
-      if (Math.abs(pts[i] - x) < 0.025 && Math.abs(pts[i + 2] - z) < 0.025 && pts[i + 1] > m.armY - 0.1 && pts[i + 1] < topY + 0.05) best = Math.max(best, pts[i + 1]);
+      if (Math.abs(pts[i]) < m.shoulderX - 0.02 && Math.abs(pts[i] - x) < 0.03 && Math.abs(pts[i + 2] - z) < 0.03 && pts[i + 1] > m.armY - 0.15 && pts[i + 1] < topY + 0.05) best = Math.max(best, pts[i + 1]);
     }
     return best;
   };
   const s3 = F.bone('spine_03'), s2 = F.bone('spine_02'), cl = F.bone('clavicle_l'), cr = F.bone('clavicle_r');
-  const open = kind === 'shawl' ? 0.22 : 0.06;
+  const open = kind === 'shawl' ? 0.24 : 0.06;
   const v0 = out.count, i0 = out.idx.length;
   const cols = COLS + 1;
   const ring: THREE.Vector3[][] = [];
+  const ph = rng() * 6;
   for (let c = 0; c < cols; c++) {
     const th = lerp(open, Math.PI * 2 - open, c / COLS);
     const sx = Math.sin(th), cz = Math.cos(th);
-    // path: over the shoulder from the neck to the edge, then down to the hem
-    const path: THREE.Vector3[] = [];
-    const r0 = neckR(th), r1 = edgeR(th);
-    for (let i = 0; i <= 6; i++) {
-      const r = lerp(r0, r1, i / 6);
-      path.push(new THREE.Vector3(sx * r, Math.max(heightAt(sx * r, zc + cz * r) + 0.02, topY - 0.07 * i / 6), zc + cz * r));
+    // over the shoulder from the neck (a gentle slope, clear of the torso), round the shoulder, then down
+    const path: [number, number][] = [];                    // (radius, height)
+    const r0 = neckR(th), r1 = edgeR(th), rho = male ? 0.06 : 0.05;
+    const side = Math.abs(sx), y0 = topY + lerp(-0.035, 0.02, (1 - cz) / 2), yEdge = lerp(y0 - 0.06, shY, side);   // low at the throat, up behind
+    for (let i = 0; i <= 5; i++) {
+      const t = i / 5, r = lerp(r0, r1, t), y = lerp(y0, yEdge, Math.pow(t, 1.5));
+      path.push([r, i ? Math.max(y, torsoTop(sx * r, zc + cz * r) + 0.018) : y]);
     }
-    const hem = hemY - (kind === 'shawl' ? 0.26 * Math.pow(Math.max(0, -cz), 2) : 0.02 * cz) + (rng() - 0.5) * 0.01;
-    const e = path[path.length - 1];
+    const [er, ey] = path[path.length - 1];
+    for (let i = 1; i <= 4; i++) { const f = (i / 4) * Math.PI / 2; path.push([er + rho * Math.sin(f), ey - rho * (1 - Math.cos(f))]); }
+    // a shawl comes to a point behind and its ends hang down in front; a cape is level
+    const ends = Math.max(0, 1 - Math.min(th, Math.PI * 2 - th) / 0.9);
+    const hem = hemY - (kind === 'shawl' ? 0.3 * Math.pow(Math.max(0, -cz), 2) + 0.16 * ends : 0.015 * cz) + (rng() - 0.5) * 0.01;
+    const [dr, dy] = path[path.length - 1];
     for (let i = 1; i <= 7; i++) {
-      const t = i / 7, fl = 1 + 0.12 * t + 0.03 * t * Math.sin(th * 9 + 1.3);
-      path.push(new THREE.Vector3(e.x * fl, lerp(e.y, hem, t), zc + (e.z - zc) * fl));
+      const t = i / 7, fold = 1 + 0.1 * t + 0.05 * Math.pow(t, 1.2) * (Math.sin(th * 9 + ph) * 0.65 + Math.sin(th * 16 + ph * 2) * 0.35);
+      path.push([dr * fold, lerp(dy, hem, t)]);
     }
-    ring.push(path);
+    ring.push(path.map(([r, y]) => new THREE.Vector3(sx * r, y, zc + cz * r)));
   }
   const W = (y: number, x: number) => {
     const t = clamp((topY - y) / (topY - hemY), 0, 1);
@@ -822,7 +870,7 @@ const HATS: Record<string, { band: number; tilt: number; prof: [number, number][
   flatcap: { band: 0.035, tilt: 0.12, peak: true, prof: [[0, 0.055], [0.9, 0.06], [1.12, 0.042], [1.06, 0.015], [1.0, 0.0], [0.96, -0.01], [0, -0.01]] },
   // women: a wide hat worn on top of the hair, a small toque
   brim: { band: 0.088, tilt: 0.06, ribbon: [0.004, 0.034], feather: true, prof: [[0, 0.07], [0.55, 0.074], [0.88, 0.066], [1.0, 0.04], [1.02, 0.004], [1.12, 0.0], [1.6, -0.004], [2.0, -0.016], [2.06, -0.014], [2.0, -0.024], [1.6, -0.014], [1.1, -0.01], [0, -0.01]] },
-  toque: { band: 0.085, tilt: -0.12, ribbon: [0.0, 0.03], prof: [[0, 0.07], [0.95, 0.075], [1.12, 0.055], [1.18, 0.02], [1.1, 0.0], [0, -0.005]] },
+  toque: { band: 0.085, tilt: -0.14, ribbon: [0.004, 0.03], feather: true, prof: [[0, 0.07], [0.8, 0.074], [1.02, 0.062], [1.08, 0.03], [1.06, 0.004], [1.14, 0.0], [1.42, 0.012], [1.46, 0.02], [1.4, 0.004], [1.1, -0.008], [0, -0.008]] },
 };
 
 /** Hat on the head bone; bonnets and headscarves are shells of the head. Returns the band height. */
@@ -832,18 +880,26 @@ function hatGeometry(F: FolkBody, B: BodyGeo, o: Outfit, out: Geo): { band: numb
   if (o.hat === 'scarf' || o.hat === 'bonnet') {
     // a kerchief (or a bonnet) shaped on the head, framing the face
     const fake = new Uint8Array(B.I.length / 3);
-    const face = (x: number, y: number, z: number) => z > -0.005 && (x / 0.068) ** 2 + ((y - (m.eyeY - 0.03)) / (o.hat === 'scarf' ? 0.085 : 0.095)) ** 2 < 1;
+    const scarf = o.hat === 'scarf', fa = scarf ? 0.066 : 0.074, fb = scarf ? 0.088 : 0.1, fc = m.eyeY - (scarf ? 0.028 : 0.02);
+    const oval = (x: number, y: number) => (x / fa) ** 2 + ((y - fc) / fb) ** 2;
+    const face = (x: number, y: number, z: number) => z > -0.01 && oval(x, y) < 1;
+    const bottom = (z: number) => lerp(m.eyeY - (scarf ? 0.14 : 0.1), m.headY - (scarf ? 0.035 : 0.0), ss(-z, -0.03, 0.06));   // tied under the chin
     shell(B, {
-      inside: (x, y, z) => y > m.headY - (o.hat === 'scarf' ? 0.03 : 0.0) && !face(x, y, z) && !(z > 0.02 && y < m.eyeY - 0.06),
-      offset: (x, y, z) => 0.016 + 0.012 * ss(y, m.eyeY, m.top) + (o.hat === 'bonnet' ? 0.02 * ss(-z, 0, 0.08) : 0) + 0 * x,
-      smooth: 8, slot: SLOT.HAT, rim: SLOT.LINING,
+      inside: (x, y, z) => y > bottom(z) && !face(x, y, z),
+      offset: (x, y, z) => 0.013 + 0.01 * ss(y, m.eyeY, m.top) + (scarf ? 0.03 : 0.02) * ss(-z, 0, 0.09) * ss(y, m.eyeY - 0.06, m.eyeY + 0.02) + 0 * x,
+      smooth: 8, slot: SLOT.HAT, rim: SLOT.HAT, keepSkin: true,
+      // a clean oval round the face, a straight edge below
+      cut: p => {
+        const e = oval(p.x, p.y);
+        if (p.z > -0.02 && e < 2.2) { const k = 1 / Math.sqrt(Math.max(e, 1e-4)); p.x *= k; p.y = fc + (p.y - fc) * k; }
+      },
     }, out, fake);
     if (o.hat === 'scarf') {
       // the tail of the kerchief down the back of the neck
       const v0 = out.count, i0 = out.idx.length, nk = F.bone('neck_01'), s3 = F.bone('spine_03');
-      const y0 = m.headY - 0.02, y1 = m.neckY - 0.13;
+      const y0 = m.headY + 0.01, y1 = m.neckY - 0.2;
       for (let k = 0; k <= 4; k++) {
-        const t = k / 4, y = lerp(y0, y1, t), w = lerp(0.09, 0.005, t), z = lerp(-0.1, -0.125, t) - 0.01 * Math.sin(t * Math.PI);
+        const t = k / 4, y = lerp(y0, y1, t), w = lerp(0.1, 0.006, Math.pow(t, 0.8)), z = lerp(-0.125, -0.15, t) - 0.012 * Math.sin(t * Math.PI);
         const sk = skin(new Map([[hb, 1 - t], [nk, t * 0.5], [s3, t * 0.5]]));
         out.v(-w, y, z, sk, SLOT.HAT); out.v(0, y, z - 0.008, sk, SLOT.HAT); out.v(w, y, z, sk, SLOT.HAT);
       }
@@ -982,7 +1038,7 @@ const ROUGH = [0.55, 0.6, 0.12, 0.88, 0.86, 0.74, 0.62, 0.42, 0.84, 0.48, 0.6, 0
  * cloth coloured from the palette with a fine wool weave (Poly Haven, CC0) as a bump; in the rain
  * the shoulders and hat crowns darken and shine unless an umbrella keeps them dry, hems carry mud.
  */
-export function figureMaterial(F: FolkBody, pal: Palette, o: { exposed: number; paint: THREE.Vector4; outfit: Outfit }): THREE.MeshStandardMaterial {
+export function figureMaterial(F: FolkBody, pal: Palette, o: { exposed: number; paint: THREE.Vector4; outfit: Outfit; pattern?: [number, number] }): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({ map: F.tex.skin, normalMap: F.tex.skinN, roughness: 1, metalness: 0 });
   const cols = [pal.skin, pal.hair, pal.eye ?? '#ffffff', pal.coat, pal.lower, pal.linen, pal.hat, pal.leather, pal.accent, pal.lining, pal.brolly, pal.wood, pal.hair].map(c => new THREE.Color(c));
   const rough = [...ROUGH];
@@ -990,10 +1046,11 @@ export function figureMaterial(F: FolkBody, pal: Palette, o: { exposed: number; 
   const m = F.m, male = F.sex === 'm', ot = o.outfit;
   // painted details in bind-pose space: waistcoat, shirt front and tie in the coat's V, the hat ribbon
   const vBot = ot.coat === 'jacket' ? m.armY - 0.2 : ot.coat === 'frock' ? m.armY - 0.16 : m.armY - 0.1;
-  const vee = male ? new THREE.Vector4(vBot, m.neckY - 0.005, ot.coat === 'great' || ot.coat === 'caped' || ot.coat === 'long' ? 0.045 : 0.07, 1) : new THREE.Vector4(m.waistY - 0.005, m.waistY + 0.03, m.neckY - 0.01, 0);
+  const buttoned = ot.coat === 'great' || ot.coat === 'caped' || ot.coat === 'long';   // only collar and tie show at the throat
+  const vee = male ? new THREE.Vector4(buttoned ? m.neckY - 0.075 : vBot, m.neckY - 0.005, buttoned ? 0.04 : 0.07, 1) : new THREE.Vector4(m.waistY - 0.005, m.waistY + 0.03, m.neckY - 0.01, 0);
   const uniforms = {
     uPal: { value: cols }, uRough: { value: rough }, tHair: { value: F.tex.hair }, tEye: { value: F.tex.eye }, tCloth: { value: clothTex },
-    uWet: WET, uExposed: { value: o.exposed }, uVee: { value: vee }, uHatBand: { value: o.paint },
+    uWet: WET, uExposed: { value: o.exposed }, uVee: { value: vee }, uHatBand: { value: o.paint }, uPattern: { value: new THREE.Vector2(...(o.pattern ?? [0, 0])) },
   };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = s => {
@@ -1012,7 +1069,24 @@ uniform float uRough[${NSLOT}];
 uniform sampler2D tHair, tEye, tCloth;
 uniform float uWet, uExposed;
 uniform vec4 uVee, uHatBand;
+uniform vec2 uPattern;   // printed cloth on the kerchief (x) and the shawl or apron (y): 1 check, 2 flowers, 3 stripes
 float fRough; float fBump; float fWet;
+vec3 printed(vec3 c, float kind, vec3 p) {
+  vec2 q = vec2(p.x + p.z * 0.7, p.y);
+  if (kind < 0.5) return c;
+  float fw = fwidth(q.x * 14.0) + fwidth(q.y * 14.0), fade = 1.0 - smoothstep(0.25, 0.9, fw);
+  if (kind < 1.5) {       // woven check
+    vec2 g = abs(fract(q * 14.0) - 0.5);
+    float bars = smoothstep(0.32, 0.28, g.x) + smoothstep(0.32, 0.28, g.y);
+    return c * mix(1.0, 0.72 + 0.2 * bars, fade);
+  } else if (kind < 2.5) { // printed flowers (a kerchief)
+    vec2 g = fract(q * 30.0) - 0.5;
+    float d = length(g), f = smoothstep(0.24, 0.16, d) * (0.6 + 0.4 * sin(atan(g.y, g.x) * 5.0));
+    return mix(c, c * 0.4 + vec3(0.55, 0.5, 0.36), f * 0.7 * fade);
+  }
+  float st = smoothstep(0.1, 0.0, abs(fract(q.y * 5.0) - 0.5) - 0.38);   // a striped border
+  return mix(c, c * 0.45, st * fade);
+}
 float clothH(vec3 p, vec3 n) {           // triplanar weave height, ~11 cm tiles
   vec3 w = pow(abs(n), vec3(4.0)); w /= max(dot(w, vec3(1.0)), 1e-4);
   p *= 9.0;
@@ -1049,6 +1123,8 @@ else {
   if (sl == 3 && uVee.w < 0.5 && vBind.y > uVee.x && vBind.y < uVee.y && abs(vBind.x) < 0.2) { col = uPal[8]; fRough = uRough[8]; }
   if (sl == 3 && uVee.w < 0.5 && vBind.y > uVee.z && abs(vBind.x) < 0.075) { col = uPal[5]; fRough = uRough[5]; }
   if (sl == 6 && uHatBand.y > 0.0 && vBind.y > uHatBand.x && vBind.y < uHatBand.y) { col = uPal[8] * 0.8; fRough = 0.3; }
+  if (sl == 6) col = printed(col, uPattern.x, vBind);
+  if (sl == 8) col = printed(col, uPattern.y, vBind);
   // wool weave, darker in the grooves; a little of it on everything woven
   float weave = (sl == 7 || sl == 11) ? 0.0 : 1.0;
   col *= 1.0 + weave * (h - 0.5) * 0.3;
