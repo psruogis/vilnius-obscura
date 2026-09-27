@@ -70,6 +70,10 @@ Waypoints: [`knygnesys-route.json`](knygnesys-route.json).
 from the south because the railway station lies beyond the gate. How the club actually brought
 deliveries into the city is **not documented** [U, design].
 
+**Other ways in:** he could take any of the old gate roads. The Trakai road is the shortest to the
+attic (~249 m), then Rūdninkai (383 m) and Subačius (810 m). Only the Gate of Dawn still stood in 1902.
+See [`docs/gates.md`](../gates.md) §6.
+
 **End:** **St Nicholas' Church**, Šv. Mikalojaus g. 4, OSM way 55447268, at (−268.0, 36.5),
 **262 m west-south-west of the Town Hall**. [V] The projection was checked against the game's own
 road vertices to 0.00 m.
