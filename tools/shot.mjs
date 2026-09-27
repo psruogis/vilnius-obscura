@@ -10,6 +10,7 @@
 //                                                  returns {eye: [x, y, z], target: [x, y, z]} in world coordinates)
 //                       [--pre '<js>']            (page JS run once after loading, e.g. to pause something)
 //                       [--scale 1.5] [--size 1600x900] [--wait 14] [--bench]
+//                       [--static]                (a production build: load, screenshot, report errors)
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -109,6 +110,18 @@ await send('Page.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 2, mobile: false });
 const url = `http://localhost:${PORT}/?${QUERY}`;
 await send('Page.navigate', { url });
+
+if (flag('static')) {
+  // a production build (no DEV hooks): just let it load, then report errors and save what the page shows
+  await sleep(WAIT * 1000 + 15000);
+  const shot = await send('Page.captureScreenshot', { format: 'jpeg', quality: 85 });
+  fs.mkdirSync(OUT, { recursive: true });
+  fs.writeFileSync(path.join(OUT, `${PREFIX}static.jpg`), Buffer.from(shot.data, 'base64'));
+  console.log(path.join(OUT, `${PREFIX}static.jpg`));
+  const uniq = [...new Set(errors)];
+  console.log(uniq.length ? `console (${uniq.length}):\n  ` + uniq.slice(0, 30).join('\n  ') : 'console: clean');
+  ws.close(); cleanup(); process.exit(0);
+}
 
 // wait for the town, the townsfolk and the textures
 const ready = await evaluate(`(async () => {
