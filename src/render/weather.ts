@@ -150,6 +150,9 @@ export function createRain(count = 9000, box = new THREE.Vector3(44, 26, 44)): {
 /** 1 while the reflection pass (render/ssr.ts) runs: the wet ground then writes its roughness into the alpha
  * of the HDR image (every other opaque surface writes 1), which is the pass's only mask. */
 export const SSR_MASK = { value: 0 };
+/** How bright the wet street's mirror image of the sky is, relative to the sky light (the environment map):
+ * a mirror shows the sky as seen, which in the rain is darker than the light the sky sheds into the shade. */
+export const SKY_MIRROR = { value: 1 };
 
 /**
  * GLSL shared by the wet street shader and the reflection pass (render/ssr.ts): noise, the flow-map lookup,
@@ -197,14 +200,29 @@ export const WET_GLSL = /* glsl */ `
   // ripple detail fades out with distance: finer than a pixel it would only sparkle (and scatter reflections)
   float wt_detail(float dist) { return 1.0 - smoothstep(8.0, 30.0, dist); }
   // running water: a level surface with ripples carried downstream (world-space normal); gentle enough
-  // that the reflections stay recognisable, broken into wavering bands
-  vec3 wt_runNormal(vec2 xz, vec2 fdir, float flowAmt) {
+  // that the reflections stay recognisable, broken into wavering bands. detail (wt_detail) calms the
+  // ripples with distance but keeps the surface level.
+  vec3 wt_runNormal(vec2 xz, vec2 fdir, float flowAmt, float detail) {
+    if (detail < 0.01) return vec3(0.0, 1.0, 0.0);
     vec2 perp = vec2(-fdir.y, fdir.x);
     float s = dot(xz, fdir), t = dot(xz, perp), spd = 0.7 + 1.9 * flowAmt;
     float ph1 = uRainTime * spd, ph2 = uRainTime * spd * 1.37 + 3.1, e = 0.04;
     float h0 = wt_water(s, t, ph1, ph2), hs = wt_water(s + e, t, ph1, ph2), ht = wt_water(s, t + e, ph1, ph2);
-    vec2 gw = fdir * (hs - h0) / e + perp * (ht - h0) / e;
+    vec2 gw = (fdir * (hs - h0) / e + perp * (ht - h0) / e) * detail;
     return normalize(vec3(-gw.x * 0.035, 1.0, -gw.y * 0.035));
+  }
+  // The reflection pass's mask, packed into the one channel it has (the alpha of the HDR image, where every
+  // other surface writes 1): the street's roughness (16 steps, finest near mirror-smooth) and the share of
+  // the sky it reflects there (three.js's own split-sum weight at the shaded normal, 64 steps). < 0.7.
+  float wt_ssrPack(float rough, float k) {
+    float rq = floor(sqrt(clamp(rough / 0.7, 0.0, 1.0)) * 15.0 + 0.5);
+    float kq = floor(sqrt(clamp(k, 0.0, 1.0)) * 63.0 + 0.5);
+    return (rq * 64.0 + kq) / 1463.0;
+  }
+  vec2 wt_ssrUnpack(float a) {   // (roughness, reflectance)
+    float code = floor(a * 1463.0 + 0.5), rq = floor(code / 64.0), kq = code - rq * 64.0;
+    rq /= 15.0; kq /= 63.0;
+    return vec2(rq * rq * 0.7, kq * kq);
   }
 `;
 
@@ -231,8 +249,9 @@ export function wet(m: THREE.Material, kind: WetKind, groundY = 0, hExpr?: strin
       ${WET_GLSL}`);
     if (kind === 'ground') {
       shader.uniforms.uSsrMask = SSR_MASK;
+      shader.uniforms.uSkyMirror = SKY_MIRROR;
       frag = frag
-        .replace('#include <common>', '#include <common>\nuniform float uSsrMask;')
+        .replace('#include <common>', '#include <common>\nuniform float uSsrMask; uniform float uSkyMirror;')
         .replace('#include <color_fragment>', `#include <color_fragment>
           // --- mud, puddles and running water, from the baked flow map --------------------------------
           vec4 fm = wt_flowAt(vWetWorld.xz);
@@ -259,10 +278,10 @@ export function wet(m: THREE.Material, kind: WetKind, groundY = 0, hExpr?: strin
           // puddles: water stands in the hollows, filling the joints first; the stone crowns break the surface
           // at the shallow margins, and a dark ring of soaked stone surrounds each one
           float pf = wt_puddleField(vWetWorld.xz);
-          float level = smoothstep(0.5, 0.6, pf) * 1.25;
-          float puddle = smoothstep(-0.05, 0.05, level - relief) * smoothstep(0.49, 0.515, pf) * uWet * (1.0 - stream);
+          float level = smoothstep(0.55, 0.66, pf) * 1.25;
+          float puddle = smoothstep(-0.05, 0.05, level - relief) * smoothstep(0.54, 0.565, pf) * uWet * (1.0 - stream);
           float depth = clamp(level - relief, 0.0, 1.0) * puddle;
-          float rim = smoothstep(0.42, 0.5, pf) * (1.0 - puddle) * uWet * (1.0 - stream);
+          float rim = smoothstep(0.47, 0.55, pf) * (1.0 - puddle) * uWet * (1.0 - stream);
           diffuseColor.rgb *= mix(1.0, 0.62, uWet);
           diffuseColor.rgb *= 1.0 - 0.3 * rim;
           // under clear water the stones stay visible, darker, and murkier with depth
@@ -288,13 +307,24 @@ export function wet(m: THREE.Material, kind: WetKind, groundY = 0, hExpr?: strin
             float detail = wt_detail(length(vWetWorld - cameraPosition));
             vec2 grad = wt_ripples(vWetWorld.xz) * detail;
             normal = normalize(normal + (viewMatrix * vec4(grad.x, 0.0, grad.y, 0.0)).xyz * wt_rippleStrength(puddle));
-            // running water: a flat surface with ripples carried downstream
-            float runW = clamp(stream + film * 0.7, 0.0, 1.0) * detail;
-            if (runW > 0.01) normal = normalize(mix(normal, normalize((viewMatrix * vec4(wt_runNormal(vWetWorld.xz, fdir, flowAmt), 0.0)).xyz), runW));
+            // running water: a level surface with ripples carried downstream
+            float runW = clamp(stream + film * 0.7, 0.0, 1.0);
+            if (runW > 0.01) normal = normalize(mix(normal, normalize((viewMatrix * vec4(wt_runNormal(vWetWorld.xz, fdir, flowAmt, detail), 0.0)).xyz), runW));
           }`)
-        // the reflection pass's mask: this pixel is wet street, this rough (see render/ssr.ts)
+        // three r186's cascaded-shadow lighting chunk (examples/jsm/csm/CSMShader.js) leaves out the split-sum
+        // set-up of the standard one, so a material with sun cascades reflects no sky at all. A wet street
+        // must (and the reflection pass replaces exactly this sky light), so it is restored here.
+        .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>
+          #ifdef STANDARD
+            material.dfg = texture2D(dfgLUT, vec2(material.roughness, saturate(dot(geometryNormal, geometryViewDir)))).rg;
+          #endif`)
+        .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
+          radiance *= uSkyMirror;`)
+        // the reflection pass's mask: wet street, this rough, reflecting this much (see render/ssr.ts)
         .replace('#include <dithering_fragment>', `#include <dithering_fragment>
-          gl_FragColor.a = mix(gl_FragColor.a, clamp(roughnessFactor, 0.0, 0.7), uSsrMask);`);
+          #ifdef STANDARD
+            if (uSsrMask > 0.5) gl_FragColor.a = wt_ssrPack(roughnessFactor, 0.04 * material.dfg.x + material.specularF90 * material.dfg.y);
+          #endif`);
     } else if (kind === 'roof') {
       frag = frag
         .replace('#include <color_fragment>', `#include <color_fragment>

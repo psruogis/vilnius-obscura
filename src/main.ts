@@ -17,7 +17,7 @@ import { Character, TOWNSMAN, TRAVELLER } from './player/character';
 import { Ambience } from './audio/ambience';
 import { Post } from './render/post';
 import { SunShadows } from './render/shadows';
-import { installHeightFog, createOvercastSky, createRain, wet, WET, RAIN_TIME, FLOW } from './render/weather';
+import { installHeightFog, createOvercastSky, createRain, wet, WET, RAIN_TIME, FLOW, SKY_MIRROR } from './render/weather';
 import { buildFlowMap } from './world/flow';
 import { StreetLamps, type LampSpot } from './world/lamps';
 import { WallGrid } from './world/collision';
@@ -80,6 +80,7 @@ async function main(force = false): Promise<void> {
   envScene.add(RAIN ? createOvercastSky('#9aa3a7', '#6c767d', 400) : createSky(sunDir, 500, LIGHT.turbidity));
   scene.environment = pmrem.fromScene(envScene, 0, 0.1, 1000).texture;
   scene.environmentIntensity = LIGHT.env;
+  if (RAIN) SKY_MIRROR.value = 0.67; // the wet street mirrors the sky as seen (the colours above), dimmer than its light
   pmrem.dispose();
   // Rain: exponential mist, thick at street level (installHeightFog); clear: the dusty haze of the period views
   scene.fog = RAIN ? new THREE.FogExp2(LIGHT.fog, 0.0072) : new THREE.Fog(LIGHT.fog, 70, 800);

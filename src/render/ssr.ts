@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
-import { WET_GLSL, HEIGHT_FOG_GLSL, WET, RAIN_TIME, FLOW } from './weather';
+import { WET_GLSL, HEIGHT_FOG_GLSL, WET, RAIN_TIME, FLOW, SKY_MIRROR } from './weather';
 
 /**
  * Screen-space reflections for the rain-soaked street, as in current games: puddles and running gutters
@@ -13,11 +13,12 @@ import { WET_GLSL, HEIGHT_FOG_GLSL, WET, RAIN_TIME, FLOW } from './weather';
  * over the street pushes the value toward 1, which only weakens the reflection there.
  *   1. trace, half resolution: view position from the shared depth texture; the water normal (level, rung by
  *      the same raindrop and running-water ripples as the street shader: WET_GLSL); a ray march in screen
- *      space (jittered steps, binary refinement, thickness test). Output, premultiplied: k·(hit − sky), k,
- *      where k is the street's specular weight × confidence (screen edges, rays toward the camera, range)
- *      and "sky" is the environment map the street already reflects, so a hit replaces it.
+ *      space (jittered steps, binary refinement, thickness test). Output: (hit − sky)·confidence, confidence,
+ *      where "sky" is the environment map the street already reflects (so a hit replaces it, a miss keeps it)
+ *      and confidence fades at the screen edges, for rays toward the camera and at the end of the ray.
  *   2. streaks, half resolution: rough stone's reflection is blurred, long vertically and short sideways.
- *   3. composite, full resolution: adds the difference; alpha goes back to 1 for the passes that follow.
+ *   3. composite, full resolution: the street's own reflection weight (Fresnel at its roughness, less the mist
+ *      between it and the eye) is worked out per pixel, so puddle edges stay crisp; alpha goes back to 1.
  * It runs after GTAO and before bloom, so reflected lamps bloom too. R toggles it (see post.ts).
  */
 
@@ -27,64 +28,74 @@ const VERTEX = /* glsl */ `
   varying vec2 vUv;
   void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
-// (built at run time: the height fog's GLSL exists only once installHeightFog has run)
+// Shared by the trace and the composite. (Built at run time: the height fog's GLSL exists only once
+// installHeightFog has run.)
+const COMMON = () => /* glsl */ `
+  #include <cube_uv_reflection_fragment>
+  uniform mat4 uInvProj, uCamWorld;
+  uniform sampler2D tEnv;
+  uniform float uEnvIntensity, uSkyMirror;
+  ${HEIGHT_FOG_GLSL || 'float wt_heightFog(float a, float b, float c, float d) { return 0.0; }'}
+  vec3 viewAt(vec2 uv, float d) { vec4 p = uInvProj * vec4(vec3(uv, d) * 2.0 - 1.0, 1.0); return p.xyz / p.w; }
+  uniform float uPuddle;
+  // standing or running water, not damp stone
+  float water(float rough) { return 1.0 - smoothstep(0.04, 0.2, rough); }
+  // the view ray through a pixel, in world space: on level ground the view angle depends only on where the
+  // pixel is on screen (no depth needed; the composite can't read the depth buffer it is drawing into)
+  vec3 viewDir(vec2 uv) { return normalize(mat3(uCamWorld) * viewAt(uv, 0.5)); }
+  // the prefiltered sky the street already reflects, as three.js samples it (and weather.ts dims it)
+  vec3 skyLight(vec3 dir, float rough) {
+    #ifdef ENVMAP_TYPE_CUBE_UV
+      return textureCubeUV(tEnv, dir, rough).rgb * uEnvIntensity * uSkyMirror;
+    #else
+      return vec3(0.0);
+    #endif
+  }`;
+
 const TRACE = () => /* glsl */ `
   #include <packing>
-  #include <cube_uv_reflection_fragment>
   uniform sampler2D tColor;
   uniform sampler2D tDepth;
-  uniform sampler2D tEnv;
-  uniform float uEnvIntensity, uFogDensity;
-  uniform mat4 uProj, uInvProj, uView, uCamWorld;
+  uniform float uFogDensity, uRange;
+  uniform mat4 uProj, uView;
   uniform vec2 uFull, uHalf;
-  uniform float uNear, uFar, uRange, uRayLen;
+  uniform float uNear, uFar, uRayLen;
   uniform int uTraceDebug;
   varying vec2 vUv;
   ${WET_GLSL}
-  ${HEIGHT_FOG_GLSL || 'float wt_heightFog(float a, float b, float c, float d) { return 0.0; }'}
-
-
-  vec3 viewAt(vec2 uv, float d) { vec4 p = uInvProj * vec4(vec3(uv, d) * 2.0 - 1.0, 1.0); return p.xyz / p.w; }
+  ${COMMON()}
   float sceneZ(vec2 uv) { return perspectiveDepthToViewZ(texture2D(tDepth, uv).r, uNear, uFar); }
-  // the split-sum specular weight three.js gives a dielectric (F0 0.04) at this roughness and angle
-  float specWeight(float rough, float NoV) {
-    const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022), c1 = vec4(1.0, 0.0425, 1.04, -0.04);
-    vec4 r = rough * c0 + c1;
-    float a004 = min(r.x * r.x, exp2(-9.28 * NoV)) * r.x + r.y;
-    vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
-    return 0.04 * ab.x + ab.y;
+  // the mist between the street and the eye veils its reflection as it veils the street; and out of range
+  float fade(vec3 P, vec3 W) {
+    return uWet * (1.0 - smoothstep(0.6, 1.0, -P.z / uRange)) * (1.0 - wt_heightFog(uCamWorld[3].y, W.y, -P.z, uFogDensity));
   }
 
   void main() {
     ivec2 fp = ivec2(gl_FragCoord.xy) * 2;
-    float rough = texelFetch(tColor, fp, 0).a;
-    if (rough > 0.75) { gl_FragColor = vec4(0.0, 0.0, 0.0, -1.0); return; }   // not wet street
+    float a0 = texelFetch(tColor, fp, 0).a;
+    if (a0 > 0.7) { gl_FragColor = vec4(0.0, 0.0, 0.0, -1.0); return; }      // not wet street
+    vec2 rk = wt_ssrUnpack(a0);
+    float rough = rk.x;
     float d = texelFetch(tDepth, fp, 0).r;
     vec3 P = viewAt((vec2(fp) + 0.5) / uFull, d);
     vec3 W = (uCamWorld * vec4(P, 1.0)).xyz;
+    vec3 Vw = normalize(W - uCamWorld[3].xyz);
+    float fd = fade(P, W);
+    gl_FragColor = vec4(0.0, 0.0, 0.0, fd);                                    // a miss keeps the sky
+    if (fd * max(rk.y, water(rough) * uPuddle) < 0.003) return;               // too far, too misty to matter
 
     // the water surface: level, rung by raindrops, rippled downstream in the gutters (as the street shader)
-    float water = 1.0 - smoothstep(0.04, 0.2, rough);          // standing or running water, not damp stone
+    float wtr = water(rough);                                  // standing or running water, not damp stone
     vec4 fm = wt_flowAt(W.xz);
     float stream = wt_stream(fm.r);
     float detail = wt_detail(length(W - uCamWorld[3].xyz));
-    vec2 g = wt_ripples(W.xz) * wt_rippleStrength(water * (1.0 - stream)) * detail;
+    vec2 g = wt_ripples(W.xz) * wt_rippleStrength(wtr * (1.0 - stream)) * detail;
     vec3 n = normalize(vec3(g.x, 1.0, g.y));
-    float runW = clamp(stream + smoothstep(0.28, 0.46, fm.r) * uWet * water * 0.7, 0.0, 1.0) * detail;
-    if (runW > 0.01) n = normalize(mix(n, wt_runNormal(W.xz, wt_flowDir(fm), fm.r), runW));
+    float runW = clamp(stream + smoothstep(0.28, 0.46, fm.r) * uWet * wtr * 0.7, 0.0, 1.0);
+    if (runW > 0.01) n = normalize(mix(n, wt_runNormal(W.xz, wt_flowDir(fm), fm.r, detail), runW));
 
-    vec3 Vw = normalize(W - uCamWorld[3].xyz);
     vec3 Rw = reflect(Vw, n);
     Rw.y = max(Rw.y, 0.03); Rw = normalize(Rw);                // a ripple can't send the ray into the street
-    float NoV = clamp(dot(n, -Vw), 0.0, 1.0);
-    // the street's own specular weight, faded by the mist between it and the eye (its reflection is fogged too)
-    float k = specWeight(rough, NoV) * uWet * (1.0 - smoothstep(0.6, 1.0, -P.z / uRange));
-    k *= 1.0 - wt_heightFog(uCamWorld[3].y, W.y, -P.z, uFogDensity);
-    // open water mirrors a little more boldly than physics would have it: the reflection's contrast is the
-    // cue that reads "wet" (misses are unaffected, see below)
-    k *= mix(1.0, 1.35, water);
-    gl_FragColor = vec4(0.0, 0.0, 0.0, k);                     // a miss keeps the sky the street already reflects
-    if (k < 0.002) return;
     vec3 R = (uView * vec4(Rw, 0.0)).xyz;
     if (R.z > 0.5) return;
 
@@ -128,17 +139,13 @@ const TRACE = () => /* glsl */ `
     // ray, and where the ray only met the street itself (a grazing ray clipping a hump of the paving)
     vec2 edge = smoothstep(0.0, 0.05, hit) * (1.0 - smoothstep(0.95, 1.0, hit));
     float conf = edge.x * edge.y * (1.0 - smoothstep(0.1, 0.5, R.z)) * (1.0 - smoothstep(0.6, 1.0, dist / uRayLen));
-    conf *= step(0.75, texelFetch(tColor, min(ivec2(hit * uFull), ivec2(uFull) - 1), 0).a);
+    conf *= step(0.7, texelFetch(tColor, min(ivec2(hit * uFull), ivec2(uFull) - 1), 0).a);
     // what the street already reflects (the prefiltered sky) is replaced by what the ray found
-    #ifdef ENVMAP_TYPE_CUBE_UV
-      vec3 env = textureCubeUV(tEnv, Rw, rough).rgb * uEnvIntensity;
-    #else
-      vec3 env = vec3(0.0);
-    #endif
+    vec3 env = skyLight(Rw, rough);
     vec3 hc = min(texture2D(tColor, hit).rgb, vec3(24.0));
-    gl_FragColor = vec4((hc - env) * k * conf, k);
-    if (uTraceDebug == 1) gl_FragColor = vec4(hc * k * conf, k);
-    if (uTraceDebug == 2) gl_FragColor = vec4(env * k * conf, k);
+    gl_FragColor = vec4((hc - env) * conf * fd, fd);
+    if (uTraceDebug == 1) gl_FragColor = vec4(hc * conf * fd, fd);
+    if (uTraceDebug == 2) gl_FragColor = vec4(env * conf * fd, fd);
   }`;
 
 // Gather blur along one direction, radius from the street's roughness (half-res pixels); alpha < 0 = not street.
@@ -148,11 +155,13 @@ const BLUR = /* glsl */ `
   uniform vec2 uHalf, uDir;
   uniform float uRadius, uBias;
   varying vec2 vUv;
+  ${WET_GLSL}
   void main() {
     ivec2 p = ivec2(gl_FragCoord.xy);
     vec4 c = texelFetch(tSrc, p, 0);
-    float r = (0.04 + smoothstep(0.03, 0.45, texelFetch(tColor, p * 2, 0).a)) * uRadius;   // water: a pixel or two
-    if (c.a < 0.0 || r < 0.5) { gl_FragColor = c; return; }
+    if (c.a < 0.0) { gl_FragColor = c; return; }
+    float r = (0.04 + smoothstep(0.03, 0.45, wt_ssrUnpack(texelFetch(tColor, p * 2, 0).a).x)) * uRadius;   // water: a pixel or two
+    if (r < 0.5) { gl_FragColor = c; return; }
     ivec2 hi = ivec2(uHalf) - 1;
     vec4 sum = vec4(0.0); float ws = 0.0;
     for (int i = -3; i <= 3; i++) {
@@ -164,17 +173,21 @@ const BLUR = /* glsl */ `
     gl_FragColor = ws > 0.0 ? sum / ws : c;
   }`;
 
-const COMPOSITE = /* glsl */ `
+const COMPOSITE = () => /* glsl */ `
   uniform sampler2D tDiffuse;
   uniform sampler2D tRefl;
   uniform vec2 uHalf;
+  uniform float uDarkRough, uGlow;
   uniform int uDebug;
   varying vec2 vUv;
+  ${WET_GLSL}
+  ${COMMON()}
   void main() {
     vec4 c = texture2D(tDiffuse, vUv);
     vec3 col = c.rgb;
     vec4 r = vec4(0.0);
-    if (c.a < 0.75) {
+    float k = 0.0;
+    if (c.a < 0.7) {
       // bilinear upsample over the street texels only
       vec2 hp = vUv * uHalf - 0.5;
       ivec2 i0 = ivec2(floor(hp)), hi = ivec2(uHalf) - 1;
@@ -185,16 +198,29 @@ const COMPOSITE = /* glsl */ `
         float w = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y) * step(0.0, v.a);
         r += v * w; ws += w;
       }
-      if (ws > 0.0) { r /= ws; col = max(col + r.rgb, col * (1.0 - r.a)); }
+      if (ws > 0.0) {
+        r /= ws;
+        // the weight per full-res pixel (crisp puddle edges): the share of the sky the street reflects here
+        vec2 rk = wt_ssrUnpack(c.a);
+        vec3 V = viewDir(vUv);
+        // standing and running water mirror more boldly than physics would have it, most at a glancing
+        // view (the cue that reads "puddle" in a game): the extra weight reflects the sky where rays missed
+        k = min(mix(rk.y, max(rk.y, uPuddle * pow(1.0 - clamp(-V.y, 0.0, 1.0), 4.0)), water(rk.x)), 0.92);
+        vec3 d = r.rgb;
+        // lights reflect a little brighter too; a dark object only dims the sheen of rough stone a little,
+        // while open water mirrors it fully
+        d = max(d, 0.0) * uGlow + min(d, 0.0) * mix(1.0, uDarkRough, smoothstep(0.06, 0.4, rk.x));
+        col = max(col + d * k + (k - rk.y) * r.a * skyLight(reflect(V, vec3(0.0, 1.0, 0.0)), rk.x), col * (1.0 - 0.8 * k));
+      }
     }
-    if (uDebug == 1) col = c.a < 0.75 ? vec3(1.0 - c.a / 0.7) : vec3(0.0);
-    if (uDebug == 2) col = vec3(r.a * 4.0);
-    if (uDebug == 3) col = max(r.rgb, 0.0) * 3.0 + max(-r.rgb, 0.0) * vec3(3.0, 0.0, 0.0);
+    if (uDebug == 1) col = c.a < 0.7 ? vec3(wt_ssrUnpack(c.a).y, 1.0 - wt_ssrUnpack(c.a).x / 0.7, 0.0) : vec3(0.0);
+    if (uDebug == 2) col = vec3(k * r.a * 2.0);
+    if (uDebug == 3) col = max(r.rgb * k, 0.0) * 4.0 + max(-r.rgb * k, 0.0) * vec3(4.0, 0.0, 0.0);
     gl_FragColor = vec4(col, 1.0);
   }`;
 
 export class SSRPass extends Pass {
-  /** 1 mask (street smoothness), 2 reflection weight, 3 reflected light (red: darker than the sky). */
+  /** 1 mask (red: reflectance, green: smoothness), 2 reflection weight, 3 change in light (red: darker than the sky). */
   debug = 0;
   private readonly quad = new FullScreenQuad();
   private readonly trace: THREE.ShaderMaterial;
@@ -220,16 +246,21 @@ export class SSRPass extends Pass {
     }
     const mat = (fragmentShader: string, uniforms: Record<string, THREE.IUniform>, d: Record<string, string | number> = {}) =>
       new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader, uniforms, defines: d, depthTest: false, depthWrite: false, blending: THREE.NoBlending });
+    // camera and mist uniforms, shared (same objects) by the trace and the composite
+    const view = { uInvProj: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, tEnv: { value: env }, uEnvIntensity: { value: 1 }, uSkyMirror: SKY_MIRROR, uPuddle: { value: 0.45 } };
     this.trace = mat(TRACE(), {
-      tColor: { value: null }, tDepth: { value: depth }, tEnv: { value: env }, uEnvIntensity: { value: 1 },
-      uFogDensity: { value: 0 },
-      uProj: { value: new THREE.Matrix4() }, uInvProj: { value: new THREE.Matrix4() }, uView: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() },
+      ...view, tColor: { value: null }, tDepth: { value: depth },
+      uFogDensity: { value: 0 }, uRange: { value: 110 }, uWet: WET,
+      uProj: { value: new THREE.Matrix4() }, uView: { value: new THREE.Matrix4() },
       uFull: { value: new THREE.Vector2(1, 1) }, uHalf: { value: new THREE.Vector2(1, 1) },
-      uNear: { value: 0.1 }, uFar: { value: 1000 }, uRange: { value: 110 }, uRayLen: { value: 90 }, uTraceDebug: { value: 0 },
-      uWet: WET, uRainTime: RAIN_TIME, uFlowMap: FLOW.map, uFlowBox: FLOW.box,
+      uNear: { value: 0.1 }, uFar: { value: 1000 }, uRayLen: { value: 90 }, uTraceDebug: { value: 0 },
+      uRainTime: RAIN_TIME, uFlowMap: FLOW.map, uFlowBox: FLOW.box,
     }, defines);
-    this.blur = mat(BLUR, { tSrc: { value: null }, tColor: { value: null }, uHalf: { value: new THREE.Vector2(1, 1) }, uDir: { value: new THREE.Vector2(0, 1) }, uRadius: { value: 1 }, uBias: { value: 0 } });
-    this.comp = mat(COMPOSITE, { tDiffuse: { value: null }, tRefl: { value: null }, uHalf: { value: new THREE.Vector2(1, 1) }, uDebug: { value: 0 } });
+    this.blur = mat(BLUR, { uWet: WET, uRainTime: RAIN_TIME, uFlowMap: FLOW.map, uFlowBox: FLOW.box, tSrc: { value: null }, tColor: { value: null }, uHalf: { value: new THREE.Vector2(1, 1) }, uDir: { value: new THREE.Vector2(0, 1) }, uRadius: { value: 1 }, uBias: { value: 0 } });
+    this.comp = mat(COMPOSITE(), {
+      ...view, uWet: WET, uRainTime: RAIN_TIME, uFlowMap: FLOW.map, uFlowBox: FLOW.box, tDiffuse: { value: null }, tRefl: { value: null }, uHalf: { value: new THREE.Vector2(1, 1) },
+      uDarkRough: { value: 0.5 }, uGlow: { value: 1.25 }, uDebug: { value: 0 },
+    }, defines);
   }
 
   setSize(w: number, h: number): void {
@@ -250,7 +281,7 @@ export class SSRPass extends Pass {
     t.uNear.value = cam.near; t.uFar.value = cam.far;
     t.uEnvIntensity.value = this.scene.environmentIntensity;
     const fog = this.scene.fog as THREE.FogExp2 | null;
-    t.uFogDensity.value = fog && (fog as THREE.FogExp2).isFogExp2 ? fog.density : 0;
+    t.uFogDensity.value = fog && fog.isFogExp2 ? fog.density : 0;
     const autoClear = renderer.autoClear;
     renderer.autoClear = false;   // every pass writes every pixel; and the shared depth must survive
     this.draw(renderer, this.trace, this.a);
