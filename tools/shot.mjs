@@ -182,6 +182,10 @@ for (const v of views) {
       w.camera.updateMatrixWorld();
     }
     w.post.render(0);
+    // Software rasterisers (headless Linux) hand the canvas back before the frame is filled in:
+    // a one-pixel readback waits for the GPU, so toDataURL sees the finished frame.
+    const gl = w.renderer.getContext();
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
     const url = w.renderer.domElement.toDataURL('image/jpeg', 0.88);
     w.walker.object.visible = true;
     return url;
