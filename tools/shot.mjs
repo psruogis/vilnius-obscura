@@ -9,7 +9,7 @@
 //                       [--js-view 'name:<js>']   (camera from page JS; `w` is window.__walk; the expression
 //                                                  returns {eye: [x, y, z], target: [x, y, z]} in world coordinates)
 //                       [--pre '<js>']            (page JS run once after loading, e.g. to pause something)
-//                       [--scale 1.5] [--size 1600x900] [--wait 14] [--bench]
+//                       [--scale 1.5] [--size 1600x900] [--wait 14] [--hold 3000] [--bench]
 //                       [--static]                (a production build: load, screenshot, report errors)
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -28,6 +28,7 @@ const QUERY = opt('query', '');
 const SCALE = Number(opt('scale', 1.5));
 const [W, H] = opt('size', '1600x900').split('x').map(Number);
 const WAIT = Number(opt('wait', 14));
+const HOLD = Number(opt('hold', 3000));   // ms each framing is held on screen before the shot
 const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const CHROME = process.env.CHROME || (process.platform === 'darwin' ? MAC_CHROME : 'chromium');
 // ANGLE backend: Metal on macOS, software rasterisation elsewhere (Linux containers have no GPU).
@@ -188,7 +189,9 @@ for (const v of views) {
     w.walker.update = () => {};
     w.post.render(0);
   })()`);
-  await sleep(600);   // a couple of frames of the held camera reach the screen
+  // The first frames of a new framing are slow (shaders compile as they are needed) and a software
+  // rasteriser gets photographed mid-draw: hold it long enough for the frame to be drawn whole.
+  await sleep(HOLD);
   const shot = await send('Page.captureScreenshot', { format: 'jpeg', quality: 88 });
   await evaluate(`(() => {
     const w = window.__walk;
