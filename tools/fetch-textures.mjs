@@ -9,7 +9,9 @@ const OUT = path.join(ROOT, 'public', 'assets', 'tex');
 
 const NAMES = { Diffuse: 'diff', nor_gl: 'nor', Rough: 'rough', arm: 'arm', Displacement: 'height' };
 // id -> resolution and the maps it needs.
-// 2k cobbles stay: a 4k set (+20 MB) is indistinguishable after the oil-paint pass even at 0.6 m eye height.
+// Resolutions were A/B tested in the shot tool: a 4k cobble set (+20 MB) is indistinguishable from 2k after the
+// oil-paint pass even at 0.6 m eye height; 2k tiles (+7 MB; roofs are 10 m and more from the walker) and 2k
+// plaster (+3 MB) are indistinguishable from 1k.
 const TEXTURES = {
   cobblestone_floor_08: { res: '2k', maps: ['Diffuse', 'nor_gl', 'arm', 'Displacement'] }, // rounded fieldstone cobbles (streets, square)
   clay_roof_tiles: { res: '1k', maps: ['Diffuse', 'nor_gl', 'arm', 'Displacement'] },      // hand-made barrel tiles, laid at their true 4 m scale
