@@ -111,7 +111,7 @@ const evaluate = async (expr, timeout = 120000) => {
 
 await send('Runtime.enable');
 await send('Page.enable');
-await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 2, mobile: false });
+await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: SCALE, mobile: false });
 const url = `http://localhost:${PORT}/?${QUERY}`;
 await send('Page.navigate', { url });
 
@@ -147,7 +147,7 @@ if (opt('pre')) console.log('pre:', JSON.stringify(await evaluate(`(async () => 
 fs.mkdirSync(OUT, { recursive: true });
 
 for (const v of views) {
-  const data = await evaluate(`(async () => {
+  await evaluate(`(async () => {
     const w = window.__walk, v = ${JSON.stringify(v)};
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const yawTo = (x, z, tx, tz) => Math.atan2(-(tx - x), -(tz - z));
@@ -181,17 +181,22 @@ for (const v of views) {
       w.camera.lookAt(tx, gy + th, tz);
       w.camera.updateMatrixWorld();
     }
+    // Hold this framing: the animation loop keeps drawing, but the walker no longer moves the camera,
+    // so every frame it presents is the shot. The page is photographed from the browser side below
+    // (reading the canvas back mid-frame gives a half-drawn picture under a software rasteriser).
+    w.__frozen = w.walker.update.bind(w.walker);
+    w.walker.update = () => {};
     w.post.render(0);
-    // Software rasterisers (headless Linux) hand the canvas back before the frame is filled in:
-    // a one-pixel readback waits for the GPU, so toDataURL sees the finished frame.
-    const gl = w.renderer.getContext();
-    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
-    const url = w.renderer.domElement.toDataURL('image/jpeg', 0.88);
+  })()`);
+  await sleep(600);   // a couple of frames of the held camera reach the screen
+  const shot = await send('Page.captureScreenshot', { format: 'jpeg', quality: 88 });
+  await evaluate(`(() => {
+    const w = window.__walk;
+    if (w.__frozen) { w.walker.update = w.__frozen; w.__frozen = null; }
     w.walker.object.visible = true;
-    return url;
   })()`);
   const file = path.join(OUT, `${PREFIX}${v.name}.jpg`);
-  fs.writeFileSync(file, Buffer.from(data.slice(data.indexOf(',') + 1), 'base64'));
+  fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
   console.log(file);
 }
 
