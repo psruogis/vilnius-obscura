@@ -1,7 +1,29 @@
+# dependencies
 node_modules/
+
+# build output
 dist/
+.vite/
+
+# env & local config
+.env
+.env.*
+!.env.example
+
+# editor / OS
 .DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# logs
 *.log
+npm-debug.log*
+
+# project-local
 .screens/
-tools/reconstruction/src/
 reference/
+
+# large source scans (the two already committed stay tracked)
+tools/reconstruction/src/
