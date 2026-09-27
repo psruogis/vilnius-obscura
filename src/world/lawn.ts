@@ -7,8 +7,9 @@ import * as THREE from 'three';
  * down to the cross-sections of a field of tapering blades at its height, so the lawn has depth,
  * tufts and a ragged edge against the kerb, and the tips lean in the wind. The shells are opaque and
  * drawn top first, so a pixel is shaded about once: the layers under a blade fail the depth test.
- * With distance the blades shorten into the base surface, which carries the same colour field (fresh and lush patches, drier and
- * yellowing ones, clover, a worn margin where people step over the kerb) at its average brightness.
+ * With distance the blades shorten into the base surface, which carries the same colour field (fresh
+ * and lush patches, drier and yellowing ones, clover, a paler margin by the kerb) at its average
+ * brightness; past ~18 m the shell cells collapse and cost nothing.
  * Panel outlines are signed-distance shapes evaluated per pixel (rounded rectangles, optionally with a
  * round hole for a basin), so the curves are exact at any distance without dense geometry.
  * The materials chain onto the lawn material main.ts passes in, so wet() still darkens and glosses
