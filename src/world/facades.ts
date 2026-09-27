@@ -11,12 +11,17 @@ import type { LampSpot } from './lamps';
  * arched doors and carriage gateways, a moulded cornice that tucks under the overhanging roof, plinth
  * and string-course bands, corner pilasters and chimneys. Party walls (against a neighbour) stay blank.
  * Everything casts and receives the sun's shadows; the wall shader adds weathering from the same layout.
+ * Nothing is a sharp box: stone and plaster pieces have chamfered arrises, cornices and courses are run
+ * profiles (cyma, ovolo, cavetto) with smooth curves, surrounds are stepped architraves, quoins dressed
+ * stones of uneven size. Half-round gutters hang from the eaves and drain through swan-necked downpipes.
+ * The walls are not ruler-straight either: each bellies and sags a little between its corners (Edge warp).
  */
 
 const GROUND_F = 4.4;   // ground-floor height, m (c.1900 shop floors; matches the painted façades and the data)
 const UPPER_F = 3.7;    // upper floors
 const WIN_DEPTH = 0.26; // window glass set back from the wall face
 const DOOR_DEPTH = 0.42;
+const CHUNK = 150;      // m: façade geometry is merged per square of this size (culling vs draw calls)
 
 const SHUTTERS = ['#3d4f3f', '#5b3b2b', '#6b675b', '#3f4b55', '#4a5a48', '#6a4a36'];
 const DOORS = ['#7a5436', '#6a4a30', '#86603f', '#6b665a', '#72563a', '#5d6b5a'];
@@ -702,10 +707,15 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
     return { b, x0, z0, x1, z1 };
   });
 
-  const wall = new GeoBuilder(['aWall', 'aLayout', 'aLayout2']);
+  // One set of builders per CHUNK-metre square of the town, so the camera and each shadow cascade skip the
+  // blocks they can't see; every set is merged into one mesh per material.
   // flat: thin mouldings whose shadows are too small to matter (AO shades them); kept out of the shadow maps
-  const trim = new GeoBuilder(), flat = new GeoBuilder(), glass = new GeoBuilder(), wood = new GeoBuilder([], 0.4);
-  const canvas = new GeoBuilder(), iron = new GeoBuilder([], 0), metal = new GeoBuilder([], 0.5), shop = new GeoBuilder(), sign = new GeoBuilder();
+  const builders = () => ({
+    wall: new GeoBuilder(['aWall', 'aLayout', 'aLayout2']), trim: new GeoBuilder(), flat: new GeoBuilder(), glass: new GeoBuilder(), wood: new GeoBuilder([], 0.4),
+    canvas: new GeoBuilder(), iron: new GeoBuilder([], 0), metal: new GeoBuilder([], 0.5), shop: new GeoBuilder(), sign: new GeoBuilder(),
+  });
+  const chunks = new Map<string, ReturnType<typeof builders>>();
+  let { wall, trim, flat, glass, wood, canvas, iron, metal, shop, sign } = builders();
   const extras: THREE.Object3D[] = [];
   const lamps: LampSpot[] = [];
   const signMat = houses.some(h => h.style === 'hotel') ? hotelSign() : null;
@@ -720,6 +730,9 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
   const cWhite = new THREE.Color();
 
   for (const b of houses) {
+    const me0 = boxes.find(o => o.b === b)!, ck = `${Math.floor((me0.x0 + me0.x1) / 2 / CHUNK)},${Math.floor((me0.z0 + me0.z1) / 2 / CHUNK)}`;
+    if (!chunks.has(ck)) chunks.set(ck, builders());
+    ({ wall, trim, flat, glass, wood, canvas, iron, metal, shop, sign } = chunks.get(ck)!);
     const seed = hashString(b.id);
     const tint = new THREE.Color(LIMEWASH[seed % LIMEWASH.length]);
     const trimStyle = (seed >>> 5) % 3;
@@ -1116,7 +1129,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
           // inside the eave, so the cornice stays closed against the soffit even where the wall sags.
           const T = ov > 0 ? -EAVE.fasciaDetail - 0.25 * k : -0.06;   // the soffit over the cornice's front
           const cm = front >= 5
-            ? new Mould(0, -0.78).out(0.035).to(0.035, T - 0.37).reversa(0.04, 0.06).out(0.01).up(0.01)
+            ? new Mould(0, -0.78).out(0.035).to(0.035, T - 0.37).reversa(0.04, 0.06, 3).out(0.01).up(0.01)
               .to(0.085, T - 0.205).ovolo(0.04, 0.035).up(0.01).out(0.055).up(0.06).out(0.01).up(0.01).recta(0.06, 0.08).up(0.05)
             : new Mould(0, -0.78).out(0.04).to(0.04, T - 0.3).to(0.1, T - 0.25).to(0.1, T - 0.16).to(0.24, T - 0.12).to(0.24, T + 0.04);   // courtyards: plain
           const cornice = [...cm.p, [0, ov > 0 ? -EAVE.fasciaDetail + 0.05 : 0]].map(([d, h, sm]) => [d, topH + h, sm ?? 0]);
@@ -1142,7 +1155,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
                 const hh = 0.33 + 0.05 * rnd(qs, k), gap = 0.05 + 0.02 * rnd(qs, k + 50);
                 if (y + hh > topH - 1.0) break;
                 const w = ((k + (sd < 0 ? 1 : 0)) % 2 ? 0.45 : 0.8) + 0.1 * (rnd(eseed, 200 + k) - 0.5), dq = 0.024 + 0.008 * rnd(eseed, 300 + k);
-                box(trim, e, u + (sd * (w - 2 * dq)) / 2, y + hh / 2, dq, (w + 2 * dq) / 2, hh / 2, dq, trimC, true, 0.022);
+                box(flat, e, u + (sd * (w - 2 * dq)) / 2, y + hh / 2, dq, (w + 2 * dq) / 2, hh / 2, dq, trimC, true, 0.022);
                 y += hh + gap;
               }
             }
@@ -1275,14 +1288,16 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
 
   const group = new THREE.Group();
   group.name = 'facades';
-  for (const [builder, mat, cast] of [[wall, mats.wall, true], [trim, mats.trim, true], [flat, mats.trim, false], [glass, mats.glass, false], [wood, mats.wood, true], [canvas, mats.canvas, true], [iron, mats.iron, false], [metal, mats.metal, true], [shop, mats.shopGlass, false], [sign, mats.signs, false]] as const) {
-    const g = builder.geometry();
-    if (!g) continue;
-    stats.triangles += g.getAttribute('position').count / 3;
-    const mesh = new THREE.Mesh(g, mat);
-    mesh.castShadow = cast;
-    mesh.receiveShadow = true;
-    group.add(mesh);
+  for (const c of chunks.values()) {
+    for (const [builder, mat, cast] of [[c.wall, mats.wall, true], [c.trim, mats.trim, true], [c.flat, mats.trim, false], [c.glass, mats.glass, false], [c.wood, mats.wood, true], [c.canvas, mats.canvas, true], [c.iron, mats.iron, false], [c.metal, mats.metal, true], [c.shop, mats.shopGlass, false], [c.sign, mats.signs, false]] as const) {
+      const g = builder.geometry();
+      if (!g) continue;
+      stats.triangles += g.getAttribute('position').count / 3;
+      const mesh = new THREE.Mesh(g, mat);
+      mesh.castShadow = cast;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    }
   }
   for (const x of extras) group.add(x);
   return { group, stats, lamps };
