@@ -205,7 +205,7 @@ export function roofModel(bd: Building, k: number): RoofModel {
   }
   let hl = 1;
   for (const [x, z] of ring) hl = Math.max(hl, Math.abs((x - cx) * ax + (z - cz) * az));
-  const sag = 0.05 + 0.09 * rnd(seed, 71);
+  const sag = 0.07 + 0.11 * rnd(seed, 71);
   const wav = 0.008 + 0.01 * rnd(seed, 72), f1 = 0.6 + 0.4 * rnd(seed, 73), f2 = 0.6 + 0.4 * rnd(seed, 74), p1 = 6.28 * rnd(seed, 75), p2 = 6.28 * rnd(seed, 76);
   // no sag over the overhang (a detailed house's eave reaches ov past its wall): the eave and the wall
   // head under it stay straight and closed

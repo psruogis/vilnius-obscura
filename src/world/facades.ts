@@ -848,7 +848,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
         for (const u of nb > 0 ? Array.from({ length: nb - 1 }, (_, k) => u0 + (k + 1) * bayW) : [e.L / 2]) if (u - knots[knots.length - 1] >= 4.5 && e.L - u >= 3) knots.push(u);
         knots.push(e.L);
         if (!e.party && knots.length > 2) {
-          const A = 0.008 + 0.022 * rnd(eseed, 61), B = 0.006 + 0.018 * rnd(eseed, 62);
+          const A = 0.012 + 0.03 * rnd(eseed, 61), B = 0.008 + 0.024 * rnd(eseed, 62);   // (the eave leaves room for both)
           e.knots = knots;
           e.wo = knots.map((u, k) => A * Math.sin((Math.PI * u) / e.L) * (0.65 + 0.35 * rnd(eseed, 63 + k)));
           e.wv = knots.map((u, k) => B * Math.sin((Math.PI * u) / e.L) * (0.6 + 0.4 * rnd(eseed, 83 + k)));
