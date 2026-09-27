@@ -79,7 +79,7 @@ function tuscan(r: number, h: number): THREE.BufferGeometry {
   p.push([rt + 0.04, top + 0.02], [rt + 0.04, top + 0.08], [rt, top + 0.1], [rt, top + 0.3], [rt + 0.03, top + 0.32]);   // astragal, necking
   for (let i = 0; i <= 5; i++) { const a = -Math.PI / 2 + (i / 5) * Math.PI / 2; p.push([rt + 0.03 + Math.cos(a) * 0.2, top + 0.52 + Math.sin(a) * 0.2]); } // echinus
   p.push([rt + 0.23, h], [0, h]);
-  return lathe(p, 32, { hard: 35 });
+  return lathe(p, 24, { hard: 35 });
 }
 
 /** A swept moulding (frieze band or cornice) along the west front and back along the tower sides. */

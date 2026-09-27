@@ -94,7 +94,7 @@ function column(x: number, z: number, base: number): THREE.BufferGeometry[] {
   prof.push([R1 + 0.04, e0 + 0.01], [R1 + 0.04, e0 + 0.04], [R1 + 0.07, e0 + 0.05], [R1 + 0.07, e0 + 0.08]); // annulets
   arc(R1 + 0.07, e0 + 0.28, 0.2, -Math.PI / 2, 0, 7);                    // echinus (quarter round)
   prof.push([R1 + 0.27, e0 + 0.3], [0, e0 + 0.3]);
-  const col = lathe(prof, 48, { hard: 35, uvR: COL_R0 });
+  const col = lathe(prof, 40, { hard: 35, uvR: COL_R0 });
   col.translate(x, base, z);
   parts.push(col);
   const ab0 = base + e0 + 0.3;
@@ -108,7 +108,7 @@ function column(x: number, z: number, base: number): THREE.BufferGeometry[] {
  * and a boss (the portico ceiling "su reljefinėmis rozetėmis", KVR 678).
  */
 function rosette(R: number): THREE.BufferGeometry {
-  const nr = 14, na = 96, pos: number[] = [], uv: number[] = [], idx: number[] = [];
+  const nr = 14, na = 72, pos: number[] = [], uv: number[] = [], idx: number[] = [];
   const depth = (r: number, th: number) => {
     const p1 = Math.pow(Math.abs(Math.cos(6 * th)), 0.7), R1 = 0.62 + 0.38 * p1;
     const p2 = Math.pow(Math.abs(Math.cos(4 * th + 0.4)), 0.7), R2 = 0.3 + 0.22 * p2;
@@ -301,18 +301,18 @@ export function buildTownHall(b: Building, mats: TownHallMaterials): THREE.Group
   const tgZ = [COL_Z, COL_Z + 1.62, COL_Z + 3.24];
   const triglyph = (along: 'x' | 'z', a: number, face: number, sgn: number) => {
     // `a` is the position along the face, `face` the face plane, sgn the outward direction
-    const put = (w: number, h: number, d: number, da: number, y: number, out: number, bev: number) =>
-      stone.push(along === 'x' ? bevelBox(w, h, d, a + da, y, face + sgn * out, bev) : bevelBox(d, h, w, face + sgn * out, y, a + da, bev));
+    const put = (w: number, h: number, d: number, da: number, y: number, out: number, bev: number, list = stone) =>
+      list.push(along === 'x' ? bevelBox(w, h, d, a + da, y, face + sgn * out, bev) : bevelBox(d, h, w, face + sgn * out, y, a + da, bev));
     const tw = 0.56, th = FRIEZE - 0.12, y0 = F_BASE;
     put(tw, th, 0.06, 0, y0 + th / 2, 0.03, 0.01);
     for (const da of [-0.19, 0, 0.19]) put(0.125, th - 0.06, 0.1, da, y0 + (th - 0.06) / 2, 0.06, 0.035); // the glyphs, V-grooves between
     put(tw + 0.06, 0.12, 0.12, 0, y0 + FRIEZE - 0.06, 0.06, 0.02);                                      // capital band
-    put(tw, 0.05, 0.05, 0, F_BASE - 0.155, 0.125, 0.01);                                               // regula
+    put(tw, 0.05, 0.05, 0, F_BASE - 0.155, 0.125, 0.01, carved);                                       // regula and guttae (too small to cast)
     for (let g = 0; g < 6; g++) {
       const gx = -tw / 2 + 0.05 + (g * (tw - 0.1)) / 5;
-      const gut = new THREE.CylinderGeometry(0.018, 0.028, 0.06, 6).translate(0, F_BASE - 0.18 - 0.03, 0);
+      const gut = new THREE.CylinderGeometry(0.018, 0.028, 0.06, 5).translate(0, F_BASE - 0.18 - 0.03, 0);
       gut.translate(along === 'x' ? a + gx : face + sgn * 0.125, 0, along === 'x' ? face + sgn * 0.125 : a + gx);
-      stone.push(gut);
+      carved.push(gut);
     }
   };
   for (const x of tgX) { triglyph('x', x, zF, -1); mutX(x, zF, -1); }

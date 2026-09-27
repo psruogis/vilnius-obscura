@@ -3,10 +3,11 @@ import * as THREE from 'three';
 /**
  * Lawns for the Town Hall garden, c.1900: scythed municipal grass inside stone kerbs.
  *
- * Near the walker the grass is shell-textured: sixteen stacked copies of the lawn surface, each cut
+ * Near the walker the grass is shell-textured: fourteen stacked copies of the lawn surface, each cut
  * down to the cross-sections of a field of tapering blades at its height, so the lawn has depth,
- * tufts and a soft edge against the kerb, and the tips lean in the wind. Past ~15 m the shells fade
- * into the base surface, which carries the same colour field (fresh and lush patches, drier and
+ * tufts and a ragged edge against the kerb, and the tips lean in the wind. The shells are opaque and
+ * drawn top first, so a pixel is shaded about once: the layers under a blade fail the depth test.
+ * With distance the blades shorten into the base surface, which carries the same colour field (fresh and lush patches, drier and
  * yellowing ones, clover, a worn margin where people step over the kerb) at its average brightness.
  * Panel outlines are signed-distance shapes evaluated per pixel (rounded rectangles, optionally with a
  * round hole for a basin), so the curves are exact at any distance without dense geometry.
@@ -17,7 +18,8 @@ import * as THREE from 'three';
 /** A rounded-rectangle lawn in promenade coordinates (s along the axis, t across). */
 export interface LawnPanel { s0: number; s1: number; t0: number; t1: number; r: number; hole?: [number, number, number] } // hole: s, t, radius
 
-const LAYERS = 16;
+const LAYERS = 14;
+const LOWEST = 0.16;        // the first shell's height (as a share of HEIGHT): below it the blades are a closed sward
 const HEIGHT = 0.075;       // grass height, metres
 const DENSITY = 80;         // blade cells per metre
 const CELL = 2;             // grid cell, metres
@@ -83,7 +85,7 @@ export function buildLawn(panels: LawnPanel[], world: (s: number, t: number) => 
   const ig = new THREE.InstancedBufferGeometry();
   ig.index = g.index;
   for (const k of Object.keys(g.attributes)) ig.setAttribute(k, g.getAttribute(k));
-  ig.setAttribute('aLayer', new THREE.InstancedBufferAttribute(new Float32Array(Array.from({ length: LAYERS }, (_, k) => (k + 1) / LAYERS)), 1));
+  ig.setAttribute('aLayer', new THREE.InstancedBufferAttribute(new Float32Array(Array.from({ length: LAYERS }, (_, k) => 1 - ((1 - LOWEST) * k) / (LAYERS - 1))), 1)); // top first
   ig.instanceCount = LAYERS;
   g.computeBoundingSphere(); g.computeBoundingBox();
   ig.boundingSphere = g.boundingSphere!.clone(); ig.boundingSphere.radius += HEIGHT;
@@ -109,7 +111,7 @@ export function buildLawn(panels: LawnPanel[], world: (s: number, t: number) => 
         float lwGust = 0.5 + 0.5 * sin(uLawnTime * 0.8 - dot(vLawnW.xz, vec2(0.21, 0.13)));
         float lwFlut = sin(uLawnTime * 2.9 + dot(vLawnW.xz, vec2(1.9, 1.3)));
         transformed.xz += vec2(0.8, 0.6) * (0.35 + lwGust * 0.65 + lwFlut * 0.2) * 0.016 * aLayer * aLayer;
-        if (distance(cameraPosition, (modelMatrix * vec4(aCell, 1.0)).xyz) > 21.0) transformed = aCell; // far: collapsed, nothing drawn` : ''}`);
+        if (distance(cameraPosition, (modelMatrix * vec4(aCell, 1.0)).xyz) > 18.5) transformed = aCell; // far: collapsed, nothing drawn` : ''}`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
         varying vec4 vLawn; varying vec4 vLawn2; varying vec3 vLawnW;
@@ -119,36 +121,33 @@ export function buildLawn(panels: LawnPanel[], world: (s: number, t: number) => 
         float lwD = lw_sdf(vLawn, vLawn2);
         if (lwD > ${shell ? '0.05 * smoothstep(0.65, 1.0, vLayer)' : '0.0'}) discard;   // the tallest blades lean over the kerb
         float lwCam = distance(cameraPosition, vLawnW);
-        vec3 lwG = lw_grass(vLawnW.xz, lwD);
         vec2 lwTilt = vec2(0.0);
         ${shell ? `
-        float lwFade = 1.0 - smoothstep(11.0, 19.0, lwCam);
-        if (lwFade <= 0.0) discard;
+        // the blade under this pixel: cut away everything else as early as possible
         vec2 lwQ = vLawnW.xz * ${DENSITY.toFixed(1)};
         vec2 lwC = floor(lwQ), lwF = fract(lwQ) - 0.5;
         float lwR1 = lw_h(lwC), lwR2 = lw_h(lwC + 13.7), lwR3 = lw_h(lwC + 31.1);
         float lwTall = mix(0.3, 1.0, lwR1) * (0.55 + 0.6 * lw_noise(vLawnW.xz * 4.0));  // tufts and thinner patches
         lwTall *= 1.0 + 0.3 * smoothstep(-0.3, 0.0, lwD);                                   // shaggier where the scythe misses, at the kerb
+        lwTall *= 1.0 - smoothstep(8.0, 16.0, lwCam);                                       // blades sink into the base lawn with distance
         float lwHt = vLayer;
+        if (lwHt >= lwTall) discard;
         // blades are thicker seen edge-on, which hides the gaps between the shells at low angles
         float lwGraze = 1.0 - abs(normalize(cameraPosition - vLawnW).y);
-        float lwRad = 0.45 * (1.0 - lwHt / max(lwTall, 1e-3)) * (1.0 + 1.3 * lwGraze * lwGraze);
-        float lwPx = length(fwidth(lwQ));
-        float lwCov = lwHt < lwTall ? clamp((lwRad - length(lwF - (vec2(lwR2, lwR3) - 0.5) * 0.4)) / max(lwPx, 1e-4) + 0.5, 0.0, 1.0) : 0.0;
-        lwCov = mix(lwCov, 0.6 * (1.0 - smoothstep(0.1, 0.85, lwHt)), smoothstep(0.7, 1.8, lwPx)); // sub-pixel blades: the layer's average
-        float lwA = lwCov * lwFade;
-        if (lwA < 0.04) discard;
+        float lwRad = 0.42 * (1.0 - lwHt / lwTall) * (1.0 + 1.2 * lwGraze * lwGraze);
+        if (length(lwF - (vec2(lwR2, lwR3) - 0.5) * 0.4) > lwRad) discard;
+        vec3 lwG = lw_grass(vLawnW.xz, lwD);
         lwG *= mix(0.45, 1.2, lwHt);                                                   // dark at the roots, lit at the tips
         lwG = mix(lwG, lwG * vec3(1.25, 1.15, 0.6), lwHt * lwHt * lwR2 * 0.7);         // some tips drying
         // daisies in a few patches, heads a little below the grass tops
         float lwDaisy = step(0.9965, lwR1) * smoothstep(0.55, 0.75, lw_noise(vLawnW.xz * 0.6 + 4.0)) * step(0.45, lwHt) * step(lwHt, 0.62);
         lwG = mix(lwG, lwR3 > 0.3 ? vec3(0.62, 0.6, 0.52) : vec3(0.55, 0.42, 0.06), lwDaisy);
         diffuseColor.rgb = lwG;
-        diffuseColor.a = lwA;
         lwTilt = (vec2(lwR2, lwR3) - 0.5) * 1.4 * lwHt;` : `
-        // soil and thatch between the blades near the walker; the blades' average colour far off
+        vec3 lwG = lw_grass(vLawnW.xz, lwD);
+        // the closed sward under the shells near the walker; the blades' average colour far off
         float lwFar = smoothstep(9.0, 17.0, lwCam);
-        diffuseColor.rgb = mix(lwG * 0.38 + vec3(0.012, 0.009, 0.004), lwG * 0.92, lwFar);`}`)
+        diffuseColor.rgb = mix(lwG * 0.5 + vec3(0.01, 0.008, 0.003), lwG * 0.92, lwFar);`}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         normal = normalize(normal + (viewMatrix * vec4(lwTilt.x, 0.0, lwTilt.y, 0.0)).xyz);`);
   };
@@ -158,7 +157,7 @@ export function buildLawn(panels: LawnPanel[], world: (s: number, t: number) => 
   lawn.onBeforeCompile = (s, r) => { wetHook.call(lawn, s, r); patch(s, false); };
   lawn.customProgramCacheKey = () => `${wetKey}|lawn-base`;
   lawn.needsUpdate = true;
-  const shellMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8, transparent: true, depthWrite: false });
+  const shellMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8 });
   shellMat.onBeforeCompile = (s, r) => { wetHook.call(shellMat, s, r); patch(s, true); };
   shellMat.customProgramCacheKey = () => `${wetKey}|lawn-shell`;
 
@@ -168,7 +167,6 @@ export function buildLawn(panels: LawnPanel[], world: (s: number, t: number) => 
   base.receiveShadow = true;
   const shells = new THREE.Mesh(ig, shellMat);
   shells.receiveShadow = true;
-  shells.renderOrder = 1;
   group.add(base, shells);
   return group;
 }
