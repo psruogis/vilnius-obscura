@@ -1,7 +1,7 @@
 # Vilnius Town Hall Walk
 
-A browser walk-through of Vilnius Town Hall Square around 1800: the Town Hall as
-finished in 1799, in a believable late-1700s city built from real map data.
+A browser walk-through of Vilnius Town Hall Square around 1900, in the rain, built from
+real map data: the Town Hall (finished 1799), the square's houses and shops, townsfolk, cabs.
 The brief is in `TOWN-HALL-WALK-BUILD-PROMPT.md`.
 
 ## Run it
@@ -12,8 +12,12 @@ node tools/build-area.mjs  # rebuild public/data/area.json from the seed data
 node tools/dev-server.mjs  # http://localhost:5173
 ```
 
-Controls: W A S D to walk, Shift to jog, mouse (or click-drag) to look,
-backtick (`` ` ``) toggles the stats overlay.
+Needs Node.js 22.18 or newer (for `stripTypeScriptTypes`) and nothing else; runs on macOS,
+Windows and Linux. A static copy for any web server: `node tools/build-static.mjs` → `dist/`.
+
+Controls: W A S D to walk, Shift to jog, mouse (or click-drag) to look, mouse wheel to
+zoom the camera in and out, M to mute, backtick (`` ` ``) toggles the stats overlay.
+`?weather=clear` for the dry morning.
 
 ### Why not `npm run dev`?
 

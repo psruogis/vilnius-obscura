@@ -12,8 +12,9 @@ const BRAKE = 7.5;        // m/s^2 when there is no input
 const TURN_MAX = 9.0;     // rad/s, body rotation rate
 const RADIUS = 0.32;      // collision radius, m
 
-const CAM_DISTANCE = 4.0;
+const CAM_DISTANCE = 4.0;   // default arm length; the mouse wheel sets it between CAM_MIN and CAM_MAX
 const CAM_DISTANCE_JOG = 4.5;
+const CAM_MIN = 1.8, CAM_MAX = 9;
 const CAM_SHOULDER = 0.45; // right-shoulder offset
 const CAM_HEIGHT = 1.62;   // look-at height above the feet
 const CAM_LAG = 11;        // spring-arm lag (1/s), as UE's CameraLagSpeed
@@ -36,6 +37,8 @@ export class Walker {
   jogging = false;
   private velocity = new THREE.Vector2();
   private camDist = CAM_DISTANCE;
+  private armGoal = CAM_DISTANCE;
+  private arm = CAM_DISTANCE;
   private readonly pivot = new THREE.Vector3();
   private pivotReady = false;
   private fov = 55;
@@ -172,13 +175,19 @@ export class Walker {
     this.pivot.y += (this.target.y - this.pivot.y) * (1 - Math.exp(-20 * dt));   // but keep up with steps and slopes
     const horiz = Math.cos(this.pitch);
     const bx = sin * horiz, bz = cos * horiz, by = Math.sin(this.pitch);
-    const armLen = this.jogging ? CAM_DISTANCE_JOG : CAM_DISTANCE;
+    // mouse wheel: about 16% per notch, eased
+    const zoom = this.input.consumeZoom();
+    if (zoom) this.armGoal = THREE.MathUtils.clamp(this.armGoal * Math.exp(zoom * 0.0015), CAM_MIN, CAM_MAX);
+    this.arm += (this.armGoal - this.arm) * (1 - Math.exp(-10 * dt));
+    const armLen = this.arm + (this.jogging ? CAM_DISTANCE_JOG - CAM_DISTANCE : 0);
     // Shorten the arm if a wall is between the pivot and the camera; ease back out
     const hit = this.walls.castSegment(this.pivot.x, this.pivot.z, this.pivot.x + bx * armLen, this.pivot.z + bz * armLen);
     const wanted = Math.max(0.6, hit * armLen - 0.25);
     const k = wanted < this.camDist ? 1 - Math.exp(-30 * dt) : 1 - Math.exp(-3 * dt);
     this.camDist += (wanted - this.camDist) * k;
     this.camPos.set(this.pivot.x + bx * this.camDist, this.pivot.y + by * this.camDist, this.pivot.z + bz * this.camDist);
+    // a long arm looking up would sink the camera into the street: keep it above the ground
+    this.camPos.y = Math.max(this.camPos.y, this.groundAt(this.camPos.x, this.camPos.z) + 0.45);
     camera.position.copy(this.camPos);
     camera.lookAt(this.pivot);
     // a touch wider when jogging

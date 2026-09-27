@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { toLks94 } from './lks94.mjs';
 import polygonClipping from './vendor/polygon-clipping/index.mjs';
+import { fileURLToPath } from 'node:url';
 
 // straight-skeleton (MIT; CGAL via Wasm) is a browser bundle: give it the globals it checks for.
 globalThis.self ??= globalThis;
@@ -14,7 +15,7 @@ globalThis.window ??= globalThis;
 const { SkeletonBuilder } = createRequire(import.meta.url)('./vendor/straight-skeleton/index.cjs');
 await SkeletonBuilder.init();
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SEED = path.join(ROOT, 'shadows-of-vilnius-seed');
 const OUT = path.join(ROOT, 'public', 'data', 'area.json');
 const LIDAR = path.join(ROOT, 'tools', 'lidar', 'heights.json');

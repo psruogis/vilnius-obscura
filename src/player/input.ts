@@ -3,6 +3,7 @@ export class Input {
   readonly keys = new Set<string>();
   lookDX = 0;
   lookDY = 0;
+  private zoomDY = 0;
   private dragging = false;
 
   constructor(private readonly el: HTMLElement) {
@@ -15,6 +16,11 @@ export class Input {
         this.lookDY += e.movementY;
       }
     });
+    // mouse wheel / trackpad scroll zooms the camera (also swallows ctrl-wheel page zoom)
+    window.addEventListener('wheel', e => {
+      e.preventDefault();
+      this.zoomDY += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+    }, { passive: false });
     el.addEventListener('mousedown', () => { this.dragging = true; });
     window.addEventListener('mouseup', () => { this.dragging = false; });
   }
@@ -38,6 +44,13 @@ export class Input {
 
   get jog(): boolean {
     return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
+  }
+
+  /** Scroll since the last call, in pixels (positive = away from the character). */
+  consumeZoom(): number {
+    const z = this.zoomDY;
+    this.zoomDY = 0;
+    return z;
   }
 
   consumeLook(out: { dx: number; dy: number }): { dx: number; dy: number } {
