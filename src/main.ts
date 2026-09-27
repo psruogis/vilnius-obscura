@@ -168,7 +168,8 @@ async function main(force = false): Promise<void> {
   // the cab stand with its pump and trough, garden benches, goods at a few shop doors
   const propMats = createStreetPropMaterials(aniso);
   if (RAIN) for (const m of Object.values(propMats)) wet(m, 'roof');
-  const streetProps = buildStreetProps({ data, terrain, anchors: facades.anchors, flow, mats: propMats, th: townHallData, ground: { cx: thx, cz: thz, size: 1000, step: 4 } }); // the terrain mesh's grid
+  propMats.gutter.envMap = propMats.water.envMap = scene.environment; // standing water mirrors the full sky, as the glass does
+  const streetProps = buildStreetProps({ data, terrain, anchors: facades.anchors, flow, mats: propMats, th: townHallData, ground: { cx: thx, cz: thz, size: 1000, step: 4 }, rain: RAIN }); // ground: the terrain mesh's grid
   scene.add(streetProps.group);
   for (const [ax, az, bx, bz, low] of streetProps.segments) walls.addSegment(ax, az, bx, bz, low);
   // Market stalls, carts and townsfolk stream in after the first frame

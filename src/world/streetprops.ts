@@ -112,7 +112,9 @@ export function createStreetPropMaterials(anisotropy: number) {
     cloth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, map: worldTex('plastered_wall_04', 'diff', true, anisotropy, 0.25) }),
     litter: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide }),
     poster: new THREE.MeshStandardMaterial({ map: posters.tex, roughness: 0.88 }),
-    water: new THREE.MeshStandardMaterial({ color: '#1c2422', roughness: 0.05, metalness: 0.1 }),
+    water: new THREE.MeshStandardMaterial({ color: '#28302b', roughness: 0.05 }),
+    // rainwater along the kerbs: vertex alpha fades it out over the cobbles
+    gutter: new THREE.MeshStandardMaterial({ color: '#1c201f', roughness: 0.04, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
   };
 }
 export type StreetPropMaterials = ReturnType<typeof createStreetPropMaterials>;
@@ -213,7 +215,11 @@ function tube(points: number[][], r: number, radial = 6, perPoint = 5): THREE.Bu
   return new THREE.TubeGeometry(curve, Math.max(4, points.length * perPoint), r, radial, false);
 }
 
-/** Collects parts per material slot and merges them into one mesh each. */
+/**
+ * Collects parts per material slot and merges them into one mesh each: a dozen draw calls per pass for
+ * everything. (Splitting into cells for culling cost ~200 more draw calls across the shadow cascades
+ * than it saved in triangles.)
+ */
 class Bags {
   private parts = new Map<string, THREE.BufferGeometry[]>();
   add(key: string, g: THREE.BufferGeometry): void {
@@ -286,6 +292,21 @@ function jointed(g: THREE.BufferGeometry, k: number): THREE.BufferGeometry {
   return g;
 }
 
+/**
+ * Wear on laid stones: each corner of a flag weathered to its own tone (so a gradient of damp and dirt
+ * runs across it), darker still where `grime` (0..1) says the splash and the mud reach.
+ */
+function weathered(g: THREE.BufferGeometry, rng: () => number, grime: (x: number, z: number) => number, spread = 0.2): THREE.BufferGeometry {
+  const pos = g.getAttribute('position'), col = g.getAttribute('color') as THREE.BufferAttribute, k = new Map<string, number>();
+  for (let i = 0; i < col.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i), key = `${Math.round(x * 20)},${Math.round(z * 20)}`;
+    let f = k.get(key);
+    if (f === undefined) k.set(key, (f = (1 - spread / 2 + spread * rng()) * (1 - 0.3 * grime(x, z))));
+    col.setXYZ(i, col.getX(i) * f, col.getY(i) * f, col.getZ(i) * f * (1 - 0.04 * grime(x, z)));
+  }
+  return g;
+}
+
 /** Heights of the terrain mesh itself (main.ts builds it from heightAt on a regular grid), for flush paving. */
 export interface GroundGrid { cx: number; cz: number; size: number; step: number }
 function meshHeight(terrain: Terrain, grid: GroundGrid): (x: number, z: number) => number {
@@ -307,13 +328,13 @@ function meshHeight(terrain: Terrain, grid: GroundGrid): (x: number, z: number) 
 // --- Prop geometry (local space: y up from the ground, front towards +z) --------------------------------
 
 /** A cooper's barrel: bulging staves, recessed heads, four iron hoops. */
-export function barrelParts(H = 0.86, R = 0.3): { wood: THREE.BufferGeometry; iron: THREE.BufferGeometry } {
+export function barrelParts(H = 0.86, R = 0.3, segs = 16): { wood: THREE.BufferGeometry; iron: THREE.BufferGeometry } {
   const r = (y: number) => R * (1 - 0.13 * (2 * y / H - 1) ** 2);
   const prof: number[][] = [[0, 0.035], [r(0) - 0.028, 0.035], [r(0) - 0.02, 0]];
-  for (let k = 0; k <= 10; k++) prof.push([r((k / 10) * H), (k / 10) * H]);
+  for (let k = 0; k <= 6; k++) prof.push([r((k / 6) * H), (k / 6) * H]);
   prof.push([r(H) - 0.02, H], [r(H) - 0.028, H - 0.035], [0, H - 0.035]);
-  const wood = lathe(prof, 22);
-  const hoops = [0.07, 0.24, H - 0.24, H - 0.07].map(y => lathe([[r(y) - 0.002, y - 0.022], [r(y) + 0.006, y - 0.02], [r(y) + 0.006, y + 0.02], [r(y) - 0.002, y + 0.022]], 22));
+  const wood = lathe(prof, segs);
+  const hoops = [0.07, 0.24, H - 0.24, H - 0.07].map(y => lathe([[r(y) + 0.006, y - 0.021], [r(y) + 0.006, y + 0.021]], segs));   // a band proud of the staves
   return { wood, iron: merged(hoops) };
 }
 
@@ -361,10 +382,10 @@ function benchParts(): { iron: THREE.BufferGeometry; wood: THREE.BufferGeometry 
   const iron: THREE.BufferGeometry[] = [], wood: THREE.BufferGeometry[] = [];
   for (const x of [-0.78, 0.78]) {
     const at = (pts: number[][]) => pts.map(([z, y]) => [x, y, z]);
-    iron.push(tube(at([[0.27, 0.05], [0.25, 0.01], [0.21, 0.0], [0.2, 0.08], [0.21, 0.25], [0.23, 0.44]]), 0.02, 6, 3));        // front leg with a scroll foot
-    iron.push(tube(at([[-0.29, 0.0], [-0.25, 0.12], [-0.21, 0.3], [-0.2, 0.44], [-0.24, 0.62], [-0.3, 0.84], [-0.28, 0.9]]), 0.02, 6, 3)); // back leg and back
-    iron.push(tube(at([[0.24, 0.43], [0.05, 0.445], [-0.2, 0.45]]), 0.018, 5, 2));                                              // seat rail
-    iron.push(tube(at([[-0.25, 0.64], [-0.05, 0.67], [0.15, 0.66], [0.27, 0.62], [0.28, 0.56], [0.23, 0.55], [0.22, 0.48]]), 0.017, 5, 3)); // arm with scroll
+    iron.push(tube(at([[0.27, 0.05], [0.25, 0.01], [0.21, 0.0], [0.2, 0.08], [0.21, 0.25], [0.23, 0.44]]), 0.02, 4, 3));        // front leg with a scroll foot
+    iron.push(tube(at([[-0.29, 0.0], [-0.25, 0.12], [-0.21, 0.3], [-0.2, 0.44], [-0.24, 0.62], [-0.3, 0.84], [-0.28, 0.9]]), 0.02, 4, 3)); // back leg and back
+    iron.push(tube(at([[0.24, 0.43], [0.05, 0.445], [-0.2, 0.45]]), 0.018, 4, 2));                                              // seat rail
+    iron.push(tube(at([[-0.25, 0.64], [-0.05, 0.67], [0.15, 0.66], [0.27, 0.62], [0.28, 0.56], [0.23, 0.55], [0.22, 0.48]]), 0.017, 4, 3)); // arm with scroll
   }
   for (const z of [0.18, 0.07, -0.04, -0.15]) wood.push(roundBox(1.9, 0.03, 0.09, 0.012).translate(0, 0.475, z));
   for (const [y, z] of [[0.6, -0.235], [0.7, -0.262], [0.8, -0.29]]) wood.push(put(roundBox(1.9, 0.08, 0.026, 0.01), 0, y, z, 0, 1, -0.22));
@@ -625,6 +646,8 @@ interface Chain { P: number[][]; t: number[][]; n: number[][]; L: number[] }
 export function buildStreetProps(opts: {
   data: AreaData; terrain: Terrain; anchors: FacadeAnchor[]; flow: FlowMap; ground: GroundGrid;
   mats: StreetPropMaterials; th?: Building;
+  /** Raining: water runs in the kerb gutters. */
+  rain?: boolean;
 }): StreetProps {
   const { data, terrain, flow, mats } = opts;
   const [cx, cz] = data.meta.townHall, walkR = data.meta.walkRadius;
@@ -750,6 +773,10 @@ export function buildStreetProps(opts: {
   const floor = (x: number, z: number) => G(x, z) + (onPavement(x, z) ? PAVE_LIFT : 0);
 
   // sandy grey granite and a few limestone flags, worn to different tones (the photographs: pale, dusty pavements)
+  const flagGrime = (x: number, z: number) => {
+    const d = nearestWall(x, z).d;
+    return Math.min(1, 0.9 * (1 - smooth(0.05, 0.45, d)) + 0.45 * smooth(PAVE_W - 0.6, PAVE_W, d) + 0.5 * smooth(0.55, 0.85, vnoise(x * 0.6, 7, z * 0.6)));
+  };
   const FLAGS = ['#b9ad96', '#aea38e', '#c3b79f', '#a49a86', '#b6aa92', '#aca290', '#c8bca3', '#9f978a'];
   const occ = new Map<number, number>(), OC = 0.2;
   const okey = (x: number, z: number) => (Math.floor(x / OC) + 50000) * 100003 + Math.floor(z / OC) + 50000;
@@ -788,7 +815,7 @@ export function buildStreetProps(opts: {
             const base = FLAGS[Math.floor(rng() * FLAGS.length)];
             const cc = new THREE.Color(base).multiplyScalar(0.9 + 0.16 * rng());
             if (rng() < 0.12) cc.multiplyScalar(0.8);    // a stained or newer stone
-            bags.add('paving', jointed(paint(slab(cs, tops, Math.min(...tops) - 0.08, 0.02, [rng() * 9, rng() * 9]), cc, 0, 0, 0.09), 0.55));
+            bags.add('paving', weathered(jointed(paint(slab(cs, tops, Math.min(...tops) - 0.08, 0.02, [rng() * 9, rng() * 9]), cc, 0, 0, 0.09), 0.55), rng, flagGrime));
             flagCount++;
           };
           tryPlace(ua, ub, 0);
@@ -830,9 +857,35 @@ export function buildStreetProps(opts: {
         const lift = (rng() - 0.5) * 0.008;
         const tops = cs.map(([x, z], q) => G(x, z) + (q < 2 ? 0.05 : 0.042) + lift);
         const cc = new THREE.Color(rng() < 0.5 ? '#9c978e' : '#a8a095').multiplyScalar(0.9 + 0.15 * rng());
-        bags.add('paving', jointed(paint(slab(cs, tops, Math.min(...tops) - 0.25, 0.03, [rng() * 9, rng() * 9]), cc, 0, 0, 0.08), 0.4));
+        bags.add('paving', weathered(jointed(paint(slab(cs, tops, Math.min(...tops) - 0.25, 0.03, [rng() * 9, rng() * 9]), cc, 0, 0, 0.08), 0.4), rng, (x, z) => 0.35 + 0.4 * vnoise(x * 0.8, 0, z * 0.8), 0.25));
         kerbCount++;
       }
+    }
+    // in the rain, a film of water running in the gutter along the kerb face (the flow map's own gutters
+    // lie under the pavement here): glossy at the kerb, thinning out over the cobbles
+    if (opts.rain) for (let i = 1; i + 2 < K.length; i++) {
+      const [ax, az] = K[i], [bx, bz] = K[i + 1], len = Math.hypot(bx - ax, bz - az);
+      if (len < 0.05) continue;
+      const [ix, iz] = inward(i), nst = Math.max(1, Math.ceil(len / 0.8));
+      const pos: number[] = [], col: number[] = [];
+      const edge = (f: number, w: number): number[][] => {
+        const x = ax + (bx - ax) * f, z = az + (bz - az) * f;
+        return [[x - ix * 0.004, z - iz * 0.004, 0.85], [x - ix * w * 0.45, z - iz * w * 0.45, 0.55], [x - ix * w, z - iz * w, 0]];
+      };
+      for (let k = 0; k < nst; k++) {
+        const w0 = 0.16 + 0.12 * vnoise(ax * 0.7 + k, az * 0.7, 3), w1 = 0.16 + 0.12 * vnoise(ax * 0.7 + k + 1, az * 0.7, 3);
+        const A = edge(k / nst, w0), Bq = edge((k + 1) / nst, w1);
+        for (let r = 0; r < 2; r++) for (const [pq, j] of [[A, r], [Bq, r], [Bq, r + 1], [A, r], [Bq, r + 1], [A, r + 1]] as [number[][], number][]) {
+          const [x, z, al] = pq[j];
+          pos.push(x, G(x, z) + 0.007, z); col.push(1, 1, 1, al);
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(Array.from({ length: pos.length / 3 }, () => [0, 1, 0]).flat(), 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((pos.length / 3) * 2).fill(0), 2));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+      bags.add('gutter', g);
     }
     spot('kerb', ...K[1]);
   }
@@ -877,7 +930,7 @@ export function buildStreetProps(opts: {
       if (iron) {
         // cast-iron wheel guard: a bar bowing out from the jamb to the ground
         const bx = a.x + a.tx * sd * (a.w / 2 + 0.1), bz = a.z + a.tz * sd * (a.w / 2 + 0.1), y0 = floor(bx, bz);
-        const g = tube([[0, 0.95, 0.02], [0, 0.8, 0.14], [0, 0.5, 0.3], [0, 0.2, 0.37], [0, -0.05, 0.38]], 0.035, 8);
+        const g = tube([[0, 0.95, 0.02], [0, 0.8, 0.14], [0, 0.5, 0.3], [0, 0.2, 0.37], [0, -0.05, 0.38]], 0.035, 6, 4);
         bags.add('iron', put(paint(g, '#2a2b28', 0.2, 0.3, 0.05), bx, y0, bz, yaw));
         bags.add('iron', put(paint(roundBox(0.12, 0.18, 0.03, 0.01).translate(0, 0.95, 0.015), '#2a2b28'), bx, y0, bz, yaw));
         ring(bx + a.nx * 0.25, bz + a.nz * 0.25, 0.14, true, 6);
@@ -959,15 +1012,15 @@ export function buildStreetProps(opts: {
     const frame = quad(0.36, 0.3), fr = frame.map(([px, pz]) => G(px, pz) + 0.012);
     // granite frame round a dark sump, the grate's bars over it
     const hole = quad(0.26, 0.2);
-    bags.add('paving', paint(slab(frame, fr, Math.min(...fr) - 0.2, 0.02), '#8c877f', 0, 0, 0.08));
+    bags.add('paving', weathered(jointed(paint(slab(frame, fr, Math.min(...fr) - 0.2, 0.02), '#7e7970', 0, 0, 0.1), 0.45), mulberry(Math.round(x * 7 + z * 13)), () => 0.5, 0.3));
     bags.add('ironFlat', paint(slab(hole, hole.map(([px, pz]) => G(px, pz) + 0.014), G(x, z) - 0.1, 0.004), '#0c0c0b', 0, 0, 0));
     for (let k = -3; k <= 3; k++) {
       const bar = [[-0.015, -0.21], [0.015, -0.21], [0.015, 0.21], [-0.015, 0.21]].map(([u, v]) => [x + (u + k * 0.068) * c + v * s, z - (u + k * 0.068) * s + v * c]);
-      bags.add('ironFlat', paint(slab(bar, bar.map(([px, pz]) => G(px, pz) + 0.024), G(x, z) - 0.03, 0.004), '#34322e', 0, 0, 0.1));
+      bags.add('ironFlat', paint(slab(bar, bar.map(([px, pz]) => G(px, pz) + 0.024), G(x, z) - 0.03, 0.004), '#43372d', 0, 0, 0.2));
     }
     for (const v of [-0.205, 0.205]) {
       const rim = [[-0.26, v - 0.012], [0.26, v - 0.012], [0.26, v + 0.012], [-0.26, v + 0.012]].map(([u, vv]) => [x + u * c + vv * s, z - u * s + vv * c]);
-      bags.add('ironFlat', paint(slab(rim, rim.map(([px, pz]) => G(px, pz) + 0.024), G(x, z) - 0.03, 0.004), '#34322e', 0, 0, 0.1));
+      bags.add('ironFlat', paint(slab(rim, rim.map(([px, pz]) => G(px, pz) + 0.024), G(x, z) - 0.03, 0.004), '#43372d', 0, 0, 0.2));
     }
   }
 
@@ -1318,14 +1371,21 @@ export function buildStreetProps(opts: {
     bags.add('litter', g);
     // two small hay heaps where a cabman fed his horse, stalks sticking out all over them
     for (let k = 0; k < 2; k++) {
-      const [x, z] = world(s0 + 3 + k * 7 + rr() * 2, t0 + 1 + rr() * 2), yaw = rr() * 6, R = 0.34, Hh = 0.2;
-      const heap = new THREE.SphereGeometry(R, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.3, Hh / R, 1);
-      hewn(heap, 0.035, 14, k * 7 + 3);
-      bags.add('cloth', put(paint(heap, '#b8a064', 0, 0, 0.3), x, G(x, z) - 0.02, z, yaw));
+      const [x, z] = world(s0 + 3 + k * 7 + rr() * 2, t0 + 1 + rr() * 2), yaw = rr() * 6, R = 0.36, Hh = 0.3;
+      const heap = new THREE.SphereGeometry(R, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.3, Hh / R, 1);
+      // pulled about by the horse: lumps and a trampled side
+      const deform = (px: number, py: number, pz: number) => {
+        const n = vnoise(px * 6 + k * 5, py * 6, pz * 6);
+        return [px * (1 + 0.25 * (n - 0.5)), py * (0.75 + 0.6 * n) * (1 - 0.35 * Math.max(0, px / (R * 1.3))), pz * (1 + 0.25 * (n - 0.5))];
+      };
+      const hp = heap.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < hp.count; i++) hp.setXYZ(i, ...(deform(hp.getX(i), hp.getY(i), hp.getZ(i)) as [number, number, number]));
+      heap.computeVertexNormals();
+      bags.add('cloth', put(paint(heap, '#c4ab6a', 0, 0, 0.35), x, G(x, z) - 0.02, z, yaw));
       const st: number[] = [], sc: number[] = [];
       for (let q = 0; q < 160; q++) {
-        const a = rr() * Math.PI * 2, f = Math.sqrt(rr()) * 1.05, hx = Math.cos(a) * R * 1.3 * f, hz = Math.sin(a) * R * f;
-        const hy = Hh * Math.sqrt(Math.max(0, 1 - f * f)) - 0.02 + 0.01;
+        const a = rr() * Math.PI * 2, f = Math.sqrt(rr()) * 1.05;
+        const [hx, hy0, hz] = deform(Math.cos(a) * R * 1.3 * f, Hh * Math.sqrt(Math.max(0, 1 - f * f)), Math.sin(a) * R * f), hy = hy0 - 0.02 + 0.012;
         const dir = rr() * Math.PI * 2, L = 0.1 + rr() * 0.16, up = (rr() - 0.3) * 0.08, w = 0.004;
         const dx = Math.cos(dir) * L / 2, dz = Math.sin(dir) * L / 2, wx = -Math.sin(dir) * w, wz = Math.cos(dir) * w;
         const quad = [[hx - dx - wx, hy - up, hz - dz - wz], [hx + dx - wx, hy + up, hz + dz - wz], [hx + dx + wx, hy + up, hz + dz + wz], [hx - dx + wx, hy - up, hz - dz + wz]];
@@ -1346,7 +1406,7 @@ export function buildStreetProps(opts: {
   group.name = 'street-props';
   const slots: Record<string, [THREE.Material, boolean]> = {
     stone: [mats.stone, true], paving: [mats.paving, false], wood: [mats.wood, true], iron: [mats.iron, true], ironFlat: [mats.iron, false],
-    cloth: [mats.cloth, true], litter: [mats.litter, false], poster: [mats.poster, true], water: [mats.water, false],
+    cloth: [mats.cloth, true], litter: [mats.litter, false], poster: [mats.poster, true], water: [mats.water, false], gutter: [mats.gutter, false],
   };
   for (const m of bags.meshes(slots, stats)) group.add(m);
   stats.segments = segments.length;

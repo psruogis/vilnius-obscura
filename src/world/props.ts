@@ -57,7 +57,17 @@ export function buildBarriers(
   data: AreaData, terrain: Terrain, cx: number, cz: number, radius: number, material: THREE.Material, iron?: THREE.Material,
 ): THREE.Group | null {
   const wood: THREE.BufferGeometry[] = [], hoops: THREE.BufferGeometry[] = [];
-  const barrel = barrelParts(0.9, 0.31);
+  const barrel = barrelParts(0.9, 0.31, 12);
+  const group = new THREE.Group();
+  group.name = 'barriers';
+  const add = (parts: THREE.BufferGeometry[], mat: THREE.Material) => {
+    const geo = mergeGeometries(parts.map(g => (g.index ? g.toNonIndexed() : g)), false);
+    if (!geo) return;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  };
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), X = new THREE.Vector3(1, 0, 0);
   const r = radius + 0.6; // just outside the walker's limit
   let seed = 1;
@@ -65,7 +75,7 @@ export function buildBarriers(
   // a hewn post: slightly irregular girth, weathered to a blunt top
   const post = (x: number, y: number, z: number) => {
     const k = 0.9 + 0.2 * rnd();
-    const g = new THREE.LatheGeometry([[0, -0.2], [0.085, -0.2], [0.085, 0.1], [0.08, 0.6], [0.076, 1.08], [0.06, 1.17], [0.03, 1.21], [0, 1.22]].map(([a, b]) => new THREE.Vector2(a * k, b)), 7, rnd() * 6);
+    const g = new THREE.LatheGeometry([[0, -0.2], [0.085, -0.2], [0.085, 0.1], [0.08, 0.6], [0.076, 1.08], [0.06, 1.17], [0.03, 1.21], [0, 1.22]].map(([a, b]) => new THREE.Vector2(a * k, b)), 6, rnd() * 6);
     const pos = g.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) { const f = 1 + 0.1 * Math.sin(pos.getY(i) * 7 + Math.atan2(pos.getZ(i), pos.getX(i)) * 3 + k * 40); pos.setX(i, pos.getX(i) * f); pos.setZ(i, pos.getZ(i) * f); }
     g.computeVertexNormals();
@@ -75,7 +85,7 @@ export function buildBarriers(
   // a round rail sagging a little between two posts, its ends lapped over them
   const rail = (A: THREE.Vector3, B: THREE.Vector3, h: number) => {
     const L = A.distanceTo(B) + 0.24, sag = 0.02 + 0.02 * rnd(), rr = 0.042 + 0.01 * rnd();
-    const g = new THREE.CylinderGeometry(rr, rr * (0.9 + 0.2 * rnd()), L, 6, 6).rotateZ(Math.PI / 2);
+    const g = new THREE.CylinderGeometry(rr, rr * (0.9 + 0.2 * rnd()), L, 5, 4, true).rotateZ(Math.PI / 2);
     const pos = g.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) { const u = pos.getX(i) / L; pos.setY(i, pos.getY(i) - sag * (1 - 4 * u * u)); }
     g.computeVertexNormals();
@@ -96,9 +106,10 @@ export function buildBarriers(
     }
     for (const pt of pts) post(pt.x, pt.y, pt.z);
     for (let i = 0; i < pts.length - 1; i++) for (const hgt of [0.45, 0.95]) rail(pts[i], pts[i + 1], hgt);
-    // a couple of barrels on the walk side of the fence
+    // a few barrels on the walk side of the fence, in ones and twos
     const inset = 0.9;
     for (let i = 1; i < pts.length - 1; i += 2) {
+      if (i > 1 && rnd() < 0.4) continue;
       const pt = pts[i];
       const dx = cx - pt.x, dz = cz - pt.z, dl = Math.hypot(dx, dz);
       const x = pt.x + (dx / dl) * inset + (rnd() - 0.5) * 0.3, z = pt.z + (dz / dl) * inset + (rnd() - 0.5) * 0.3;
@@ -110,16 +121,6 @@ export function buildBarriers(
     }
   }
   if (!wood.length) return null;
-  const group = new THREE.Group();
-  group.name = 'barriers';
-  const add = (parts: THREE.BufferGeometry[], mat: THREE.Material) => {
-    const geo = mergeGeometries(parts.map(g => (g.index ? g.toNonIndexed() : g)), false);
-    if (!geo) return;
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-  };
   if (iron) { add(wood, material); if (hoops.length) add(hoops, iron); } else add([...wood, ...hoops.map(h => { h.deleteAttribute('color'); return h; })], material);
   return group;
 }
