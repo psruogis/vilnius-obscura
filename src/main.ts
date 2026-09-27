@@ -174,15 +174,9 @@ async function main(force = false): Promise<void> {
       for (const [ax, az, bx, bz] of mk.segments) walls.addSegment(ax, az, bx, bz);
       // Open ground: a 1 m occupancy raster of the building outlines around the walk
       const free = openGround(data, thx, thz, 180);
-      // Horse-drawn coaches and carts on a loop fitted round the square
+      // Droshkies, a closed carriage and a farm cart on a loop fitted round the square (hoods up in the rain)
       buildTraffic({
-        th: townHallData, walls, terrain, free,
-        mats: {
-          wood: createWoodMaterial(aniso),
-          body: new THREE.MeshStandardMaterial({ color: '#34241c', roughness: 0.45, metalness: 0.05 }),
-          dark: new THREE.MeshStandardMaterial({ color: '#15130f', roughness: 0.3 }),
-          horse: new THREE.MeshStandardMaterial(),
-        },
+        th: townHallData, walls, terrain, free, wood: createWoodMaterial(aniso), rain: RAIN, wet: RAIN ? wet : undefined,
       }).then(tr => { traffic = tr; scene.add(tr.group); shadows.apply(tr.group); }).catch(err => console.warn('traffic', err));
       // Townsfolk: knots of people talking, and strollers
       const groups: THREE.Vector2[] = [];
