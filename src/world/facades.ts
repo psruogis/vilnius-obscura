@@ -514,13 +514,15 @@ function signQuad(b: GeoBuilder, e: Edge, u: number, y0: number, y1: number, hw:
   b.quad(at(-hw, y0), at(hw, y0), at(hw, y1), at(-hw, y1), n, signRow(k), new THREE.Color('#ffffff'));
 }
 
+/** Façade points the street props respect (streetprops.ts): doors, gateways, shopfronts, photographed fronts and downpipe feet, at the wall face (threshold height), with the outward normal, the tangent along the wall and the width. */
+export interface FacadeAnchor { kind: 'gate' | 'door' | 'shop' | 'front' | 'pipe'; x: number; y: number; z: number; nx: number; nz: number; tx: number; tz: number; w: number; door?: number; goods?: boolean }
 export interface FacadeStats { houses: number; windows: number; doors: number; shops: number; triangles: number; heroDebug?: unknown[] }
 
 // Shopfront fascia (signboard) and awning colours, after the period photographs of Wielka street
 const FASCIA = ['#3f5a48', '#6e2e26', '#34425c', '#5a4632', '#8a6a34', '#cfc2a4', '#4a5e4a', '#7a5a3c'];
 const AWNING = ['#e8dcc0', '#c8b48a', '#7a3b2c', '#3e5a44', '#d6c8a4', '#8a6a3a'];
 
-export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMaterials, free?: (x: number, z: number) => boolean): { group: THREE.Group; stats: FacadeStats; lamps: LampSpot[] } {
+export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMaterials, free?: (x: number, z: number) => boolean): { group: THREE.Group; stats: FacadeStats; lamps: LampSpot[]; anchors: FacadeAnchor[] } {
   const houses = data.buildings.filter(b => b.detail);
   // Neighbours for party-wall tests: every building whose bounding box is near
   const boxes = data.buildings.map(b => {
@@ -535,6 +537,8 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
   const canvas = new GeoBuilder(), iron = new GeoBuilder(), metal = new GeoBuilder(), shop = new GeoBuilder(), sign = new GeoBuilder();
   const extras: THREE.Object3D[] = [];
   const lamps: LampSpot[] = [];
+  const anchors: FacadeAnchor[] = [];
+  const anchor = (kind: FacadeAnchor['kind'], e: Edge, u: number, h: number, w: number, more?: Partial<FacadeAnchor>) => { const p = P(e, u, h, 0); anchors.push({ kind, x: p.x, y: p.y, z: p.z, nx: e.nx, nz: e.nz, tx: e.tx, tz: e.tz, w, ...more }); };
   const signMat = houses.some(h => h.style === 'hotel') ? hotelSign() : null;
   const stats: FacadeStats = { houses: houses.length, windows: 0, doors: 0, shops: 0, triangles: 0 };
   // open ground ahead of a wall: how far the street or square reaches (m, up to 30)
@@ -606,6 +610,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
       edges.forEach((e, i) => {
         if (e.L < 0.05) return;
         if (heroEdges.has(i)) {
+          anchor('front', e, e.L / 2, 0, e.L);
           if (b.style === 'hotel') hotelFacade(e, topH, h0, terrain, { wall, trim, flat, glass, wood, canvas, iron, shop, sign }, new THREE.Color('#d9cdb4'), new THREE.Color('#ece3d0'), stats, extras, i === gableEdge ? signMat : null);
           else heroFacade(e, topH, h0, terrain, { wall, trim, flat, glass, wood, canvas, iron, shop, sign }, new THREE.Color('#e3dccb'), new THREE.Color('#efe9dc'), stats, i === gableEdge);
           return;
@@ -778,6 +783,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
             const dm = Math.floor(R(16) * 4), dw = 0.9 + 0.25 * R(17);
             let doorAt: number | null = dm === 0 ? null : dm === 1 ? l + dw / 2 + 0.06 : dm === 2 ? o.u : r - dw / 2 - 0.06;
             if (doorAt !== null && o.w < dw + 0.9) doorAt = null;
+            anchor('shop', e, o.u, o.bottom, o.w, { door: doorAt === null ? undefined : doorAt - o.u, goods: doorAt !== null && R(41) < 0.22 });
             const spans = (doorAt === null ? [[l, r]] : [[l, doorAt - dw / 2], [doorAt + dw / 2, r]]).filter(([x0, x1]) => x1 - x0 > 0.25) as [number, number][];
             const nBars = Math.floor(R(21) * 4), transomAt = R(23) < 0.6 ? sTop - (0.35 + 0.3 * R(22)) : null;
             for (const [x0, x1] of spans) {
@@ -898,6 +904,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
             }
           } else {
             stats.doors++;
+            anchor(o.kind === 'gate' ? 'gate' : 'door', e, o.u, o.bottom, o.w);
             // Door leaves (or gate leaves) filling the opening, set deep in the wall
             const shape = holes[oi];
             const dt = THREE.ShapeUtils.triangulateShape(shape, []);
@@ -990,6 +997,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
           if (e.L > 4 && topH > 5) {
             const pipeC = new THREE.Color('#6f7478');
             for (const u of [0.28, e.L - 0.28]) {
+              anchor('pipe', e, u, 0, 0.11);
               const cyl = new THREE.CylinderGeometry(0.055, 0.055, topH - 0.5, 6).translate(0, (topH - 0.5) / 2, 0);
               onEdge(metal, cyl, e, u, 0.05, pipeC);
               onEdge(metal, new THREE.CylinderGeometry(0.14, 0.06, 0.28, 6).translate(0, topH - 0.34, 0), e, u, 0.05, pipeC);
@@ -1098,5 +1106,5 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
     group.add(mesh);
   }
   for (const x of extras) group.add(x);
-  return { group, stats, lamps };
+  return { group, stats, lamps, anchors };
 }

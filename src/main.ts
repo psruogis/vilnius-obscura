@@ -4,6 +4,7 @@ import { buildWalls, buildRoofs, hasTileRoof } from './world/buildings';
 import { Terrain } from './world/terrain';
 import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial } from './world/materials';
 import { buildBarriers } from './world/props';
+import { buildStreetProps, createStreetPropMaterials } from './world/streetprops';
 import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
 import { buildPromenade } from './world/promenade';
@@ -163,6 +164,13 @@ async function main(force = false): Promise<void> {
     promenadeRef = promenade;
     lampSpots.push(...promenade.lamps);
   }
+  // Street furniture c.1900: pavements and kerbs, guard stones, drain grates, the advertising column,
+  // the cab stand with its pump and trough, garden benches, goods at a few shop doors
+  const propMats = createStreetPropMaterials(aniso);
+  if (RAIN) for (const m of Object.values(propMats)) wet(m, 'roof');
+  const streetProps = buildStreetProps({ data, terrain, anchors: facades.anchors, flow, mats: propMats, th: townHallData, ground: { cx: thx, cz: thz, size: 1000, step: 4 } }); // the terrain mesh's grid
+  scene.add(streetProps.group);
+  for (const [ax, az, bx, bz, low] of streetProps.segments) walls.addSegment(ax, az, bx, bz, low);
   // Market stalls, carts and townsfolk stream in after the first frame
   let market: Market | null = null;
   let crowd: Crowd | null = null, traffic: Traffic | null = null;
@@ -279,7 +287,7 @@ async function main(force = false): Promise<void> {
       get character() { return character; },
       get ambience() { return ambience; },
       get crowd() { return crowd; }, get traffic() { return traffic; },
-      post, shadows, lamps, facadeStats: facades.stats, flowStats: flow.stats, flowTex: flow.tex, flowBox: flow.box,
+      post, shadows, lamps, facadeStats: facades.stats, streetProps: streetProps.spots, streetStats: streetProps.stats, flowStats: flow.stats, flowTex: flow.tex, flowBox: flow.box,
       // Saves the current frame to .screens/<name>.jpg via the dev server.
       snapshot: async (name: string) => {
         post.render(0);

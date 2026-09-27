@@ -4,6 +4,8 @@ import type { AreaData } from './area';
 interface Seg {
   ax: number; az: number; bx: number; bz: number;
   stamp: number;
+  /** Knee-high street furniture: blocks walking, but not the camera's or the carts' line of sight. */
+  low?: boolean;
 }
 
 /**
@@ -27,9 +29,9 @@ export class WallGrid {
     }
   }
 
-  /** Adds a free-standing wall (fences, booths). */
-  addSegment(ax: number, az: number, bx: number, bz: number): void {
-    this.add({ ax, az, bx, bz, stamp: 0 });
+  /** Adds a free-standing wall (fences, booths); `low` for knee-high props (see Seg.low). */
+  addSegment(ax: number, az: number, bx: number, bz: number, low = false): void {
+    this.add({ ax, az, bx, bz, stamp: 0, low });
   }
 
   private key(cx: number, cz: number): number {
@@ -109,6 +111,7 @@ export class WallGrid {
     const rx = bx - ax, rz = bz - az;
     let best = 1;
     for (const s of segs) {
+      if (s.low) continue;
       const sx = s.bx - s.ax, sz = s.bz - s.az;
       const denom = rx * sz - rz * sx;
       if (Math.abs(denom) < 1e-9) continue;
