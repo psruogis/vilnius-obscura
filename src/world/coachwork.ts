@@ -162,7 +162,7 @@ export const rod = (pts: THREE.Vector3[], r: number, n = pts.length > 2 ? 10 : 2
   sweep(pts.length > 2 ? curve(pts, n) : pts, ellipse(r, r, radial), { scale: t => 1 + (taper - 1) * t });
 
 /** A soft box (superellipsoid): cushions, sacks, roofs. p → 0 is boxy, 1 is an ellipsoid. */
-export function cushion(a: number, b: number, c: number, p = 0.25, ws = 16, hs = 10): THREE.BufferGeometry {
+export function cushion(a: number, b: number, c: number, p = 0.25, ws = 14, hs = 8): THREE.BufferGeometry {
   const g = new THREE.SphereGeometry(1, ws, hs);
   g.deleteAttribute('uv'); g.deleteAttribute('normal');
   const P = g.getAttribute('position');
@@ -242,7 +242,7 @@ export function gridSurface(rows: THREE.Vector3[][], inside: THREE.Vector3): THR
  * `spokes` tapered spokes (dished outward), felloe and iron tyre. Right-hand wheels are this rotated 180°.
  */
 export function wheel(k: Kit, r: number, spokes: number, o: { paint: Finish; hub?: number; width?: number; spoke?: number; cap?: Finish; seg?: number }, xf: THREE.Matrix4): void {
-  const hub = o.hub ?? 1, w = o.width ?? 0.05, sp = o.spoke ?? 1, seg = o.seg ?? Math.round(28 + r * 24);
+  const hub = o.hub ?? 1, w = o.width ?? 0.05, sp = o.spoke ?? 1, seg = o.seg ?? Math.round(24 + r * 20);
   const toX = RZ(-Math.PI / 2); // lathe axis Y → X (outboard)
   const L = (m: THREE.Matrix4) => mul(xf.clone(), m);
   // nave
@@ -350,7 +350,7 @@ export function hood(k: Kit, o: { pivot: THREE.Vector3; W: number; H: number; rc
   inner.computeVertexNormals();
   k.add(inner, o.lining, xf);
   // the bows show as ridges; hinge plates; jointed stays locking the raised hood
-  for (const th of o.angles) k.add(sweep(hoop.map(([x, h]) => at(x * 1.004, h + 0.006, th, 0)), ellipse(0.011, 0.011, 5)), FIN.leather, xf);
+  for (const th of o.angles) k.add(sweep(hoop.map(([x, h]) => at(x * 1.004, h + 0.006, th, 0)), ellipse(0.011, 0.011, 4)), FIN.leather, xf);
   for (const sx of [-1, 1]) {
     k.add(new THREE.CylinderGeometry(0.045, 0.045, 0.012, 12).rotateZ(Math.PI / 2).translate(sx * (o.W / 2 + 0.008), o.pivot.y, o.pivot.z), FIN.brass, xf);
     if (o.joints) {
@@ -382,6 +382,7 @@ export interface VehicleGeo {
   front: THREE.BufferGeometry;          // turns with the front axle: axle, spring, shafts, duga
   wheelsR: THREE.BufferGeometry; wheelsF: THREE.BufferGeometry;
   seat: THREE.Vector3;                  // driver's seat top (body frame, relative to pivot)
+  fare?: THREE.Vector3;                 // a passenger's seat, if it has one (body frame)
   foot: number;                         // driver's footboard height (body frame)
   springy: number;                      // how much the body moves on its springs (0 for a cart)
 }
@@ -416,7 +417,7 @@ function shaftsAndDuga(k: Kit, h: Hitch, rF: number, trackF: number, duga: Finis
  * A vehicle's parts. Frames: `root` at the rear axle on the ground (+z forward); the body about `pivot`;
  * the front unit at the front axle on the ground, turning about y.
  */
-export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; paint: string; wheelPaint: string; duga: string; seed: number }): VehicleGeo {
+export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; paint: string; wheelPaint: string; duga: string; line: string; seed: number }): VehicleGeo {
   const chassis = new Kit(), body = new Kit(), front = new Kit();
   const P = FIN.lacquer(o.paint), W = FIN.paintWood(o.wheelPaint);
   if (kind === 'droshky') {
@@ -431,6 +432,8 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
     // tub: solid lower body with rounded edges, the side panels sweeping up into the back
     body.add(slab(roundedShape([[-0.3, 0.74], [-0.52, 0.86], [-0.5, 0.96], [0.36, 0.96], [0.5, 0.82], [0.95, 0.8], [1.02, 0.88], [1.08, 0.72], [0.4, 0.69]], 0.07), 1.02, 0.035), P, B());
     for (const sx of [-1, 1]) {
+      // painted coach line along the tub
+      body.add(sweep(curve([V(sx * 0.513, 0.84, -0.44), V(sx * 0.513, 0.905, -0.3), V(sx * 0.513, 0.905, 0.3), V(sx * 0.513, 0.85, 0.44), V(sx * 0.513, 0.79, 0.62), V(sx * 0.513, 0.76, 0.95)], 16), ellipse(0.004, 0.006, 4)), FIN.lacquer(o.line), B());
       body.add(slab(roundedShape([[-0.53, 0.9], [-0.56, 1.24], [-0.46, 1.34], [-0.2, 1.3], [0.08, 1.15], [0.3, 1.12], [0.44, 1.03], [0.42, 0.9]], 0.08), 0.045, 0.018), P, B(T(sx * 0.5, 0, 0)));
       // armrest roll in leather along the top edge
       body.add(sweep(curve([V(sx * 0.5, 1.33, -0.46), V(sx * 0.5, 1.28, -0.18), V(sx * 0.5, 1.16, 0.1), V(sx * 0.5, 1.12, 0.32), V(sx * 0.5, 1.02, 0.44)], 14), ellipse(0.03, 0.022, 7)), FIN.leather, B());
@@ -459,8 +462,8 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
     // the hood: raised in the rain, folded back in the sun
     const hp = V(0, 1.22, -0.3);
     hood(body, {
-      pivot: hp, W: 1.08, H: 0.9, rc: 0.3, sag: o.rain ? 0.05 : 0.11,
-      angles: o.rain ? [0.42, 0.06, -0.3, -0.6] : [-1.3, -1.38, -1.46, -1.55, -1.64],
+      pivot: hp, W: 1.08, H: 0.9, rc: 0.3, sag: o.rain ? 0.05 : 0.14,
+      angles: o.rain ? [0.42, 0.06, -0.3, -0.6] : [-1.42, -1.54, -1.66, -1.78, -1.9],
       leather: FIN.leather, lining: FIN.cloth('#2c2926'), joints: o.rain,
       rail: o.rain ? (x, h) => V(x, hp.y, hp.z).lerp(V(x * 0.97, 1.33, -0.56), THREE.MathUtils.smoothstep(h, 0, 0.45)) : undefined,
     }, B());
@@ -479,7 +482,7 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
       kind, rR, rF, wb, pivot, springy: 1,
       chassis: chassis.build(), body: body.build(), front: front.build(),
       wheelsR: wheelPair(rR, 14, tR, { paint: W }), wheelsF: wheelPair(rF, 12, tF, { paint: W, hub: 0.9 }),
-      seat: V(0, 1.26, 1.42).sub(pivot), foot: 0.85 - pivot.y,
+      seat: V(0, 1.26, 1.42).sub(pivot), foot: 0.85 - pivot.y, fare: V(-0.2, 1.09, -0.26).sub(pivot),
     };
   }
   if (kind === 'brougham') {
@@ -495,13 +498,18 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
     body.add(slab(roundedShape([[-0.52, 0.76], [-0.7, 0.98], [-0.68, 1.32], [0.86, 1.32], [0.82, 1.08], [0.6, 0.8], [0.1, 0.7]], 0.12), 1.2, 0.045), P, B());
     // upper cabin (black) with the roof
     body.add(slab(roundedShape([[-0.68, 1.3], [-0.66, 1.96], [0.8, 1.96], [0.86, 1.3]], 0.07), 1.16, 0.035), upper, B());
-    body.add(cushion(0.64, 0.05, 0.84, 0.18).translate(0, 1.99, 0.07), FIN.lacquer('#0c0c0c'), B());
+    body.add(cushion(0.64, 0.05, 0.84, 0.18, 12, 8).translate(0, 1.99, 0.07), { c: '#151413', r: 0.55 }, B());
     body.add(sweep(curve([V(-0.62, 2.02, -0.74), V(0.62, 2.02, -0.74), V(0.62, 2.02, 0.88), V(-0.62, 2.02, 0.88)], 40, true), ellipse(0.012, 0.018, 5), { closed: true }), FIN.nickel, B());
     // glass: door window, quarter lights, front glass; mouldings and handle
     for (const sx of [-1, 1]) {
-      const g = (z0: number, z1: number, y0: number, y1: number) => body.add(slab(roundedShape([[z0, y0], [z0, y1], [z1, y1], [z1, y0]], 0.05), 0.012, 0.004).translate(sx * 0.585, 0, 0), FIN.glass, B());
+      const g = (z0: number, z1: number, y0: number, y1: number) => {
+        body.add(slab(roundedShape([[z0, y0], [z0, y1], [z1, y1], [z1, y0]], 0.05), 0.012, 0.004).translate(sx * 0.585, 0, 0), FIN.glass, B());
+        const fr = [V(sx * 0.592, y0, z0), V(sx * 0.592, y1, z0), V(sx * 0.592, y1, z1), V(sx * 0.592, y0, z1)];
+        body.add(sweep(fr, ellipse(0.012, 0.01, 4), { closed: true }), FIN.lacquer('#0a0a0a'), B());
+      };
       g(-0.02, 0.44, 1.4, 1.86); g(-0.56, -0.16, 1.4, 1.86); g(0.56, 0.74, 1.4, 1.86);
       body.add(sweep(curve([V(sx * 0.6, 1.33, -0.72), V(sx * 0.6, 1.33, 0.2), V(sx * 0.6, 1.33, 0.88)], 12), ellipse(0.012, 0.012, 5)), FIN.lacquer('#6a4a1c'), B());
+      body.add(sweep(curve([V(sx * 0.601, 1.02, -0.62), V(sx * 0.601, 0.86, -0.4), V(sx * 0.601, 0.8, 0.1), V(sx * 0.601, 0.88, 0.62), V(sx * 0.601, 1.1, 0.78)], 16), ellipse(0.004, 0.006, 4)), FIN.lacquer(o.line), B());
       body.add(sweep([V(sx * 0.6, 0.76, -0.06), V(sx * 0.6, 1.9, -0.06), V(sx * 0.6, 1.9, 0.5), V(sx * 0.6, 0.76, 0.5)], ellipse(0.006, 0.006, 4)), FIN.lacquer('#050505'), B());
       body.add(rod([V(sx * 0.605, 1.3, 0.42), V(sx * 0.63, 1.3, 0.42), V(sx * 0.63, 1.3, 0.34)], 0.009, 6), FIN.brass, B());
       carriageLamp(body, B(mul(T(sx * 0.66, 1.62, 0.84), RY(sx > 0 ? 0 : Math.PI))), o.rain);
@@ -514,6 +522,11 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
       body.add(sweep(mg, flat(0.085, 0.005), { ups }), FIN.leather, B());
     }
     body.add(slab(roundedShape([[0.8, 1.38], [0.84, 1.88], [0.86, 1.88], [0.86, 1.38]], 0.02), 1.0, 0.004), FIN.glass, B());
+    { // the front glass in its frame, with a centre bar
+      const fz = (y: number) => 0.868 - (y - 1.38) * 0.05;
+      body.add(sweep([V(-0.5, 1.38, fz(1.38)), V(-0.5, 1.88, fz(1.88)), V(0.5, 1.88, fz(1.88)), V(0.5, 1.38, fz(1.38))], ellipse(0.014, 0.012, 4), { closed: true }), FIN.lacquer('#0a0a0a'), B());
+      body.add(rod([V(0, 1.38, fz(1.38)), V(0, 1.88, fz(1.88))], 0.01, 2, 4), FIN.lacquer('#0a0a0a'), B());
+    }
     // coachman's box on an iron frame over the front wheels, footboard and dash
     for (const sx of [-1, 1]) {
       body.add(rod([V(sx * 0.4, 1.3, 0.84), V(sx * 0.42, 1.48, 1.1), V(sx * 0.4, 1.56, 1.3)], 0.016, 10), FIN.iron, B());
@@ -568,7 +581,8 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
   // the load: hay mounded in the bed (sackcloth over it in the rain), a few sacks, the driver's board
   const hay = cushion(0.52, 0.3, 0.95, 0.55, 20, 12);
   { const Pp = hay.getAttribute('position'); for (let i = 0; i < Pp.count; i++) { const x = Pp.getX(i), y = Pp.getY(i), z = Pp.getZ(i); const n = 1 + 0.07 * Math.sin(x * 13 + z * 7) + 0.05 * Math.sin(z * 17 + y * 9); Pp.setXYZ(i, x * n, Math.max(y, -0.1) * n, z); } hay.computeVertexNormals(); }
-  body.add(hay.translate(0, 1.02, 0.05), o.rain ? { c: '#5a5040', r: 0.8, w: 0.3 } : { c: '#9a8a58', r: 0.95, w: 0.5 }, B());
+  body.add(hay.translate(0, 1.02, 0.05), { c: '#8a7f66', r: 0.92, w: 0.25 }, B());
+  for (const z of [-0.45, 0.5]) body.add(rod([V(-0.62, 0.98, z), V(-0.4, 1.28, z + 0.02), V(0, 1.35, z), V(0.4, 1.28, z - 0.02), V(0.62, 0.98, z)], 0.011, 12, 5), { c: '#9a8a66', r: 0.9, w: 0.3 }, B());
   for (const [x, z, a] of [[-0.2, 0.95, 0.3], [0.18, 1.1, -0.2], [0, 1.3, 0.1]] as const) body.add(cushion(0.2, 0.14, 0.3, 0.6, 12, 8).applyMatrix4(RY(a)).translate(x, 0.92, z), { c: '#8a7a60', r: 0.95, w: 0.2 }, B());
   body.add(new THREE.BoxGeometry(0.95, 0.04, 0.3).translate(0, 1.2, 1.55), wood, B());
   front.add(rod([V(-tF, rF, 0), V(tF, rF, 0)], 0.035, 2, 6), dark);

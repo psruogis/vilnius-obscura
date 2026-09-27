@@ -309,10 +309,10 @@ function fitHorse(md: Model, walk: THREE.AnimationClip): HorseFit {
   const ndir = N3.clone().sub(T3).normalize();
   const cn = V(0, ndir.y * 0.55, ndir.z).normalize();
   const cc = mid(N1.clone().lerp(N2, 0.25), cn, 0.05, 0.3); cc.x = 0;
-  const collar = withHair.ring(cc, cn, up, 0.045, 30, 0.9);
+  const collar = withHair.ring(cc, cn, up, 0.058, 30, 0.9);
   const tugI = Math.round(30 * 0.27); // just below the horizontal on the left (+x) side
   const side = (i: number, sx: number) => sx > 0 ? i : (30 - i) % 30;
-  const tugRest = collar.p[side(tugI, 1)].clone().addScaledVector(collar.out[side(tugI, 1)], 0.05).addScaledVector(cn, 0.02);
+  const tugRest = collar.p[side(tugI, 1)].clone().addScaledVector(collar.out[side(tugI, 1)], 0.07).addScaledVector(cn, 0.03);
   const crestRest = collar.p[0].clone();
   // saddle pad and girth behind the withers
   const sz = T2.z + (T3.z - T2.z) * 0.6, Z = V(0, 0, 1), sc = mid(V(0, T2.y + 0.15, sz), Z, 0.05, 0.5); sc.x = 0;
@@ -348,12 +348,13 @@ function fitHorse(md: Model, walk: THREE.AnimationClip): HorseFit {
   const harness = (k: SkinKit, trim: Finish) => {
     const L = FIN.leather;
     // collar: a thick leather roll, the hames standing on its front, tug loops at the sides
-    k.add(sweep(collar.p, ellipse(0.05, 0.046, 8), { ups: collar.out, closed: true }), L, ['Torso3', 'Neck1']);
+    k.add(sweep(collar.p, ellipse(0.064, 0.058, 8), { ups: collar.out, closed: true }), L, ['Torso3', 'Neck1']);
     for (const sx of [1, -1]) {
       const idx = Array.from({ length: 13 }, (_, i) => side(2 + i, sx));
-      const pts = idx.map(i => collar.p[i].clone().addScaledVector(collar.out[i], 0.05).addScaledVector(cn, 0.03));
-      k.add(sweep(curve(pts, 16), ellipse(0.02, 0.016, 6)), trim, ['Torso3', 'Neck1']);
-      const tp = collar.p[side(tugI, sx)].clone().addScaledVector(collar.out[side(tugI, sx)], 0.07);
+      const pts = idx.map(i => collar.p[i].clone().addScaledVector(collar.out[i], 0.062).addScaledVector(cn, 0.04));
+      k.add(sweep(curve(pts, 14), ellipse(0.026, 0.02, 6)), trim, ['Torso3', 'Neck1']);
+      k.add(new THREE.SphereGeometry(0.03, 8, 6).translate(pts[0].x, pts[0].y + 0.01, pts[0].z), FIN.brass, ['Neck1']);
+      const tp = collar.p[side(tugI, sx)].clone().addScaledVector(collar.out[side(tugI, sx)], 0.085);
       k.add(new THREE.TorusGeometry(0.035, 0.012, 5, 10).rotateY(Math.PI / 2).translate(tp.x, tp.y, tp.z), FIN.brass, ['Neck1']);
     }
     // saddle pad with the rein terrets, girth
@@ -414,7 +415,7 @@ function fitHorse(md: Model, walk: THREE.AnimationClip): HorseFit {
       const top = withHair.at(path[i], dors, -0.01, true, 0.12, 0.45);
       const len = (0.16 + rnd() * 0.1) * (i > path.length - 4 ? 0.6 : 1), sx = -1;
       const p0 = top, p1 = top.clone().add(V(sx * 0.04, 0.02, -0.02)), p2 = top.clone().add(V(sx * 0.1, -len * 0.35, -0.03)), p3 = top.clone().add(V(sx * (0.13 + rnd() * 0.03), -len, -0.05 + rnd() * 0.03));
-      k.add(sweep(curve([p0, p1, p2, p3], 7), ellipse(0.028, 0.009, 5), { scale: t => 1 - 0.75 * t, up0: X }), { c: hair, r: 0.7 }, neck);
+      k.add(sweep(curve([p0, p1, p2, p3], 6), ellipse(0.03, 0.01, 4), { scale: t => 1 - 0.75 * t, up0: X }), { c: hair, r: 0.7 }, neck);
     }
     // forelock over the brow
     for (const sx of [-0.02, 0.02]) {
@@ -427,7 +428,7 @@ function fitHorse(md: Model, walk: THREE.AnimationClip): HorseFit {
     for (let j = 0; j < 12; j++) {
       const a = (j / 12) * Math.PI * 2, rr = 0.02 + rnd() * 0.015;
       const pts = tc.slice(1).map((p, i) => p.clone().add(V(Math.cos(a) * rr * (1 + i * 0.35), 0, Math.sin(a) * rr * (1 + i * 0.25))));
-      const g = sweep(curve(pts, 16), ellipse(0.022, 0.022, 5), { scale: t => 1 - 0.6 * t });
+      const g = sweep(curve(pts, 11), ellipse(0.024, 0.024, 4), { scale: t => 1 - 0.6 * t });
       k.add(g, { c: hair, r: 0.72 }, tb.map(b => b.name));
     }
   };
@@ -473,6 +474,7 @@ const DRESS: Record<VehicleKind, Dress[]> = {
   brougham: [{ coat: '#141618', lining: '#101112', sash: '#141618', hat: 'top', hatC: '#0e0e0e', skin: '#caa085', hair: '#2a2018', beard: false }],
   cart: [{ coat: '#5e5446', lining: '#4a4236', sash: '#7a6a4a', hat: 'felt', hatC: '#2e2a24', skin: '#c08868', hair: '#6a5238', beard: true }],
 };
+const FARE: Dress = { coat: '#24221f', lining: '#1a1816', sash: '#24221f', hat: 'top', hatC: '#121212', skin: '#d2a888', hair: '#4a3727', beard: false };
 
 interface Driver { root: THREE.Object3D; mixer: THREE.AnimationMixer; mesh: THREE.SkinnedMesh; arms: { u: THREE.Object3D; l: THREE.Object3D; h: THREE.Object3D }[] }
 
@@ -595,8 +597,8 @@ interface Rig {
   v: Vehicle; geo: VehicleGeo; hitch: Hitch;
   body: THREE.Group; front: THREE.Group; wheelsR: THREE.Mesh; wheelsF: THREE.Mesh;
   horse: THREE.Object3D; hmesh: THREE.SkinnedMesh; mixer: THREE.AnimationMixer; walk: THREE.AnimationAction; idle: THREE.AnimationAction;
-  driver: Driver | null; reins: Reins; hands: THREE.Vector3[];
-  vel: number; phase: number; bits: { o: THREE.Object3D; local: THREE.Vector3 }[]; terrets: { o: THREE.Object3D; local: THREE.Vector3 }[];
+  driver: Driver | null; fares: Driver[]; reins: Reins; hands: THREE.Vector3[];
+  vel: number; phase: number; bounded: boolean; bits: { o: THREE.Object3D; local: THREE.Vector3 }[]; terrets: { o: THREE.Object3D; local: THREE.Vector3 }[];
 }
 
 export async function buildTraffic(opts: {
@@ -634,11 +636,11 @@ export async function buildTraffic(opts: {
   const clothMat = surfPatch(new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 1, metalness: 1, sheen: 0.4, sheenRoughness: 0.7, sheenColor: '#4a4a50' }), false);
   if (opts.wet) { opts.wet(coach, 'roof'); opts.wet(horseMat, 'roof'); opts.wet(clothMat, 'wall', 0, '2.0'); }
 
-  const specs: { kind: VehicleKind; coat: string; paint: string; wheel: string; duga: string; trim: Finish }[] = [
-    { kind: 'droshky', coat: 'bay', paint: '#141414', wheel: '#161412', duga: '#5a1c14', trim: FIN.lacquer('#121212') },
-    { kind: 'cart', coat: 'grey', paint: '#000', wheel: '#000', duga: '#000', trim: FIN.wood('#9a8266') },
-    { kind: 'brougham', coat: 'black', paint: '#18261d', wheel: '#15211a', duga: '#141414', trim: FIN.brass },
-    { kind: 'droshky', coat: 'chestnut', paint: '#16181e', wheel: '#4a1e16', duga: '#2a3a24', trim: FIN.lacquer('#101010') },
+  const specs: { kind: VehicleKind; coat: string; paint: string; wheel: string; duga: string; line: string; trim: Finish; fare?: boolean }[] = [
+    { kind: 'droshky', coat: 'bay', paint: '#141414', wheel: '#161412', duga: '#5a1c14', line: '#6a2416', trim: FIN.lacquer('#121212') },
+    { kind: 'cart', coat: 'grey', paint: '#000', wheel: '#000', duga: '#000', line: '#000', trim: FIN.wood('#9a8266') },
+    { kind: 'brougham', coat: 'black', paint: '#18261d', wheel: '#15211a', duga: '#141414', line: '#8a6a2a', trim: FIN.brass },
+    { kind: 'droshky', coat: 'chestnut', paint: '#16181e', wheel: '#4a1e16', duga: '#2a3a24', line: '#7a5a26', trim: FIN.lacquer('#101010'), fare: true },
   ];
   const n = Math.min(specs.length, Math.max(1, Math.floor(total / 90)));
   const rigs: Rig[] = [];
@@ -649,7 +651,7 @@ export async function buildTraffic(opts: {
     // horse stands ~0.4 m ahead of the front wheels
     const rFguess = sp.kind === 'brougham' ? 0.4 : sp.kind === 'cart' ? 0.4 : 0.37;
     const hitch: Hitch = { ...fit.hitch, horseZ: rFguess + 0.42 + fit.rear };
-    const geo = buildVehicle(sp.kind, hitch, { rain: opts.rain, paint: sp.paint, wheelPaint: sp.wheel, duga: sp.duga, seed: 11 + i });
+    const geo = buildVehicle(sp.kind, hitch, { rain: opts.rain, paint: sp.paint, wheelPaint: sp.wheel, duga: sp.duga, line: sp.line, seed: 11 + i });
     const mesh = (g: THREE.BufferGeometry, mat: THREE.Material, parent: THREE.Object3D) => { const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
     mesh(geo.chassis, coach, root);
     const body = new THREE.Group(); body.position.copy(geo.pivot); root.add(body);
@@ -677,11 +679,8 @@ export async function buildTraffic(opts: {
     walk.play(); idle.play(); idle.setEffectiveWeight(0);
     walk.time = (i * 0.37) % clipWalk.duration;
     const boneOf = (k: number) => horse.getObjectByName(hm.bones[k].name)!;
-    // coachman on the box
-    let driver: Driver | null = null;
-    {
-      const dress = DRESS[sp.kind][i % DRESS[sp.kind].length];
-      const Hh = 1.72 * (0.97 + 0.05 * ((i * 0.618) % 1));
+    // coachman on the box (and, in one droshky, a gentleman fare under the hood)
+    const seatFigure = (dress: Dress, Hh: number, at: THREE.Vector3, t0: number): Driver => {
       const fig = cloneSkinned(mm.scene);
       let fsrc: THREE.SkinnedMesh | null = null;
       fig.traverse(o => { if (!fsrc && (o as THREE.SkinnedMesh).isSkinnedMesh) fsrc = o as THREE.SkinnedMesh; });
@@ -696,22 +695,24 @@ export async function buildTraffic(opts: {
       const droot = new THREE.Group();
       droot.add(fig);
       fig.position.y = mm.yOff * ks;
-      // seated: his pelvis on the cushion, thighs forward over the front edge
-      droot.position.set(0, geo.seat.y - 0.39 * ks, geo.seat.z + 0.24 * ks);
+      // seated: the pelvis on the cushion, thighs forward over its front edge
+      droot.position.set(at.x, at.y - 0.39 * ks, at.z + 0.24 * ks);
       body.add(droot);
       const dm = new THREE.AnimationMixer(fig);
-      const a = dm.clipAction(sitting); a.play(); a.time = (i * 1.7) % sitting.duration;
+      const a = dm.clipAction(sitting); a.play(); a.time = t0 % sitting.duration;
       const b = (nm: string) => fig.getObjectByName(nm)!;
-      driver = { root: droot, mixer: dm, mesh: fm, arms: [{ u: b('UpperArmL'), l: b('LowerArmL'), h: b('PalmL') }, { u: b('UpperArmR'), l: b('LowerArmR'), h: b('PalmR') }] };
-    }
+      return { root: droot, mixer: dm, mesh: fm, arms: [{ u: b('UpperArmL'), l: b('LowerArmL'), h: b('PalmL') }, { u: b('UpperArmR'), l: b('LowerArmR'), h: b('PalmR') }] };
+    };
+    const driver = seatFigure(DRESS[sp.kind][i % DRESS[sp.kind].length], 1.72 * (0.97 + 0.05 * ((i * 0.618) % 1)), geo.seat, i * 1.7);
+    const fares = sp.fare && geo.fare ? [seatFigure(FARE, 1.76, geo.fare, 3.1)] : [];
     const reins = new Reins(coach);
     group.add(reins.mesh);
     group.add(root);
     const v: Vehicle = { kind: sp.kind, root, s: (total / n) * i, speed: 1.9 + 0.3 * (i % 2) };
     vehicles.push(v);
     rigs.push({
-      v, geo, hitch, body, front, wheelsR, wheelsF, horse, hmesh: hmNew, mixer, walk, idle, driver, reins, hands: [new THREE.Vector3(), new THREE.Vector3()],
-      vel: 0, phase: i * 1.3,
+      v, geo, hitch, body, front, wheelsR, wheelsF, horse, hmesh: hmNew, mixer, walk, idle, driver, fares, reins, hands: [new THREE.Vector3(), new THREE.Vector3()],
+      vel: 0, phase: i * 1.3, bounded: false,
       bits: fit.bit.map(b => ({ o: boneOf(b.bone), local: b.local })), terrets: fit.terret.map(b => ({ o: boneOf(b.bone), local: b.local })),
     });
   }
@@ -759,6 +760,7 @@ export async function buildTraffic(opts: {
         if (r.driver && !far) {
           r.driver.mixer.update(dt);
           r.driver.mesh.castShadow = dist < 45;
+          for (const f of r.fares) { f.mixer.update(dt); f.mesh.castShadow = dist < 45; }
           // hands on the reins, forearms forward over the knees
           root.updateMatrixWorld(true);
           const s = g.seat;
@@ -770,6 +772,12 @@ export async function buildTraffic(opts: {
             twoBoneIK(a.u, a.l, a.h, ik, pole);
             a.h.getWorldPosition(r.hands[j]);
           });
+        }
+        if (!r.bounded && !far) {
+          // bounds of the posed horse and driver (they only move in place), so they can be frustum-culled
+          root.updateMatrixWorld(true);
+          for (const m of [r.hmesh, r.driver?.mesh, ...r.fares.map(f => f.mesh)]) { if (!m) continue; m.computeBoundingSphere(); m.boundingSphere!.radius *= 1.3; m.frustumCulled = true; }
+          r.bounded = true;
         }
         if (r.reins.mesh.visible) {
           if (far) root.updateMatrixWorld(true);
