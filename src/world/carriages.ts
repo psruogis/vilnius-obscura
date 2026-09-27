@@ -84,11 +84,11 @@ interface Model {
   scene: THREE.Object3D; gltf: GLTF;
   geometry: THREE.BufferGeometry;       // bind space, attributes position/normal/skinIndex/skinWeight
   part: string[];                       // material name per vertex
-  metric: Float32Array;                 // rest-pose vertex positions in metric model space (feet on y = 0)
+  metric: Float32Array;                 // bind-pose vertex positions in metric model space (feet on y = 0)
   s: number; yOff: number;              // metric = scene * s + (0, yOff, 0)
   toBind: THREE.Matrix4;                // metric → bind space
-  bones: { name: string; a: THREE.Vector3; b: THREE.Vector3 }[];   // skeleton.bones order, metric rest
-  boneWorld: THREE.Matrix4[];           // rest matrixWorld of each bone (scene space)
+  bones: { name: string; a: THREE.Vector3; b: THREE.Vector3 }[];   // skeleton.bones order, metric, bind pose
+  boneWorld: THREE.Matrix4[];           // bind-pose matrix of each bone (scene space)
 }
 
 async function loadModel(url: string, size: (box: THREE.Box3) => number): Promise<Model> {
@@ -118,18 +118,22 @@ async function loadModel(url: string, size: (box: THREE.Box3) => number): Promis
     }
   }
   const geometry = mergeGeometries(geos, false)!;
-  // rest-pose metric positions (bind pose = rest pose for these models)
+  // bind-pose metric positions
   const P = geometry.getAttribute('position'), metric = new Float32Array(P.count * 3), v = new THREE.Vector3();
   const toMetric = new THREE.Matrix4().makeTranslation(0, yOff, 0).multiply(new THREE.Matrix4().makeScale(s, s, s)).multiply(src.matrixWorld);
   for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(toMetric); metric.set([v.x, v.y, v.z], i * 3); }
-  const bones = src.skeleton.bones.map(b => {
-    const a = b.getWorldPosition(new THREE.Vector3());
-    const child = b.children.find(c => (c as THREE.Bone).isBone) ?? b.children[0];
-    const e = child ? child.getWorldPosition(new THREE.Vector3()) : a.clone().add(new THREE.Vector3(0, 0.01, 0).applyQuaternion(b.getWorldQuaternion(new THREE.Quaternion())));
-    const M = (p: THREE.Vector3) => p.multiplyScalar(s).add(new THREE.Vector3(0, yOff, 0));
-    return { name: b.name, a: M(a), b: M(e) };
+  // Bones in the bind pose (the pose the mesh was modelled in), which is not the node rest pose for these
+  // models (the man's rest pose has his arms down; his mesh is in a T-pose). GLTFLoader binds with an
+  // identity bind matrix, so a bone's bind-pose matrix in scene space is meshWorld × inverse(boneInverse).
+  const sk = src.skeleton, bindWorld = sk.boneInverses.map(ib => src.matrixWorld.clone().multiply(ib.clone().invert()));
+  const M = (p: THREE.Vector3) => p.multiplyScalar(s).add(new THREE.Vector3(0, yOff, 0));
+  const bones = sk.bones.map((b, i) => {
+    const child = b.children.find(c => sk.bones.includes(c as THREE.Bone)) as THREE.Bone | undefined;
+    const e = child ? new THREE.Vector3().applyMatrix4(bindWorld[sk.bones.indexOf(child)])
+      : (b.children[0]?.position.clone() ?? new THREE.Vector3(0, 0.005, 0)).applyMatrix4(bindWorld[i]);
+    return { name: b.name, a: M(new THREE.Vector3().applyMatrix4(bindWorld[i])), b: M(e) };
   });
-  return { scene, gltf, geometry, part, metric, s, yOff, toBind: toMetric.clone().invert(), bones, boneWorld: src.skeleton.bones.map(b => b.matrixWorld.clone()) };
+  return { scene, gltf, geometry, part, metric, s, yOff, toBind: toMetric.clone().invert(), bones, boneWorld: bindWorld };
 }
 
 /** Accumulates skinned parts (built in metric rest space) and the model body into one geometry. */
@@ -386,7 +390,7 @@ function fitHorse(md: Model, walk: THREE.AnimationClip): HorseFit {
     const headRing = (t: number, w: number, a0 = 0, a1 = Math.PI * 2, bins = 20) => { const r = body.ring(hp(t), hax, hup, 0.008, bins, 0, a0, a1); k.add(strap(r.p, r.out, w, 0.008, a1 - a0 >= Math.PI * 2 - 1e-6), L, ['Head']); return r; };
     headRing(0.04, 0.03);
     headRing(0.14, 0.022, -1.2, 1.2, 10);
-    const nose = headRing(0.66, 0.035);
+    headRing(0.66, 0.035);
     for (const sx of [1, -1]) {
       const pts: THREE.Vector3[] = [], outs: THREE.Vector3[] = [];
       for (let i = 0; i <= 8; i++) {
@@ -402,7 +406,6 @@ function fitHorse(md: Model, walk: THREE.AnimationClip): HorseFit {
       const b = bits[sx > 0 ? 0 : 1];
       k.add(new THREE.TorusGeometry(0.026, 0.006, 5, 12).rotateY(Math.PI / 2).translate(b.x + sx * 0.008, b.y, b.z), FIN.nickel, ['Head']);
     }
-    void nose;
   };
 
   const mane = (k: SkinKit, hair: string) => {
@@ -442,11 +445,12 @@ function fitHorse(md: Model, walk: THREE.AnimationClip): HorseFit {
   };
 }
 
+const MUD = new THREE.Color('#4e3d2b');
 function horseGeometry(md: Model, fit: HorseFit, coat: Coat, trim: Finish): THREE.BufferGeometry {
   const k = new SkinKit(md);
   const c = new THREE.Color(), base = new THREE.Color(), pts = coat.points ? new THREE.Color(coat.points) : null;
   k.addBody((part, p) => {
-    if (part === 'Hooves') return { c: '#1d1a17', r: 0.38 };
+    if (part === 'Hooves') return { c: '#211c17', r: 0.42 };
     if (part === 'Eye_Black') return { c: '#050403', r: 0.08 };
     if (part === 'Eye_White') return { c: '#2a1c14', r: 0.1 };
     if (part === 'Hair') return { c: coat.hair, r: 0.7 };
@@ -455,6 +459,7 @@ function horseGeometry(md: Model, fit: HorseFit, coat: Coat, trim: Finish): THRE
     c.copy(base);
     // black points on the legs, a darker line along the back, soft variation in the coat
     if (pts) c.lerp(pts, sstep(p.y, 0.66, 0.42));
+    c.lerp(MUD, 0.55 * sstep(p.y, 0.32, 0.04));   // splashed from the street
     c.multiplyScalar(1 - 0.16 * sstep(Math.abs(p.x), 0.12, 0.0) * sstep(p.y, 1.35, 1.6));
     c.multiplyScalar(0.94 + 0.12 * (0.5 + 0.5 * Math.sin(p.x * 7.1 + p.z * 5.3) * Math.sin(p.y * 6.7 - p.z * 3.1)));
     if (coat.dapple) { const d = Math.sin(p.x * 31 + p.y * 7) * Math.sin(p.y * 29 - p.z * 5) * Math.sin(p.z * 27 + p.x * 3); if (d > 0.25 && p.y > 0.9) c.multiplyScalar(1.16); }
@@ -465,7 +470,7 @@ function horseGeometry(md: Model, fit: HorseFit, coat: Coat, trim: Finish): THRE
 }
 
 // --- The coachman ---------------------------------------------------------------------------------------------
-interface Dress { coat: string; lining: string; sash: string; hat: 'low' | 'top' | 'felt'; hatC: string; skin: string; hair: string; beard: boolean }
+interface Dress { coat: string; lining: string; sash: string; hat: 'low' | 'top' | 'felt' | 'bowler'; hatC: string; skin: string; hair: string; beard: boolean }
 const DRESS: Record<VehicleKind, Dress[]> = {
   droshky: [
     { coat: '#1a1f2c', lining: '#15181f', sash: '#6a2a1c', hat: 'low', hatC: '#121212', skin: '#c49074', hair: '#3a2a1e', beard: true },
@@ -474,13 +479,14 @@ const DRESS: Record<VehicleKind, Dress[]> = {
   brougham: [{ coat: '#141618', lining: '#101112', sash: '#141618', hat: 'top', hatC: '#0e0e0e', skin: '#caa085', hair: '#2a2018', beard: false }],
   cart: [{ coat: '#5e5446', lining: '#4a4236', sash: '#7a6a4a', hat: 'felt', hatC: '#2e2a24', skin: '#c08868', hair: '#6a5238', beard: true }],
 };
-const FARE: Dress = { coat: '#24221f', lining: '#1a1816', sash: '#24221f', hat: 'top', hatC: '#121212', skin: '#d2a888', hair: '#4a3727', beard: false };
+const FARE: Dress = { coat: '#24221f', lining: '#1a1816', sash: '#24221f', hat: 'bowler', hatC: '#121212', skin: '#d2a888', hair: '#4a3727', beard: false };
 
 interface Driver { root: THREE.Object3D; mixer: THREE.AnimationMixer; mesh: THREE.SkinnedMesh; arms: { u: THREE.Object3D; l: THREE.Object3D; h: THREE.Object3D }[] }
 
 function hatGeometry(kind: Dress['hat']): THREE.BufferGeometry {
   // the izvozchik's low hat: a short crown widening to a flat top, narrow brim curled up at the sides
   if (kind === 'low') return lathe([[0, -0.004], [0.1, -0.004], [0.165, 0.0], [0.172, 0.03], [0.16, 0.012], [0.104, 0.02], [0.118, 0.112], [0.112, 0.12], [0, 0.12]], 22);
+  if (kind === 'bowler') return lathe([[0, -0.004], [0.14, -0.004], [0.158, 0.012], [0.15, 0.018], [0.104, 0.014], [0.108, 0.05], [0.09, 0.09], [0.05, 0.108], [0, 0.112]], 20);
   if (kind === 'top') return lathe([[0, 0], [0.155, 0], [0.165, 0.025], [0.16, 0.012], [0.095, 0.03], [0.098, 0.17], [0, 0.17]], 20);
   return lathe([[0, -0.005], [0.19, -0.01], [0.21, -0.005], [0.2, 0.01], [0.1, 0.02], [0.09, 0.08], [0, 0.085]], 22);
 }
@@ -516,7 +522,14 @@ function driverGeometry(md: Model, d: Dress, H: number): THREE.BufferGeometry {
   // sash tied round the waist
   k.add(lathe([[0.17 * sc, H * 0.565], [0.178 * sc, H * 0.585], [0.172 * sc, H * 0.61]], 20).scale(1, 1, 0.8).translate(hips.x, 0, hips.z), { c: d.sash, r: 0.85 }, ['Hips', 'Abdomen']);
   // padded shoulders and chest (the izvozchik's bulk), standing collar
-  k.add(lathe([[0.16 * sc, H * 0.6], [0.17 * sc, H * 0.68], [0.175 * sc, H * 0.76], [0.14 * sc, H * 0.8], [0.07 * sc, H * 0.82]], 18).scale(1, 1, 0.78).translate(hips.x, 0, hips.z), { c: d.coat, r: 0.9 }, ['Abdomen', 'Torso']);
+  k.add(lathe([[0.172 * sc, H * 0.6], [0.19 * sc, H * 0.67], [0.192 * sc, H * 0.74], [0.155 * sc, H * 0.795], [0.075 * sc, H * 0.825]], 18).scale(1, 1, 0.8).translate(hips.x, 0, hips.z), { c: d.coat, r: 0.9 }, ['Abdomen', 'Torso']);
+  // wide sleeves over the arms, shoulder to wrist
+  for (const sd of ['L', 'R']) {
+    const ua = bone(`UpperArm${sd}`), la = bone(`LowerArm${sd}`);
+    const wrist = la.b.clone(), sh = ua.a.clone().lerp(ua.b, -0.15);
+    const g = sweep(curve([sh, ua.b, wrist.clone().lerp(ua.b, 0.08)], 9), ellipse(0.062 * sc, 0.062 * sc, 7), { scale: t => 1.05 - 0.2 * t });
+    k.add(g, { c: d.coat, r: 0.9 }, [`UpperArm${sd}`, `LowerArm${sd}`]);
+  }
   k.add(lathe([[0.07 * sc, neck.y - 0.03], [0.072 * sc, neck.y + 0.03], [0.068 * sc, neck.y + 0.045]], 14).translate(neck.x, 0, neck.z), { c: d.coat, r: 0.9 }, ['Torso', 'Neck']);
   // hat and beard on the head
   const top = md.bones.reduce((m, b) => Math.max(m, b.b.y), 0);
@@ -536,10 +549,9 @@ function gridOriented(rows: THREE.Vector3[][], inside: THREE.Vector3, flip: bool
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx); g.computeVertexNormals();
-  const N = g.getAttribute('normal'), p = new THREE.Vector3(1, 0, 0);
+  const N = g.getAttribute('normal');
   const s = N.getX(C * 2 + 3) * (pos[(C * 2 + 3) * 3] - inside.x) + N.getZ(C * 2 + 3) * (pos[(C * 2 + 3) * 3 + 2] - inside.z);
   if ((s < 0) !== flip) { for (let q = 0; q < idx.length; q += 3) [idx[q + 1], idx[q + 2]] = [idx[q + 2], idx[q + 1]]; g.setIndex(idx); g.computeVertexNormals(); }
-  void p;
   return g;
 }
 
@@ -704,7 +716,7 @@ export async function buildTraffic(opts: {
       return { root: droot, mixer: dm, mesh: fm, arms: [{ u: b('UpperArmL'), l: b('LowerArmL'), h: b('PalmL') }, { u: b('UpperArmR'), l: b('LowerArmR'), h: b('PalmR') }] };
     };
     const driver = seatFigure(DRESS[sp.kind][i % DRESS[sp.kind].length], 1.72 * (0.97 + 0.05 * ((i * 0.618) % 1)), geo.seat, i * 1.7);
-    const fares = sp.fare && geo.fare ? [seatFigure(FARE, 1.76, geo.fare, 3.1)] : [];
+    const fares = sp.fare && geo.fare ? [seatFigure(FARE, 1.7, geo.fare, 3.1)] : [];
     const reins = new Reins(coach);
     group.add(reins.mesh);
     group.add(root);

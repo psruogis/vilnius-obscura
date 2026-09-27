@@ -52,7 +52,6 @@ export class Kit {
     this.parts.push(out);
     return this;
   }
-  get empty(): boolean { return this.parts.length === 0; }
   build(): THREE.BufferGeometry {
     const g0 = mergeGeometries(this.parts, false);
     if (!g0) throw new Error('coachwork: merge failed');
@@ -60,6 +59,26 @@ export class Kit {
     g.computeBoundingSphere();
     return g;
   }
+}
+
+/** Smoothstep that also runs downhill (a > b). */
+export const ss = (x: number, a: number, b: number) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+/** Road dirt: blotchy splashes of mud (colour, and a dull finish) where `amount` says, e.g. low down. */
+export function grime(g: THREE.BufferGeometry, amount: (p: THREE.Vector3) => number, seed = 1): THREE.BufferGeometry {
+  const P = g.getAttribute('position'), C = g.getAttribute('color'), S = g.getAttribute('surf');
+  const p = new THREE.Vector3(), c = new THREE.Color(), mud = new THREE.Color('#57442f');
+  for (let i = 0; i < P.count; i++) {
+    p.fromBufferAttribute(P, i);
+    const blot = 0.55 + 0.45 * Math.sin(p.x * 23.1 + seed) * Math.sin(p.z * 19.7 + p.y * 11.3 + seed * 0.7);
+    const a = THREE.MathUtils.clamp(amount(p) * blot, 0, 1);
+    if (a <= 0) continue;
+    c.fromBufferAttribute(C, i).lerp(mud, a);
+    C.setXYZ(i, c.r, c.g, c.b);
+    S.setX(i, S.getX(i) + (0.9 - S.getX(i)) * a);
+    S.setY(i, S.getY(i) * (1 - a));
+  }
+  return g;
 }
 
 /** UVs in metres, projected along the dominant normal axis (for the wood grain). */
@@ -155,7 +174,10 @@ export function sweep(path: THREE.Vector3[], section: [number, number][], o: {
 }
 
 /** A smooth path through control points (Catmull-Rom), `n` samples. */
-export const curve = (pts: THREE.Vector3[], n: number, closed = false) => new THREE.CatmullRomCurve3(pts, closed, 'centripetal').getPoints(closed ? n : n - 1).slice(0, closed ? n : n);
+export const curve = (pts: THREE.Vector3[], n: number, closed = false) => {
+  const out = new THREE.CatmullRomCurve3(pts, closed, 'centripetal').getPoints(closed ? n : n - 1);
+  return closed ? out.slice(0, n) : out;   // a closed curve repeats its first point
+};
 
 /** Straight or curved rod. */
 export const rod = (pts: THREE.Vector3[], r: number, n = pts.length > 2 ? 10 : 2, radial = 6, taper = 1) =>
@@ -264,11 +286,12 @@ export function wheel(k: Kit, r: number, spokes: number, o: { paint: Finish; hub
 }
 
 /** A pair of wheels on one axle (axle along X at the origin, wheels at ±track). */
-export function wheelPair(r: number, spokes: number, track: number, o: Parameters<typeof wheel>[2]): THREE.BufferGeometry {
+export function wheelPair(r: number, spokes: number, track: number, o: Parameters<typeof wheel>[3]): THREE.BufferGeometry {
   const k = new Kit();
   wheel(k, r, spokes, o, T(track, 0, 0));
   wheel(k, r, spokes, o, mul(T(-track, 0, 0), RY(Math.PI)));
-  return k.build();
+  // rims caked with street mud, fading in towards the nave
+  return grime(k.build(), p => 0.8 * ss(Math.hypot(p.y, p.z) / r, 0.5, 1.0), r * 7);
 }
 
 /** Elliptic (double-bow) leaf spring along Z, centred at the origin, `h` tall between the bow centres. */
@@ -349,8 +372,9 @@ export function hood(k: Kit, o: { pivot: THREE.Vector3; W: number; H: number; rc
   for (let i = 0; i < I.count; i += 3) { const a = I.getX(i + 1); I.setX(i + 1, I.getX(i + 2)); I.setX(i + 2, a); }
   inner.computeVertexNormals();
   k.add(inner, o.lining, xf);
-  // the bows show as ridges; hinge plates; jointed stays locking the raised hood
-  for (const th of o.angles) k.add(sweep(hoop.map(([x, h]) => at(x * 1.004, h + 0.006, th, 0)), ellipse(0.011, 0.011, 4)), FIN.leather, xf);
+  // the bows show as ridges on the raised hood (folded, they lie inside the leather); hinge plates;
+  // jointed stays locking the raised hood
+  if (o.joints) for (const th of o.angles) k.add(sweep(hoop.map(([x, h]) => at(x * 1.004, h + 0.006, th, 0)), ellipse(0.011, 0.011, 4)), FIN.leather, xf);
   for (const sx of [-1, 1]) {
     k.add(new THREE.CylinderGeometry(0.045, 0.045, 0.012, 12).rotateZ(Math.PI / 2).translate(sx * (o.W / 2 + 0.008), o.pivot.y, o.pivot.z), FIN.brass, xf);
     if (o.joints) {
@@ -391,12 +415,12 @@ export interface VehicleGeo {
 function shaftsAndDuga(k: Kit, h: Hitch, rF: number, trackF: number, duga: Finish, shaft: Finish): void {
   const tz = h.horseZ + h.tug.z, tx = h.tug.x, ty = h.tug.y;
   for (const sx of [-1, 1]) {
-    const pts = [V(sx * trackF * 0.62, rF + 0.1, 0.12), V(sx * (tx + 0.1), rF + 0.1 + (ty - rF - 0.1) * 0.55, tz - 1.15), V(sx * (tx + 0.05), ty - 0.03, tz - 0.3), V(sx * (tx + 0.02), ty, tz + 0.25)];
+    const pts = [V(sx * trackF * 0.62, rF + 0.1, 0.12), V(sx * (tx + 0.1), rF + 0.1 + (ty - rF - 0.1) * 0.55, tz - 1.15), V(sx * (tx + 0.05), ty - 0.03, tz - 0.3), V(sx * (tx + 0.02), ty, tz + 0.1)];
     k.add(sweep(curve(pts, 14), ellipse(0.032, 0.036, 7), { scale: t => 1 - 0.3 * t }), shaft);
     // tug loops: leather wraps holding the shaft and the duga end to the hame
     k.add(new THREE.TorusGeometry(0.05, 0.016, 5, 10).rotateY(Math.PI / 2).translate(sx * (tx + 0.025), ty + 0.01, tz), FIN.leather);
     // iron shaft tips
-    k.add(rod([V(sx * (tx + 0.02), ty, tz + 0.2), V(sx * (tx + 0.018), ty + 0.002, tz + 0.3)], 0.024, 2, 7, 0.7), FIN.iron);
+    k.add(rod([V(sx * (tx + 0.02), ty, tz + 0.06), V(sx * (tx + 0.018), ty + 0.002, tz + 0.15)], 0.024, 2, 7, 0.7), FIN.iron);
   }
   // splinter bar joining the shafts at the axle
   k.add(rod([V(-trackF * 0.66, rF + 0.1, 0.15), V(trackF * 0.66, rF + 0.1, 0.15)], 0.03, 2, 7), shaft);
@@ -462,8 +486,8 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
     // the hood: raised in the rain, folded back in the sun
     const hp = V(0, 1.22, -0.3);
     hood(body, {
-      pivot: hp, W: 1.08, H: 0.9, rc: 0.3, sag: o.rain ? 0.05 : 0.14,
-      angles: o.rain ? [0.42, 0.06, -0.3, -0.6] : [-1.42, -1.54, -1.66, -1.78, -1.9],
+      pivot: hp, W: 1.08, H: 1.0, rc: 0.3, sag: o.rain ? 0.05 : 0.09,
+      angles: o.rain ? [0.4, 0.05, -0.3, -0.58] : [-1.5, -1.56, -1.62, -1.68, -1.74],
       leather: FIN.leather, lining: FIN.cloth('#2c2926'), joints: o.rain,
       rail: o.rain ? (x, h) => V(x, hp.y, hp.z).lerp(V(x * 0.97, 1.33, -0.56), THREE.MathUtils.smoothstep(h, 0, 0.45)) : undefined,
     }, B());
@@ -480,9 +504,9 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
     shaftsAndDuga(front, h, rF, tF, FIN.lacquer(o.duga), FIN.paintWood('#2a2018'));
     return {
       kind, rR, rF, wb, pivot, springy: 1,
-      chassis: chassis.build(), body: body.build(), front: front.build(),
+      ...dirty(chassis, body, front, pivot),
       wheelsR: wheelPair(rR, 14, tR, { paint: W }), wheelsF: wheelPair(rF, 12, tF, { paint: W, hub: 0.9 }),
-      seat: V(0, 1.26, 1.42).sub(pivot), foot: 0.85 - pivot.y, fare: V(-0.2, 1.09, -0.26).sub(pivot),
+      seat: V(0, 1.26, 1.42).sub(pivot), foot: 0.85 - pivot.y, fare: V(-0.2, 1.06, -0.26).sub(pivot),
     };
   }
   if (kind === 'brougham') {
@@ -498,7 +522,7 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
     body.add(slab(roundedShape([[-0.52, 0.76], [-0.7, 0.98], [-0.68, 1.32], [0.86, 1.32], [0.82, 1.08], [0.6, 0.8], [0.1, 0.7]], 0.12), 1.2, 0.045), P, B());
     // upper cabin (black) with the roof
     body.add(slab(roundedShape([[-0.68, 1.3], [-0.66, 1.96], [0.8, 1.96], [0.86, 1.3]], 0.07), 1.16, 0.035), upper, B());
-    body.add(cushion(0.64, 0.05, 0.84, 0.18, 12, 8).translate(0, 1.99, 0.07), { c: '#151413', r: 0.55 }, B());
+    body.add(cushion(0.64, 0.05, 0.84, 0.18, 12, 8).translate(0, 1.99, 0.07), { c: '#121110', r: 0.8 }, B());
     body.add(sweep(curve([V(-0.62, 2.02, -0.74), V(0.62, 2.02, -0.74), V(0.62, 2.02, 0.88), V(-0.62, 2.02, 0.88)], 40, true), ellipse(0.012, 0.018, 5), { closed: true }), FIN.nickel, B());
     // glass: door window, quarter lights, front glass; mouldings and handle
     for (const sx of [-1, 1]) {
@@ -549,7 +573,7 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
     shaftsAndDuga(front, h, rF, tF, FIN.lacquer(o.duga), FIN.lacquer('#141414'));
     return {
       kind, rR, rF, wb, pivot, springy: 0.8,
-      chassis: chassis.build(), body: body.build(), front: front.build(),
+      ...dirty(chassis, body, front, pivot),
       wheelsR: wheelPair(rR, 14, tR, { paint: W }), wheelsF: wheelPair(rF, 12, tF, { paint: W, hub: 0.95 }),
       seat: V(0, 1.68, 1.3).sub(pivot), foot: 1.265 - pivot.y,
     };
@@ -591,9 +615,18 @@ export function buildVehicle(kind: VehicleKind, h: Hitch, o: { rain: boolean; pa
   const heavy = { paint: FIN.wood('#8f7c64'), hub: 1.35, width: 0.065, spoke: 1.35, cap: FIN.wood('#6a5a48') };
   return {
     kind, rR, rF, wb, pivot, springy: 0,
-    chassis: chassis.build(), body: body.build(), front: front.build(),
+    ...dirty(chassis, body, front, pivot),
     wheelsR: wheelPair(rR, 12, tR, heavy), wheelsF: wheelPair(rF, 10, tF, heavy),
     seat: V(0, 1.22, 1.52).sub(pivot), foot: 0.8 - pivot.y,
+  };
+}
+
+/** Built chassis, body and front unit, splashed with mud from the ground up. */
+function dirty(chassis: Kit, body: Kit, front: Kit, pivot: THREE.Vector3) {
+  return {
+    chassis: grime(chassis.build(), p => 0.75 * ss(p.y, 0.8, 0.25), 3),
+    body: grime(body.build(), p => 0.6 * ss(p.y + pivot.y, 0.9, 0.35), 5),
+    front: grime(front.build(), p => 0.7 * ss(p.y, 0.75, 0.2), 7),
   };
 }
 
