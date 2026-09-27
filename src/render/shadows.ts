@@ -1,5 +1,23 @@
 import * as THREE from 'three';
 import { CSM } from 'three/examples/jsm/csm/CSM.js';
+import { CSMShader } from 'three/examples/jsm/csm/CSMShader.js';
+
+// three r186's cascaded-shadow lighting chunk leaves out the split-sum set-up of the standard chunk, so every
+// material lit by the cascades had no specular at all: no sky in the glass or the wet roofs, no glint of the
+// lamps. Restored here as three's own lights_fragment_begin does it.
+const SPLIT_SUM = /* glsl */ `
+#ifdef STANDARD
+	float dotNVms = saturate( dot( geometryNormal, geometryViewDir ) );
+	material.dfg = texture2D( dfgLUT, vec2( material.roughness, dotNVms ) ).rg;
+	#if ( NUM_SUN_LIGHTS > 0 || NUM_DIR_LIGHTS > 0 || NUM_POINT_LIGHTS > 0 || NUM_SPOT_LIGHTS > 0 )
+		float EssMs = material.dfg.x + material.dfg.y;
+		material.multiScatteringCompensation = 1.0 + material.specularColorBlended * ( 1.0 / EssMs - 1.0 );
+	#endif
+#endif
+IncidentLight directLight;`;
+if (!CSMShader.lights_fragment_begin.includes('material.dfg')) {
+  CSMShader.lights_fragment_begin = CSMShader.lights_fragment_begin.replace('IncidentLight directLight;', SPLIT_SUM);
+}
 
 /**
  * Cascaded sun shadows: crisp near the walker, still present on buildings 300 m away.

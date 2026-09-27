@@ -136,6 +136,11 @@ export class Post {
     // then let the blend upsample it; at full resolution it was the most expensive thing in the frame
     const gtaoSize = this.gtao.setSize.bind(this.gtao);
     this.gtao.setSize = (width: number, height: number) => gtaoSize(Math.ceil(width / 2), Math.ceil(height / 2));
+    // ...and fade it out with distance, where the mist hides it anyway and the coarse buffer would smudge
+    // the far roofline (the fade is done in the denoiser, the last pass that may read the depth)
+    const pd = (this.gtao as unknown as { pdMaterial: THREE.ShaderMaterial }).pdMaterial;
+    pd.defines.FRAGMENT_OUTPUT = 'vec4(mix(vec3(1.0), denoised, 1.0 - smoothstep(55.0, 110.0, -viewPos.z)), 1.0)';
+    pd.needsUpdate = true;
     this.composer.addPass(this.gtao);
     // After GTAO (which keeps the street's mask in alpha), before bloom: reflected lamps bloom too.
     if (wetStreets) { this.ssr = new SSRPass(camera, depth, scene); this.composer.addPass(this.ssr); }

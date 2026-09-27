@@ -353,6 +353,22 @@ export function wet(m: THREE.Material, kind: WetKind, groundY = 0, hExpr?: strin
         .replace('#include <metalnessmap_fragment>', `roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.8, uWet);
           #include <metalnessmap_fragment>`);
     }
+    if (kind !== 'ground') {
+      // Roofs and walls: the rain's "sun" is the bright part of an overcast sky, so its highlight is a broad
+      // sheen, never a hot spot; and they mirror the sky as it is seen (SKY_MIRROR), as the street does.
+      shader.uniforms.uSkyMirror = SKY_MIRROR;
+      frag = frag
+        .replace('#include <common>', '#include <common>\nuniform float uSkyMirror;')
+        .replace('#include <lights_fragment_begin>', `
+          float wtRough = material.roughness;
+          material.roughness = mix(material.roughness, max(material.roughness, 0.55), uWet);
+          #include <lights_fragment_begin>
+          material.roughness = wtRough;`)
+        .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
+          #if defined( RE_IndirectSpecular )
+            radiance *= mix(1.0, uSkyMirror, uWet);
+          #endif`);
+    }
     shader.fragmentShader = frag;
   };
   m.customProgramCacheKey = () => `${ownKey}|wet-${kind}`;
