@@ -195,8 +195,8 @@ export const WET_GLSL = /* glsl */ `
     }
     return grad;
   }
-  // how much the rings tilt the surface: strong on open water, faint on wet stone
-  float wt_rippleStrength(float water) { return (0.06 + 0.25 * water) * uWet; }
+  // how much the rings tilt the surface: strong on open water, barely on wet stone
+  float wt_rippleStrength(float water) { return (0.025 + 0.285 * water) * uWet; }
   // ripple detail fades out with distance: finer than a pixel it would only sparkle (and scatter reflections)
   float wt_detail(float dist) { return 1.0 - smoothstep(8.0, 30.0, dist); }
   // running water: a level surface with ripples carried downstream (world-space normal); gentle enough
@@ -269,8 +269,8 @@ export function wet(m: THREE.Material, kind: WetKind, groundY = 0, hExpr?: strin
           float joint = 1.0 - smoothstep(0.1, 0.5, relief);
           float mudZone = wt_fbm(vWetWorld.xz * 0.3 + 11.0) * 0.75 + 0.22 * (1.0 - smoothstep(0.4, 2.0, wallD)) + 0.3 * smoothstep(0.28, 0.45, flowAmt) * (1.0 - smoothstep(0.52, 0.64, flowAmt));
           float mud = smoothstep(0.62, 0.86, mudZone);
-          float jointMud = smoothstep(0.46, 0.66, mudZone) * joint;   // mud settles in the joints first
-          float mudAll = max(mud * 0.7, jointMud);
+          float jointMud = smoothstep(0.46, 0.66, mudZone) * (1.0 - relief);   // mud settles in the joints first
+          float mudAll = max(mud * mix(0.88, 0.7, uWet), jointMud);             // rain washes the crowns
           vec3 mudC = mix(vec3(0.19, 0.15, 0.11), vec3(0.33, 0.27, 0.19), wt_noise(vWetWorld.xz * 2.1)) * mix(1.3, 0.8, uWet);
           diffuseColor.rgb = mix(diffuseColor.rgb, mudC, mudAll);
           float stream = wt_stream(flowAmt);                                           // gutters running with water
@@ -312,18 +312,27 @@ export function wet(m: THREE.Material, kind: WetKind, groundY = 0, hExpr?: strin
             if (runW > 0.01) normal = normalize(mix(normal, normalize((viewMatrix * vec4(wt_runNormal(vWetWorld.xz, fdir, flowAmt, detail), 0.0)).xyz), runW));
           }`)
         // three r186's cascaded-shadow lighting chunk (examples/jsm/csm/CSMShader.js) leaves out the split-sum
-        // set-up of the standard one, so a material with sun cascades reflects no sky at all. A wet street
-        // must (and the reflection pass replaces exactly this sky light), so it is restored here.
-        .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>
+        // set-up of the standard one, so a material with sun cascades has no specular at all: no sky in it, no
+        // glint of the lamps. A wet street needs both (and the reflection pass replaces exactly this sky light),
+        // so the set-up is restored here, as three's own chunk does it.
+        .replace('#include <lights_fragment_begin>', `
           #ifdef STANDARD
-            material.dfg = texture2D(dfgLUT, vec2(material.roughness, saturate(dot(geometryNormal, geometryViewDir)))).rg;
-          #endif`)
+            material.dfg = texture2D(dfgLUT, vec2(material.roughness, saturate(dot(normal, isOrthographic ? vec3(0.0, 0.0, 1.0) : normalize(vViewPosition))))).rg;
+            material.multiScatteringCompensation = 1.0 + material.specularColorBlended * (1.0 / (material.dfg.x + material.dfg.y) - 1.0);
+          #endif
+          // lamps and sun glitter on rippled water as soft sparks, not single-pixel fireflies (the sky stays sharp)
+          float wtRough = material.roughness;
+          material.roughness = max(material.roughness, 0.12);
+          #include <lights_fragment_begin>
+          material.roughness = wtRough;`)
+        // the sky's mirror image, as seen (SKY_MIRROR); the joints, sunk between the stones, see less of it
         .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
-          radiance *= uSkyMirror;`)
+          float skySeen = 1.0 - 0.55 * joint * (1.0 - max(puddle, stream));
+          radiance *= uSkyMirror * skySeen;`)
         // the reflection pass's mask: wet street, this rough, reflecting this much (see render/ssr.ts)
         .replace('#include <dithering_fragment>', `#include <dithering_fragment>
           #ifdef STANDARD
-            if (uSsrMask > 0.5) gl_FragColor.a = wt_ssrPack(roughnessFactor, 0.04 * material.dfg.x + material.specularF90 * material.dfg.y);
+            if (uSsrMask > 0.5) gl_FragColor.a = wt_ssrPack(roughnessFactor, (0.04 * material.dfg.x + material.specularF90 * material.dfg.y) * skySeen);
           #endif`);
     } else if (kind === 'roof') {
       frag = frag

@@ -7,19 +7,21 @@ import { WET_GLSL, HEIGHT_FOG_GLSL, WET, RAIN_TIME, FLOW, SKY_MIRROR } from './w
  * mirror the house fronts, lit shop windows, gas lamps and passers-by, broken by raindrop rings, while the
  * wet cobbles give a soft reflection drawn out into vertical streaks, the way lights smear on a wet road.
  *
- * No G-buffer. While this pass runs, the street shader (weather.ts, wet(…, 'ground')) writes its final
- * roughness into the alpha of the HDR image; every other opaque surface writes 1, and GTAO keeps alpha (it
- * multiplies by its own 1), so alpha < 0.75 reads "wet street, this rough". A semi-transparent surface drawn
- * over the street pushes the value toward 1, which only weakens the reflection there.
+ * No G-buffer. While this pass runs, the street shader (weather.ts, wet(…, 'ground')) packs its roughness and
+ * the share of the sky it reflects (three.js's own split-sum weight) into the alpha of the HDR image
+ * (wt_ssrPack); every other opaque surface writes 1 and GTAO keeps alpha (it multiplies by its own 1), so
+ * alpha < 0.7 reads "wet street". A semi-transparent surface drawn over the street garbles the value there.
  *   1. trace, half resolution: view position from the shared depth texture; the water normal (level, rung by
  *      the same raindrop and running-water ripples as the street shader: WET_GLSL); a ray march in screen
- *      space (jittered steps, binary refinement, thickness test). Output: (hit − sky)·confidence, confidence,
- *      where "sky" is the environment map the street already reflects (so a hit replaces it, a miss keeps it)
- *      and confidence fades at the screen edges, for rays toward the camera and at the end of the ray.
+ *      space (jittered steps, binary refinement, thickness test). Output: (hit − sky)·confidence·mist, mist,
+ *      where "sky" is the light the street already reflects there (so a hit replaces it, a miss keeps it) and
+ *      confidence fades at the screen edges, for rays toward the camera and at the end of the ray.
  *   2. streaks, half resolution: rough stone's reflection is blurred, long vertically and short sideways.
- *   3. composite, full resolution: the street's own reflection weight (Fresnel at its roughness, less the mist
- *      between it and the eye) is worked out per pixel, so puddle edges stay crisp; alpha goes back to 1.
- * It runs after GTAO and before bloom, so reflected lamps bloom too. R toggles it (see post.ts).
+ *   3. composite, full resolution, per pixel from the packed mask (so puddle edges stay crisp): the street's
+ *      reflectance, raised on open water toward a mirror at glancing views, times the traced difference;
+ *      alpha goes back to 1. (It can't read depth: it draws into the target the depth texture belongs to.)
+ * It runs after GTAO and before bloom, so reflected lamps bloom too, and only while the street is wet.
+ * R toggles it (see post.ts); debug 1-3 show the mask, the weight and the change in light.
  */
 
 const STEPS = 32;
@@ -29,7 +31,7 @@ const VERTEX = /* glsl */ `
   void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
 // Shared by the trace and the composite. (Built at run time: the height fog's GLSL exists only once
-// installHeightFog has run.)
+// installHeightFog has run.) uPuddle: how close open water comes to a mirror at a glancing view.
 const COMMON = () => /* glsl */ `
   #include <cube_uv_reflection_fragment>
   uniform mat4 uInvProj, uCamWorld;
@@ -160,7 +162,7 @@ const BLUR = /* glsl */ `
     ivec2 p = ivec2(gl_FragCoord.xy);
     vec4 c = texelFetch(tSrc, p, 0);
     if (c.a < 0.0) { gl_FragColor = c; return; }
-    float r = (0.04 + smoothstep(0.03, 0.45, wt_ssrUnpack(texelFetch(tColor, p * 2, 0).a).x)) * uRadius;   // water: a pixel or two
+    float r = (0.06 + smoothstep(0.03, 0.45, wt_ssrUnpack(texelFetch(tColor, p * 2, 0).a).x)) * uRadius;   // water: a pixel or two
     if (r < 0.5) { gl_FragColor = c; return; }
     ivec2 hi = ivec2(uHalf) - 1;
     vec4 sum = vec4(0.0); float ws = 0.0;
