@@ -48,43 +48,67 @@ export interface StreetProps {
 
 // --- Materials ------------------------------------------------------------------------------------------
 
-/** Granite: a speckle of feldspar, quartz and mica; the vertex colour carries the stone's tint. */
+/**
+ * Granite: a fine speckle of feldspar, quartz and mica over soft clouding and a few rust stains; the vertex
+ * colour carries each stone's tint. Kept low in contrast: worn, dusty stone, not polished terrazzo.
+ */
 function speckleTexture(): THREE.CanvasTexture {
-  const S = 256, c = document.createElement('canvas');
+  const S = 512, c = document.createElement('canvas');
   c.width = c.height = S;
   const g = c.getContext('2d')!;
-  g.fillStyle = '#a4a4a4'; g.fillRect(0, 0, S, S);
+  g.fillStyle = '#c2c0bb'; g.fillRect(0, 0, S, S);
   const r = mulberry(7);
-  for (let k = 0; k < 90; k++) {   // soft cloudy variation
-    const x = r() * S, y = r() * S, rad = 10 + r() * 34, v = 150 + r() * 40;
+  const blot = (x: number, y: number, rad: number, col: string) => {
     const gr = g.createRadialGradient(x, y, 0, x, y, rad);
-    gr.addColorStop(0, `rgba(${v},${v},${v},0.35)`); gr.addColorStop(1, `rgba(${v},${v},${v},0)`);
+    gr.addColorStop(0, col); gr.addColorStop(1, col.replace(/[\d.]+\)$/, '0)'));
     for (const [dx, dy] of [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S]]) { g.save(); g.translate(dx, dy); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); g.restore(); }
-  }
-  for (let k = 0; k < 5200; k++) {
+  };
+  for (let k = 0; k < 140; k++) { const v = 150 + r() * 70; blot(r() * S, r() * S, 20 + r() * 70, `rgba(${v},${v * 0.99},${v * 0.96},0.3)`); }   // clouding
+  for (let k = 0; k < 10; k++) blot(r() * S, r() * S, 12 + r() * 40, `rgba(150,110,70,${0.08 + r() * 0.1})`);                           // iron stains
+  for (let k = 0; k < 9000; k++) {
     const x = r() * S, y = r() * S, q = r();
-    const v = q < 0.45 ? 60 + r() * 40 : q < 0.8 ? 190 + r() * 50 : 140 + r() * 30;
-    g.fillStyle = `rgb(${v},${v * (0.98 + r() * 0.03)},${v * (0.95 + r() * 0.04)})`;
-    const s = 0.8 + r() * (q < 0.45 ? 1.6 : 2.4);
-    g.fillRect(x, y, s, s * (0.6 + r() * 0.8));
+    const v = q < 0.4 ? 95 + r() * 45 : q < 0.8 ? 205 + r() * 35 : 160 + r() * 30;
+    g.fillStyle = `rgba(${v},${v * (0.98 + r() * 0.03)},${v * (0.94 + r() * 0.05)},${0.35 + r() * 0.4})`;
+    const sz = 0.8 + r() * (q < 0.4 ? 1.6 : 2.2);
+    g.fillRect(x, y, sz, sz * (0.6 + r() * 0.8));
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(1 / 0.45, 1 / 0.45);   // UVs are in metres: a 45 cm repeat
+  t.repeat.set(1 / 0.8, 1 / 0.8);   // UVs are in metres: an 80 cm repeat
   t.anisotropy = 4;
   return t;
 }
 
+/**
+ * Pavement flags and kerbs: the granite, with the joints kept matte. slab()'s 'edge' attribute marks the
+ * arrises; there the stone stays rough even when the rain has glossed the flags, so wet pavements still
+ * read as laid stones (dirt fills the joints) instead of one sheet of reflection.
+ */
+function pavingMaterial(map: THREE.Texture, normalMap: THREE.Texture): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ map, normalMap, normalScale: new THREE.Vector2(0.6, 0.6), vertexColors: true, roughness: 0.85 });
+  m.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float edge; varying float vEdge;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEdge = edge;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vEdge;')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.95, smoothstep(0.1, 0.8, vEdge));');
+  };
+  m.customProgramCacheKey = () => 'street-paving';
+  return m;
+}
+
 export function createStreetPropMaterials(anisotropy: number) {
-  const posters = posterAtlas();
+  const posters = posterAtlas(), speckle = speckleTexture(), stoneNor = worldTex('plastered_wall_04', 'nor', false, anisotropy, 0.7);
   return {
-    stone: new THREE.MeshStandardMaterial({ map: speckleTexture(), normalMap: worldTex('plastered_wall_04', 'nor', false, anisotropy, 0.7), normalScale: new THREE.Vector2(0.8, 0.8), vertexColors: true, roughness: 0.9 }),
+    stone: new THREE.MeshStandardMaterial({ map: speckle, normalMap: stoneNor, normalScale: new THREE.Vector2(0.8, 0.8), vertexColors: true, roughness: 0.9 }),
+    paving: pavingMaterial(speckle, stoneNor),
     wood: new THREE.MeshStandardMaterial({
       map: worldTex('weathered_planks', 'diff', true, anisotropy, 1.1), normalMap: worldTex('weathered_planks', 'nor', false, anisotropy, 1.1),
       roughnessMap: worldTex('weathered_planks', 'rough', false, anisotropy, 1.1), vertexColors: true, roughness: 1,
     }),
-    iron: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.35 }),   // painted cast iron
+    iron: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.1 }),   // painted cast iron: the paint is what shows
     cloth: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, map: worldTex('plastered_wall_04', 'diff', true, anisotropy, 0.25) }),
     litter: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide }),
     poster: new THREE.MeshStandardMaterial({ map: posters.tex, roughness: 0.88 }),
@@ -193,7 +217,9 @@ function tube(points: number[][], r: number, radial = 6, perPoint = 5): THREE.Bu
 class Bags {
   private parts = new Map<string, THREE.BufferGeometry[]>();
   add(key: string, g: THREE.BufferGeometry): void {
-    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
+    const keep = key === 'paving' ? ['position', 'normal', 'uv', 'color', 'edge'] : ['position', 'normal', 'uv', 'color'];
+    for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k);
+    if (key === 'paving' && !g.getAttribute('edge')) g.setAttribute('edge', new THREE.Float32BufferAttribute(new Float32Array(g.getAttribute('position').count), 1));
     let list = this.parts.get(key);
     if (!list) this.parts.set(key, (list = []));
     list.push(g);
@@ -218,8 +244,8 @@ class Bags {
  * A slab on four ground corners with a chamfered top: tops[i] is the height of corner i, `bottom` its
  * underside. Faces are wound by their expected direction, so the corner order only has to go round.
  */
-function slab(c: number[][], tops: number[], bottom: number, ch: number): THREE.BufferGeometry {
-  const pos: number[] = [], nor: number[] = [], uv: number[] = [];
+function slab(c: number[][], tops: number[], bottom: number, ch: number, uvo: number[] = [0, 0]): THREE.BufferGeometry {
+  const pos: number[] = [], nor: number[] = [], uv: number[] = [], edge: number[] = [];
   const cx = (c[0][0] + c[1][0] + c[2][0] + c[3][0]) / 4, cz = (c[0][1] + c[1][1] + c[2][1] + c[3][1]) / 4;
   const inner = c.map((p, i) => {
     const q = c[(i + 1) % 4], o = c[(i + 3) % 4];
@@ -234,7 +260,8 @@ function slab(c: number[][], tops: number[], bottom: number, ch: number): THREE.
     const along = side ? Math.hypot(b.x - a.x, b.z - a.z) : 0;
     for (const [p, k] of [[a, 0], [b, 1], [cc, 2], [a, 0], [cc, 2], [d, 3]] as [THREE.Vector3, number][]) {
       pos.push(p.x, p.y, p.z); nor.push(n.x, n.y, n.z);
-      if (side) uv.push(k === 1 || k === 2 ? along : 0, p.y); else uv.push(p.x, p.z);
+      if (side) uv.push(k === 1 || k === 2 ? along : 0, p.y); else uv.push(p.x + uvo[0], p.z + uvo[1]);
+      edge.push(c.some(q => Math.abs(q[0] - p.x) + Math.abs(q[1] - p.z) < ch * 0.3) ? 1 : 0);   // on the arris or below it
     }
   };
   quad(A.set(inner[0][0], tops[0], inner[0][1]), B.set(inner[1][0], tops[1], inner[1][1]), C.set(inner[2][0], tops[2], inner[2][1]), D.set(inner[3][0], tops[3], inner[3][1]), 0, 1, 0, false);
@@ -248,6 +275,14 @@ function slab(c: number[][], tops: number[], bottom: number, ch: number): THREE.
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('edge', new THREE.Float32BufferAttribute(edge, 1));
+  return g;
+}
+
+/** Darkens a painted slab's arrises and sides (slab()'s 'edge' attribute), so the joints read as dirt-filled lines. */
+function jointed(g: THREE.BufferGeometry, k: number): THREE.BufferGeometry {
+  const e = g.getAttribute('edge'), col = g.getAttribute('color') as THREE.BufferAttribute;
+  for (let i = 0; i < col.count; i++) { const f = 1 - k * e.getX(i); col.setXYZ(i, col.getX(i) * f, col.getY(i) * f, col.getZ(i) * f); }
   return g;
 }
 
@@ -297,18 +332,25 @@ function crateParts(w: number, h: number, d: number): THREE.BufferGeometry {
   return merged(parts);
 }
 
-/** A filled sack, tied at the neck, slumped. */
-function sackGeometry(seed: number, R = 0.22): THREE.BufferGeometry {
-  const g = new THREE.SphereGeometry(R, 12, 10);
+/**
+ * A filled sack: a rounded-square body bellying out and slumping to one side, gathered at the neck and
+ * tied, with the loose tuft above the string.
+ */
+function sackGeometry(seed: number, H = 0.66): THREE.BufferGeometry {
+  const g = new THREE.SphereGeometry(1, 16, 14);
   const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const lean = (hash3(seed, 1, 2) - 0.5) * 0.14;
   for (let i = 0; i < pos.count; i++) {
-    let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const t = y / R;                             // -1 bottom .. 1 top
-    const girth = t > 0.45 ? 1 - (t - 0.45) * 1.25 : 1 + 0.12 * (1 - Math.abs(t + 0.2));
-    const bump = 1 + 0.08 * (vnoise(x * 9 + seed, y * 9, z * 9) - 0.5);
-    x *= girth * bump * 1.05; z *= girth * bump * 0.85;
-    y = (t < -0.55 ? -0.55 * R : y) * 1.35 + R * 0.74;
-    pos.setXYZ(i, x, y, z);
+    const ux = pos.getX(i), uy = pos.getY(i), uz = pos.getZ(i);
+    const t = (uy + 1) / 2;                                     // 0 bottom .. 1 top
+    const sq = Math.pow(Math.pow(Math.abs(ux), 3) + Math.pow(Math.abs(uz), 3), 1 / 3) || 1;
+    const hr = Math.hypot(ux, uz) / sq;                         // rounded-square cross-section
+    // girth along the height: full belly, drawn in to the neck, the tuft flaring above it
+    const girth = t < 0.1 ? 0.78 + 2.2 * t : t < 0.62 ? 1 + 0.06 * Math.sin(((t - 0.1) / 0.52) * Math.PI) : t < 0.84 ? 1 - 0.86 * smooth(0.62, 0.84, t) : t < 0.9 ? 0.14 + 0.2 * smooth(0.84, 0.9, t) : 0.34 * (1 - smooth(0.9, 1, t) * 0.8);
+    const bump = 1 + 0.07 * (vnoise(ux * 3 + seed, uy * 3, uz * 3) - 0.5);
+    const y = ((Math.max(t, 0.06) - 0.06) / 0.94) * H;           // flat underneath
+    const k = girth * bump * hr;
+    pos.setXYZ(i, ux * k * 0.24 + lean * y * y * 2.2, y, uz * k * 0.18 * (ux > 0 ? 1 : 0.94));
   }
   g.computeVertexNormals();
   return g;
@@ -319,10 +361,10 @@ function benchParts(): { iron: THREE.BufferGeometry; wood: THREE.BufferGeometry 
   const iron: THREE.BufferGeometry[] = [], wood: THREE.BufferGeometry[] = [];
   for (const x of [-0.78, 0.78]) {
     const at = (pts: number[][]) => pts.map(([z, y]) => [x, y, z]);
-    iron.push(tube(at([[0.27, 0.05], [0.25, 0.01], [0.21, 0.0], [0.2, 0.08], [0.21, 0.25], [0.23, 0.44]]), 0.02));        // front leg with a scroll foot
-    iron.push(tube(at([[-0.29, 0.0], [-0.25, 0.12], [-0.21, 0.3], [-0.2, 0.44], [-0.24, 0.62], [-0.3, 0.84], [-0.28, 0.9]]), 0.02)); // back leg and back
-    iron.push(tube(at([[0.24, 0.43], [0.05, 0.445], [-0.2, 0.45]]), 0.018));                                              // seat rail
-    iron.push(tube(at([[-0.25, 0.64], [-0.05, 0.67], [0.15, 0.66], [0.27, 0.62], [0.28, 0.56], [0.23, 0.55], [0.22, 0.48]]), 0.017)); // arm with scroll
+    iron.push(tube(at([[0.27, 0.05], [0.25, 0.01], [0.21, 0.0], [0.2, 0.08], [0.21, 0.25], [0.23, 0.44]]), 0.02, 6, 3));        // front leg with a scroll foot
+    iron.push(tube(at([[-0.29, 0.0], [-0.25, 0.12], [-0.21, 0.3], [-0.2, 0.44], [-0.24, 0.62], [-0.3, 0.84], [-0.28, 0.9]]), 0.02, 6, 3)); // back leg and back
+    iron.push(tube(at([[0.24, 0.43], [0.05, 0.445], [-0.2, 0.45]]), 0.018, 5, 2));                                              // seat rail
+    iron.push(tube(at([[-0.25, 0.64], [-0.05, 0.67], [0.15, 0.66], [0.27, 0.62], [0.28, 0.56], [0.23, 0.55], [0.22, 0.48]]), 0.017, 5, 3)); // arm with scroll
   }
   for (const z of [0.18, 0.07, -0.04, -0.15]) wood.push(roundBox(1.9, 0.03, 0.09, 0.012).translate(0, 0.475, z));
   for (const [y, z] of [[0.6, -0.235], [0.7, -0.262], [0.8, -0.29]]) wood.push(put(roundBox(1.9, 0.08, 0.026, 0.01), 0, y, z, 0, 1, -0.22));
@@ -405,117 +447,155 @@ function posterAtlas(): PosterAtlas {
   };
   const INK = '#1d1a17', RED = '#9a2a20', BLUE = '#27365a';
 
-  // Row 1 (upper), then row 2 pasted over its lower edge
-  bill(20, 30, 300, 520, '#e8dcc0', (w, h) => {        // the city theatre (the Town Hall was the theatre c.1900)
-    rule(18, w - 18, 20);
-    line('ГОРОДСКОЙ', w / 2, 82, 50, { b: true, maxW: w - 30, sq: 0.8 });
-    line('ТЕАТРЪ', w / 2, 142, 64, { b: true, maxW: w - 30, sq: 0.8 });
-    line('Въ Субботу, 24 Іюня', w / 2, 180, 21, { i: true, maxW: w - 40 });
-    rule(40, w - 40, 196, 2);
-    line('представлено будетъ', w / 2, 232, 20, { maxW: w - 40 });
-    line('РЕВИЗОРЪ', w / 2, 300, 62, { b: true, col: RED, maxW: w - 24, sq: 0.72 });
-    line('комедія въ 5 дѣйствіяхъ', w / 2, 340, 22, { maxW: w - 40 });
-    line('соч. Н. В. Гоголя', w / 2, 370, 22, { i: true, maxW: w - 40 });
-    rule(40, w - 40, 392, 2);
-    line('Начало въ 8 час. вечера', w / 2, 432, 24, { b: true, maxW: w - 40 });
-    line('Цѣны мѣстамъ обыкновенныя', w / 2, 466, 18, { maxW: w - 40 });
-    rule(18, w - 18, h - 30);
-  }, -0.01);
-  bill(345, 50, 360, 470, '#dcb95a', (w) => {          // the circus
+  // Six faces, one 256 px strip each (the column is hexagonal, as on the 1901-14 postcard): two or three
+  // bills pasted down each face, the lower ones a little over the upper
+  const F = 256, fx = (k: number, j = 0) => k * F + 9 + j;
+  const FW = F - 18;
+  bill(fx(0), 26, FW, 520, '#e8dcc0', (w, h) => {        // the city theatre (the Town Hall was the theatre c.1900)
+    rule(14, w - 14, 20);
+    line('ГОРОДСКОЙ', w / 2, 80, 46, { b: true, maxW: w - 24, sq: 0.8 });
+    line('ТЕАТРЪ', w / 2, 140, 62, { b: true, maxW: w - 24, sq: 0.8 });
+    line('Въ Субботу, 24 Іюня', w / 2, 178, 20, { i: true, maxW: w - 30 });
+    rule(30, w - 30, 194, 2);
+    line('представлено будетъ', w / 2, 230, 19, { maxW: w - 30 });
+    line('РЕВИЗОРЪ', w / 2, 298, 58, { b: true, col: RED, maxW: w - 20, sq: 0.72 });
+    line('комедія въ 5 дѣйствіяхъ', w / 2, 338, 20, { maxW: w - 30 });
+    line('соч. Н. В. Гоголя', w / 2, 368, 21, { i: true, maxW: w - 30 });
+    rule(30, w - 30, 390, 2);
+    line('Начало въ 8 час.', w / 2, 428, 23, { b: true, maxW: w - 30 });
+    line('вечера', w / 2, 454, 20, { maxW: w - 30 });
+    line('Цѣны мѣстамъ обыкновенныя', w / 2, 486, 16, { maxW: w - 30 });
+    rule(14, w - 14, h - 22);
+  }, -0.008);
+  bill(fx(0, 4), 560, FW - 6, 440, '#f0ead8', (w, h) => {        // official notice: small, dense print
+    line('ОБЯЗАТЕЛЬНОЕ', w / 2, 46, 28, { b: true, maxW: w - 24, sq: 0.85 });
+    line('ПОСТАНОВЛЕНІЕ', w / 2, 80, 28, { b: true, maxW: w - 24, sq: 0.85 });
+    line('Виленскаго Городского', w / 2, 106, 15, { i: true, maxW: w - 30 });
+    line('Управленія', w / 2, 124, 15, { i: true, maxW: w - 30 });
+    g.fillStyle = 'rgba(29,26,23,0.55)';
+    for (let y = 146; y < h - 36; y += 11) { let x = 20; while (x < w - 24) { const ww = 8 + r() * 30; g.fillRect(x, y, Math.min(ww, w - 20 - x), 4); x += ww + 5; } if (r() < 0.12) y += 8; }
+  }, 0.004);
+  bill(fx(1), 30, FW, 470, '#dcb95a', (w) => {          // the circus
     g.fillStyle = RED; g.fillRect(0, 0, w, 16);
-    line('ЦИРКЪ', w / 2, 128, 120, { b: true, col: RED, maxW: w - 20, sq: 0.7 });
-    line('Сегодня и ежедневно', w / 2, 172, 26, { i: true, maxW: w - 40 });
-    line('БОЛЬШОЕ', w / 2, 232, 50, { b: true, f: SANS, maxW: w - 40, sq: 0.65 });
-    line('ПРЕДСТАВЛЕНІЕ', w / 2, 282, 44, { b: true, f: SANS, maxW: w - 30, sq: 0.62 });
+    line('ЦИРКЪ', w / 2, 124, 110, { b: true, col: RED, maxW: w - 16, sq: 0.7 });
+    line('Сегодня и ежедневно', w / 2, 166, 22, { i: true, maxW: w - 30 });
+    line('БОЛЬШОЕ', w / 2, 224, 46, { b: true, f: SANS, maxW: w - 30, sq: 0.65 });
+    line('ПРЕДСТАВЛЕНІЕ', w / 2, 270, 40, { b: true, f: SANS, maxW: w - 24, sq: 0.62 });
     // a rearing horse, cut in black
-    g.save(); g.translate(w / 2, 390); g.fillStyle = INK;
+    g.save(); g.translate(w / 2 - 6, 372); g.scale(0.85, 0.85); g.fillStyle = INK;
     g.beginPath(); g.ellipse(0, 0, 58, 24, -0.25, 0, Math.PI * 2); g.fill();
     g.beginPath(); g.moveTo(40, -18); g.lineTo(62, -62); g.lineTo(80, -70); g.lineTo(84, -58); g.lineTo(70, -50); g.lineTo(58, -8); g.fill();
     for (const [lx, ly, ex, ey] of [[-40, 10, -52, 58], [-22, 16, -26, 60], [30, 8, 58, 38], [40, 0, 70, 20]]) { g.lineWidth = 9; g.strokeStyle = INK; g.beginPath(); g.moveTo(lx, ly); g.lineTo(ex, ey); g.stroke(); }
     g.beginPath(); g.moveTo(-56, -6); g.quadraticCurveTo(-96, 0, -88, 40); g.lineWidth = 7; g.stroke();
     g.restore();
-    line('дрессированныя лошади · клоуны · акробаты', w / 2, 452, 18, { maxW: w - 30 });
-  }, 0.012);
-  bill(735, 24, 280, 400, '#cfd4bb', (w, h) => {         // Polish opera: Moniuszko's Halka
-    g.strokeStyle = BLUE; g.lineWidth = 4; g.strokeRect(12, 12, w - 24, h - 24); g.lineWidth = 1.5; g.strokeRect(20, 20, w - 40, h - 40);
-    line('TEATR POLSKI', w / 2, 72, 32, { b: true, col: BLUE, maxW: w - 50 });
-    line('Dziś', w / 2, 112, 24, { i: true, maxW: w - 50 });
-    line('HALKA', w / 2, 190, 76, { b: true, maxW: w - 50, sq: 0.8 });
-    line('opera w 4 aktach', w / 2, 232, 22, { maxW: w - 50 });
-    line('St. Moniuszki', w / 2, 262, 24, { i: true, maxW: w - 50 });
-    line('Początek o godz. 8 wiecz.', w / 2, 330, 19, { maxW: w - 50 });
-  }, -0.006);
-  bill(1040, 40, 250, 330, '#e6e2d4', (w) => {           // Lithuanian evening (after the press ban was lifted in 1904)
-    line('LIETUVIŲ', w / 2, 60, 40, { b: true, maxW: w - 30, sq: 0.8 });
-    line('VAKARAS', w / 2, 104, 40, { b: true, maxW: w - 30, sq: 0.8 });
-    rule(30, w - 30, 120, 2);
-    line('Rodoma', w / 2, 158, 20, { i: true, maxW: w - 40 });
-    line('«BIRUTĖ»', w / 2, 212, 46, { b: true, col: RED, maxW: w - 30, sq: 0.8 });
-    line('M. Petrausko opera', w / 2, 250, 20, { maxW: w - 40 });
-    line('Pradžia 7 val. vakare', w / 2, 296, 18, { maxW: w - 40 });
+    line('дрессированныя лошади', w / 2, 438, 17, { maxW: w - 24 });
+    line('клоуны · акробаты', w / 2, 458, 17, { maxW: w - 24 });
   }, 0.01);
-  bill(1300, 60, 250, 380, '#d8b8a6', (w, h) => {        // cigarettes (wraps round the seam)
-    g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(14, 14, w - 28, h - 28);
-    g.beginPath(); g.ellipse(w / 2, 160, 90, 64, 0, 0, Math.PI * 2); g.lineWidth = 2; g.stroke();
-    line('ПАПИРОСЫ', w / 2, 70, 38, { b: true, f: SANS, maxW: w - 40, sq: 0.7 });
-    line('№ 6', w / 2, 178, 54, { b: true, col: RED, maxW: 150 });
-    line('ВЫСШІЙ СОРТЪ', w / 2, 270, 26, { b: true, maxW: w - 40, sq: 0.8 });
-    line('10 шт. — 6 коп.', w / 2, 316, 24, { maxW: w - 40 });
-  }, -0.015);
-  // row 2
-  bill(-60, 530, 330, 440, '#f0ead8', (w, h) => {        // official notice: small, dense print
-    line('ОБЯЗАТЕЛЬНОЕ', w / 2, 48, 30, { b: true, maxW: w - 30, sq: 0.85 });
-    line('ПОСТАНОВЛЕНІЕ', w / 2, 84, 30, { b: true, maxW: w - 30, sq: 0.85 });
-    line('Виленскаго Городского Управленія', w / 2, 112, 16, { i: true, maxW: w - 40 });
-    g.fillStyle = 'rgba(29,26,23,0.55)';
-    for (let y = 134; y < h - 40; y += 11) { let x = 24; while (x < w - 30) { const ww = 8 + r() * 34; g.fillRect(x, y, Math.min(ww, w - 24 - x), 4); x += ww + 5; } if (r() < 0.12) y += 8; }
-  }, 0.004);
-  bill(300, 560, 380, 480, '#b9c3c3', (w, h) => {        // beer
+  bill(fx(1, -3), 515, FW + 4, 480, '#b9c3c3', (w, h) => {        // beer
     g.fillStyle = BLUE; g.fillRect(0, 0, w, 70); g.fillRect(0, h - 50, w, 50);
-    line('ВИЛЕНСКІЙ', w / 2, 52, 40, { b: true, col: '#e8e0c8', f: SANS, maxW: w - 30, sq: 0.7 });
-    line('ПИВО', w / 2, 210, 130, { b: true, col: RED, maxW: w - 30, sq: 0.66 });
-    line('Мартовское · Баварское', w / 2, 262, 26, { i: true, maxW: w - 40 });
-    line('Пивоваренный заводъ', w / 2, 330, 28, { b: true, maxW: w - 40 });
-    line('въ Вильнѣ', w / 2, 364, 26, { maxW: w - 40 });
-    line('Складъ: Большая ул.', w / 2, h - 18, 22, { col: '#e8e0c8', maxW: w - 40 });
-  }, -0.008);
-  bill(700, 450, 300, 360, '#e2d3a8', (w) => {          // a Yiddish concert bill, Russian beneath
-    line('קאָנצערט', w / 2, 96, 64, { b: true, f: `"Arial Hebrew", "Times New Roman", "David", ${SERIF}`, maxW: w - 30 });
-    rule(30, w - 30, 120, 2);
-    line('КОНЦЕРТЪ', w / 2, 172, 42, { b: true, maxW: w - 40, sq: 0.8 });
-    line('въ Городскомъ саду', w / 2, 212, 22, { i: true, maxW: w - 40 });
-    line('Оркестръ · Хоръ', w / 2, 256, 24, { maxW: w - 40 });
-    line('Начало въ 7½ ч.', w / 2, 310, 22, { b: true, maxW: w - 40 });
-  }, 0.018);
-  bill(1010, 400, 300, 330, '#ece6d6', (w) => {          // a sale
-    line('ДЕШЕВАЯ', w / 2, 70, 50, { b: true, f: SANS, maxW: w - 30, sq: 0.66 });
-    line('РАСПРОДАЖА', w / 2, 124, 44, { b: true, f: SANS, col: RED, maxW: w - 30, sq: 0.62 });
-    line('обуви, кожъ и галантереи', w / 2, 170, 20, { maxW: w - 40 });
-    line('Нѣмецкая ул., № 12', w / 2, 230, 24, { i: true, maxW: w - 40 });
-    line('Цѣны внѣ конкуренціи!', w / 2, 290, 22, { b: true, maxW: w - 40 });
-  }, -0.012);
-  bill(1320, 470, 240, 300, '#e9e1c9', (w) => {          // a flat to let (Polish)
-    line('DO WYNAJĘCIA', w / 2, 60, 30, { b: true, maxW: w - 30, sq: 0.85 });
-    line('mieszkanie', w / 2, 104, 26, { i: true, maxW: w - 40 });
-    line('z 4 pokoi i kuchni', w / 2, 140, 22, { maxW: w - 40 });
-    line('Wiadomość u stróża', w / 2, 200, 20, { maxW: w - 40 });
-  }, 0.02);
-  bill(40, 880, 360, 230, '#d9c7a0', (w) => {           // a steamship line, a strip along the foot
-    line('ПАРОХОДСТВО', w / 2, 70, 44, { b: true, f: SANS, maxW: w - 30, sq: 0.66 });
-    line('Рига · Либава · Нью-Йоркъ', w / 2, 118, 26, { maxW: w - 40 });
-    line('Билеты въ конторѣ', w / 2, 160, 20, { i: true, maxW: w - 40 });
-  }, 0.006);
-  bill(640, 830, 420, 260, '#eee6cf', (w) => {           // a ball
-    g.strokeStyle = RED; g.lineWidth = 3; g.strokeRect(10, 10, w - 20, 240);
-    line('БАЛЪ', w / 2, 96, 84, { b: true, col: RED, maxW: w - 40, sq: 0.8 });
-    line('въ пользу бѣдныхъ города Вильны', w / 2, 146, 22, { i: true, maxW: w - 40 });
-    line('въ залѣ Городской Думы', w / 2, 184, 22, { maxW: w - 40 });
-  }, -0.01);
-  bill(1080, 740, 300, 340, '#c9ccb4', (w) => {
-    line('ЧАЙ', w / 2, 120, 110, { b: true, maxW: w - 40, sq: 0.8 });
-    line('развѣсной и въ пачкахъ', w / 2, 172, 22, { i: true, maxW: w - 40 });
-    line('Торговля М. Блехера', w / 2, 230, 24, { b: true, maxW: w - 40 });
+    line('ВИЛЕНСКІЙ', w / 2, 50, 36, { b: true, col: '#e8e0c8', f: SANS, maxW: w - 24, sq: 0.7 });
+    line('ПИВО', w / 2, 200, 120, { b: true, col: RED, maxW: w - 20, sq: 0.66 });
+    line('Мартовское', w / 2, 248, 24, { i: true, maxW: w - 30 });
+    line('Баварское', w / 2, 276, 24, { i: true, maxW: w - 30 });
+    line('Пивоваренный', w / 2, 334, 26, { b: true, maxW: w - 30 });
+    line('заводъ въ Вильнѣ', w / 2, 366, 24, { maxW: w - 30 });
+    line('Складъ: Большая ул.', w / 2, h - 18, 19, { col: '#e8e0c8', maxW: w - 30 });
+  }, -0.007);
+  bill(fx(2), 22, FW, 400, '#cfd4bb', (w, h) => {         // Polish opera: Moniuszko's Halka
+    g.strokeStyle = BLUE; g.lineWidth = 4; g.strokeRect(10, 10, w - 20, h - 20); g.lineWidth = 1.5; g.strokeRect(18, 18, w - 36, h - 36);
+    line('TEATR POLSKI', w / 2, 68, 30, { b: true, col: BLUE, maxW: w - 44 });
+    line('Dziś', w / 2, 108, 23, { i: true, maxW: w - 44 });
+    line('HALKA', w / 2, 184, 70, { b: true, maxW: w - 44, sq: 0.8 });
+    line('opera w 4 aktach', w / 2, 226, 21, { maxW: w - 44 });
+    line('St. Moniuszki', w / 2, 256, 23, { i: true, maxW: w - 44 });
+    line('Początek', w / 2, 316, 19, { maxW: w - 44 });
+    line('o godz. 8 wiecz.', w / 2, 340, 19, { maxW: w - 44 });
+  }, -0.006);
+  bill(fx(2, 3), 438, FW - 4, 360, '#e2d3a8', (w) => {          // a Yiddish concert bill, Russian beneath
+    line('קאָנצערט', w / 2, 92, 58, { b: true, f: `"Arial Hebrew", "Times New Roman", "David", ${SERIF}`, maxW: w - 26 });
+    rule(26, w - 26, 116, 2);
+    line('КОНЦЕРТЪ', w / 2, 166, 40, { b: true, maxW: w - 30, sq: 0.8 });
+    line('въ Городскомъ саду', w / 2, 204, 20, { i: true, maxW: w - 30 });
+    line('Оркестръ · Хоръ', w / 2, 246, 22, { maxW: w - 30 });
+    line('Начало въ 7½ ч.', w / 2, 298, 21, { b: true, maxW: w - 30 });
+  }, 0.014);
+  bill(fx(2, -2), 812, FW + 2, 230, '#d9c7a0', (w) => {           // a steamship line, a strip along the foot
+    line('ПАРОХОДСТВО', w / 2, 62, 38, { b: true, f: SANS, maxW: w - 24, sq: 0.66 });
+    line('Рига · Либава', w / 2, 104, 24, { maxW: w - 30 });
+    line('Нью-Йоркъ', w / 2, 134, 26, { b: true, maxW: w - 30 });
+    line('Билеты въ конторѣ', w / 2, 170, 18, { i: true, maxW: w - 30 });
+  }, 0.005);
+  bill(fx(3), 40, FW, 330, '#e6e2d4', (w) => {           // Lithuanian evening (after the press ban was lifted in 1904)
+    line('LIETUVIŲ', w / 2, 60, 38, { b: true, maxW: w - 26, sq: 0.8 });
+    line('VAKARAS', w / 2, 102, 38, { b: true, maxW: w - 26, sq: 0.8 });
+    rule(26, w - 26, 118, 2);
+    line('Rodoma', w / 2, 156, 20, { i: true, maxW: w - 30 });
+    line('«BIRUTĖ»', w / 2, 208, 44, { b: true, col: RED, maxW: w - 26, sq: 0.8 });
+    line('M. Petrausko opera', w / 2, 246, 19, { maxW: w - 30 });
+    line('Pradžia 7 val. vakare', w / 2, 290, 17, { maxW: w - 30 });
   }, 0.01);
+  bill(fx(3, 2), 385, FW - 2, 330, '#ece6d6', (w) => {          // a sale
+    line('ДЕШЕВАЯ', w / 2, 68, 46, { b: true, f: SANS, maxW: w - 24, sq: 0.66 });
+    line('РАСПРОДАЖА', w / 2, 118, 40, { b: true, f: SANS, col: RED, maxW: w - 24, sq: 0.62 });
+    line('обуви, кожъ', w / 2, 160, 20, { maxW: w - 30 });
+    line('и галантереи', w / 2, 186, 20, { maxW: w - 30 });
+    line('Нѣмецкая ул., № 12', w / 2, 236, 22, { i: true, maxW: w - 30 });
+    line('Цѣны внѣ конкуренціи!', w / 2, 290, 20, { b: true, maxW: w - 30 });
+  }, -0.01);
+  bill(fx(3, -2), 735, FW + 2, 280, '#eee6cf', (w) => {           // a ball
+    g.strokeStyle = RED; g.lineWidth = 3; g.strokeRect(10, 10, w - 20, 258);
+    line('БАЛЪ', w / 2, 96, 80, { b: true, col: RED, maxW: w - 34, sq: 0.8 });
+    line('въ пользу бѣдныхъ', w / 2, 140, 21, { i: true, maxW: w - 34 });
+    line('города Вильны', w / 2, 166, 21, { i: true, maxW: w - 34 });
+    line('въ залѣ Городской Думы', w / 2, 212, 18, { maxW: w - 34 });
+  }, -0.008);
+  bill(fx(4), 24, FW, 380, '#d8b8a6', (w, h) => {        // cigarettes
+    g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(12, 12, w - 24, h - 24);
+    g.beginPath(); g.ellipse(w / 2, 160, 84, 60, 0, 0, Math.PI * 2); g.lineWidth = 2; g.stroke();
+    line('ПАПИРОСЫ', w / 2, 70, 36, { b: true, f: SANS, maxW: w - 34, sq: 0.7 });
+    line('№ 6', w / 2, 178, 52, { b: true, col: RED, maxW: 140 });
+    line('ВЫСШІЙ СОРТЪ', w / 2, 270, 25, { b: true, maxW: w - 34, sq: 0.8 });
+    line('10 шт. — 6 коп.', w / 2, 316, 23, { maxW: w - 34 });
+  }, -0.012);
+  bill(fx(4, 5), 420, FW - 8, 300, '#e9e1c9', (w) => {          // a flat to let (Polish)
+    line('DO WYNAJĘCIA', w / 2, 60, 30, { b: true, maxW: w - 26, sq: 0.85 });
+    line('mieszkanie', w / 2, 104, 26, { i: true, maxW: w - 30 });
+    line('z 4 pokoi i kuchni', w / 2, 140, 21, { maxW: w - 30 });
+    line('Wiadomość u stróża', w / 2, 200, 19, { maxW: w - 30 });
+  }, 0.018);
+  bill(fx(4, -2), 738, FW + 2, 340, '#c9ccb4', (w) => {
+    line('ЧАЙ', w / 2, 118, 104, { b: true, maxW: w - 34, sq: 0.8 });
+    line('развѣсной', w / 2, 166, 22, { i: true, maxW: w - 30 });
+    line('и въ пачкахъ', w / 2, 192, 22, { i: true, maxW: w - 30 });
+    line('Торговля', w / 2, 244, 22, { maxW: w - 30 });
+    line('М. Блехера', w / 2, 272, 26, { b: true, maxW: w - 30 });
+  }, 0.009);
+  bill(fx(5), 30, FW, 440, '#e4d6b4', (w, h) => {          // a charity lottery
+    g.fillStyle = RED; g.fillRect(0, 0, w, 10); g.fillRect(0, h - 10, w, 10);
+    line('ЛОТЕРЕЯ', w / 2, 84, 52, { b: true, maxW: w - 26, sq: 0.75 });
+    line('АЛЛЕГРИ', w / 2, 140, 52, { b: true, col: RED, maxW: w - 26, sq: 0.75 });
+    rule(26, w - 26, 160, 2);
+    line('въ пользу Общества', w / 2, 200, 19, { i: true, maxW: w - 30 });
+    line('Краснаго Креста', w / 2, 226, 22, { b: true, maxW: w - 30 });
+    line('Каждый билетъ', w / 2, 282, 21, { maxW: w - 30 });
+    line('выигрываетъ!', w / 2, 310, 24, { b: true, maxW: w - 30 });
+    line('Цѣна билета 25 коп.', w / 2, 370, 18, { maxW: w - 30 });
+  }, -0.01);
+  bill(fx(5, 3), 492, FW - 4, 330, '#dfe0d4', (w, h) => {          // a Polish bookshop
+    g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(10, 10, w - 20, h - 20);
+    line('KSIĘGARNIA', w / 2, 66, 36, { b: true, maxW: w - 30, sq: 0.8 });
+    line('POLSKA', w / 2, 106, 32, { b: true, maxW: w - 30, sq: 0.8 });
+    line('Nowości wydawnicze', w / 2, 152, 19, { i: true, maxW: w - 34 });
+    line('Kalendarze', w / 2, 204, 26, { b: true, col: BLUE, maxW: w - 34 });
+    line('na rok 1901', w / 2, 234, 22, { maxW: w - 34 });
+    line('ul. Wielka № 14', w / 2, 290, 20, { i: true, maxW: w - 34 });
+  }, 0.012);
+  bill(fx(5, -3), 836, FW + 4, 210, '#cdbf9c', (w) => {           // a torn remnant of an older bill, half pasted over
+    line('...ОНЦЕРТЪ', w / 2, 60, 34, { b: true, f: SANS, maxW: w - 24, sq: 0.7 });
+    line('въ пятницу', w / 2, 98, 20, { i: true, maxW: w - 30 });
+    g.fillStyle = 'rgba(29,26,23,0.5)';
+    for (let y = 124; y < 190; y += 12) g.fillRect(24, y, w - 48 - r() * 60, 4);
+  }, -0.02);
   // grime along the foot of the band, where the street splashes it
   const foot = g.createLinearGradient(0, BH - 160, 0, BH); foot.addColorStop(0, 'rgba(60,48,32,0)'); foot.addColorStop(1, 'rgba(60,48,32,0.55)');
   g.fillStyle = foot; g.fillRect(0, 0, W, BH);
@@ -669,7 +749,8 @@ export function buildStreetProps(opts: {
   const onPavement = (x: number, z: number) => nearestWall(x, z).d < PAVE_W - 0.02 && !inside(x, z);
   const floor = (x: number, z: number) => G(x, z) + (onPavement(x, z) ? PAVE_LIFT : 0);
 
-  const FLAGS = ['#a89e8e', '#9d9587', '#b0a592', '#948d81', '#aaa08c', '#a1998b', '#b5aa97'];
+  // sandy grey granite and a few limestone flags, worn to different tones (the photographs: pale, dusty pavements)
+  const FLAGS = ['#b9ad96', '#aea38e', '#c3b79f', '#a49a86', '#b6aa92', '#aca290', '#c8bca3', '#9f978a'];
   const occ = new Map<number, number>(), OC = 0.2;
   const okey = (x: number, z: number) => (Math.floor(x / OC) + 50000) * 100003 + Math.floor(z / OC) + 50000;
   const rng = mulberry(42);
@@ -686,11 +767,11 @@ export function buildStreetProps(opts: {
       const u1 = k === m - 1 ? L - KERB_W - 0.01 : convex(k + 1) ? L + PAVE_W : L;
       const split = rng() < 0.3 ? [0.03, dMax] : [0.03, 0.03 + (dMax - 0.03) * (0.42 + 0.16 * rng()), dMax];
       for (let row = 0; row + 1 < split.length; row++) {
-        const d0 = split[row] + (row ? 0.008 : 0), d1 = split[row + 1];
+        const d0 = split[row] + (row ? 0.014 : 0), d1 = split[row + 1];
         let u = u0 - (row % 2) * 0.35 * rng();
         while (u < u1 - 0.05) {
           const len = 0.6 + 0.55 * rng(), ua = Math.max(u0, u), ub = Math.min(u1, u + len);
-          u += len + 0.009;
+          u += len + 0.014;
           if (ub - ua < 0.12) continue;
           const tryPlace = (a: number, b: number, depth: number): void => {
             const cs = [at(P, t, n, a, d0), at(P, t, n, b, d0), at(P, t, n, b, d1), at(P, t, n, a, d1)];
@@ -701,11 +782,13 @@ export function buildStreetProps(opts: {
             }) || cs.some(([x, z]) => nearestWall(x, z).d > dMax + 0.02);
             if (bad) { if (depth < 2 && b - a > 0.3) { const mid = (a + b) / 2; tryPlace(a, mid - 0.005, depth + 1); tryPlace(mid + 0.005, b, depth + 1); } return; }
             for (let su = a; su <= b; su += OC * 0.7) for (let sd = d0; sd <= d1; sd += OC * 0.7) { const [x, z] = at(P, t, n, su, sd); occ.set(okey(x, z), segId); }
-            const tops = cs.map(([x, z]) => G(x, z) + PAVE_LIFT + (rng() - 0.5) * 0.006);
+            // each flag settled a little on its bed: a slight tilt, one corner sunk now and then
+            const tilt = (rng() - 0.5) * 0.008, sunk = rng() < 0.2 ? Math.floor(rng() * 4) : -1;
+            const tops = cs.map(([x, z], q) => G(x, z) + PAVE_LIFT + (q < 2 ? tilt : -tilt) + (q === sunk ? -0.007 : 0) + (rng() - 0.5) * 0.004);
             const base = FLAGS[Math.floor(rng() * FLAGS.length)];
-            const cc = new THREE.Color(base).multiplyScalar(0.92 + 0.14 * rng());
+            const cc = new THREE.Color(base).multiplyScalar(0.9 + 0.16 * rng());
             if (rng() < 0.12) cc.multiplyScalar(0.8);    // a stained or newer stone
-            bags.add('paving', paint(slab(cs, tops, Math.min(...tops) - 0.08, 0.012), cc, 0, 0, 0.05));
+            bags.add('paving', jointed(paint(slab(cs, tops, Math.min(...tops) - 0.08, 0.02, [rng() * 9, rng() * 9]), cc, 0, 0, 0.09), 0.55));
             flagCount++;
           };
           tryPlace(ua, ub, 0);
@@ -746,8 +829,8 @@ export function buildStreetProps(opts: {
         const cs = [lerp(K[i], K[i + 1], f0), lerp(K[i], K[i + 1], f1), lerp(Kin[i], Kin[i + 1], f1), lerp(Kin[i], Kin[i + 1], f0)];
         const lift = (rng() - 0.5) * 0.008;
         const tops = cs.map(([x, z], q) => G(x, z) + (q < 2 ? 0.05 : 0.042) + lift);
-        const cc = new THREE.Color(rng() < 0.5 ? '#8f8b84' : '#99928a').multiplyScalar(0.9 + 0.15 * rng());
-        bags.add('paving', paint(slab(cs, tops, Math.min(...tops) - 0.25, 0.022), cc, 0, 0, 0.06));
+        const cc = new THREE.Color(rng() < 0.5 ? '#9c978e' : '#a8a095').multiplyScalar(0.9 + 0.15 * rng());
+        bags.add('paving', jointed(paint(slab(cs, tops, Math.min(...tops) - 0.25, 0.03, [rng() * 9, rng() * 9]), cc, 0, 0, 0.08), 0.4));
         kerbCount++;
       }
     }
@@ -765,10 +848,10 @@ export function buildStreetProps(opts: {
     const ox = ax + (bx - ax) * w.u, oz = az + (bz - az) * w.u;
     const cs = [[-0.1, 0.07], [0.1, 0.07], [0.1, dMax], [-0.1, dMax]].map(([u, d]) => [ox + tx * u + nx * d, oz + tz * u + nz * d]);
     const tops = cs.map(([x, z]) => G(x, z) + PAVE_LIFT + 0.012);
-    bags.add('ironFlat', paint(slab(cs, tops, tops[0] - 0.03, 0.006), '#3b3935', 0, 0, 0.1));
+    bags.add('ironFlat', paint(slab(cs, tops, tops[0] - 0.03, 0.006), '#57524a', 0, 0, 0.14));
     for (const u of [-0.05, 0, 0.05]) {
       const rs = [[u - 0.008, 0.1], [u + 0.008, 0.1], [u + 0.008, dMax - 0.03], [u - 0.008, dMax - 0.03]].map(([uu, d]) => [ox + tx * uu + nx * d, oz + tz * uu + nz * d]);
-      bags.add('ironFlat', paint(slab(rs, rs.map(([x, z]) => G(x, z) + PAVE_LIFT + 0.02), tops[0] - 0.01, 0.003), '#46433d', 0, 0, 0.1));
+      bags.add('ironFlat', paint(slab(rs, rs.map(([x, z]) => G(x, z) + PAVE_LIFT + 0.02), tops[0] - 0.01, 0.003), '#6a6259', 0, 0, 0.14));
     }
     stats.pipePlates = (stats.pipePlates ?? 0) + 1;
   }
@@ -908,10 +991,17 @@ export function buildStreetProps(opts: {
 
     // benches: along both gravel walks, between the trees, backs to the trees; four round the basin
     const bench = benchParts();
-    const benchAt = (x: number, z: number, yaw: number) => {
-      const y = G(x, z) + 0.04;   // on the gravel
+    // the gravel walk's own surface: flat triangles between its grid points (4 m along, WALK/3 across), 4 cm up
+    const gravelY = (sv: number, tv: number) => {
+      const ds = 4, dt = P_WALK / 3, s0 = Math.floor(sv / ds) * ds, t0 = -P_WALK + Math.floor((tv + P_WALK) / dt) * dt, fs = (sv - s0) / ds, ft = (tv - t0) / dt;
+      const h = (a: number, b: number) => { const [x, z] = world(a, b); return terrain.heightAt(x, z); };
+      const a = h(s0, t0), b = h(s0, t0 + dt), c = h(s0 + ds, t0 + dt), d = h(s0 + ds, t0);
+      return 0.04 + (ft >= fs ? a + (b - a) * ft + (c - b) * fs : a + (d - a) * fs + (c - d) * ft);   // triangles [a, b, c] and [a, c, d]
+    };
+    const benchAt = (x: number, z: number, yaw: number, sv: number, tv: number) => {
+      const y = gravelY(sv, tv);
       bags.add('iron', put(paint(bench.iron.clone(), '#23271f', 0.15, 0.25, 0.05), x, y, z, yaw));
-      bags.add('wood', put(paint(bench.wood.clone(), '#8c7152', 0, 0, 0.12), x, y, z, yaw));
+      bags.add('wood', put(paint(bench.wood.clone(), '#c8a27a', 0, 0, 0.12), x, y, z, yaw));
       rect(x, z, yaw, 0.98, 0.33);
       spot('bench', x, y, z, yaw);
     };
@@ -919,19 +1009,19 @@ export function buildStreetProps(opts: {
     for (const [side, ss] of sides) for (const s of ss) {
       if (P_GAPS.some(([a, b]) => s > a - 2 && s < b + 2)) continue;
       const [x, z] = world(s, side * (P_WALK - 0.45));
-      benchAt(x, z, yawOf(-across[0] * side, -across[1] * side));
+      benchAt(x, z, yawOf(-across[0] * side, -across[1] * side), s, side * (P_WALK - 0.45));
     }
     const basinS = P_SEND - 26;
     for (const a of [0.8, 2.35, 3.95, 5.5]) {
       const ds = Math.cos(a), dt = Math.sin(a), [x, z] = world(basinS + ds * 6.3, dt * 6.3);
-      benchAt(x, z, yawOf(-(along[0] * ds + across[0] * dt), -(along[1] * ds + across[1] * dt)));
+      benchAt(x, z, yawOf(-(along[0] * ds + across[0] * dt), -(along[1] * ds + across[1] * dt)), basinS + ds * 6.3, dt * 6.3);
     }
 
     // the advertising column: out on the square beyond the garden's east fence
     {
       const [x, z] = world(64, P_HALF + 5.6), y = G(x, z);
       advertisingColumn(x, y, z, yawOf(across[0], across[1]));
-      ring(x, z, 0.8, false, 12);
+      ring(x, z, 0.98, false, 12);
       spot('column', x, y, z);
     }
 
@@ -960,7 +1050,7 @@ export function buildStreetProps(opts: {
     const rr = mulberry(77);
     let dropped = 0;
     const N = Math.round(1 / flow.box.z), fpx = flow.tex.image.data as Uint8Array;
-    for (let k = 0; k < 400 && dropped < 16; k++) {
+    for (let k = 0; k < 400 && dropped < 9; k++) {
       const a = rr() * Math.PI * 2, rad = 10 + rr() * (walkR - 18), x = cx + Math.cos(a) * rad, z = cz + Math.sin(a) * rad;
       const i = Math.floor(x - flow.box.x), j = Math.floor(z - flow.box.y);
       if (i < 0 || j < 0 || i >= N || j >= N) continue;
@@ -1000,20 +1090,20 @@ export function buildStreetProps(opts: {
       const rr = mulberry(seed), y = floor(x, z) - 0.01;
       if (kind === 'barrel' || kind === 'keg') {
         const b = kind === 'barrel' ? barrel : smallBarrel;
-        bags.add('wood', put(paint(b.wood.clone(), new THREE.Color('#8a6a4a').multiplyScalar(0.8 + 0.3 * rr()), 0.3, 0.3, 0.1), x, y, z, rr() * 6));
+        bags.add('wood', put(paint(b.wood.clone(), new THREE.Color('#e0c09a').multiplyScalar(0.8 + 0.3 * rr()), 0.3, 0.3, 0.1), x, y, z, rr() * 6));
         bags.add('iron', put(paint(b.iron.clone(), '#3a3530', 0, 0, 0.1), x, y, z, 0));
         ring(x, z, kind === 'barrel' ? 0.3 : 0.23, true, 6);
       } else if (kind === 'crates') {
         const w = 0.6, d = 0.42;
-        bags.add('wood', put(paint(crateParts(w, 0.38, d), new THREE.Color('#a0845e').multiplyScalar(0.8 + 0.25 * rr()), 0.2, 0.25, 0.12), x, y, z, yaw));
-        if (rr() < 0.7) bags.add('wood', put(paint(crateParts(w, 0.34, d), new THREE.Color('#9a7c58').multiplyScalar(0.8 + 0.25 * rr()), 0, 0, 0.12), x + (rr() - 0.5) * 0.06, y + 0.39, z + (rr() - 0.5) * 0.06, yaw + (rr() - 0.5) * 0.4));
+        bags.add('wood', put(paint(crateParts(w, 0.38, d), new THREE.Color('#f0dcb4').multiplyScalar(0.8 + 0.25 * rr()), 0.2, 0.25, 0.12), x, y, z, yaw));
+        if (rr() < 0.7) bags.add('wood', put(paint(crateParts(w, 0.34, d), new THREE.Color('#e8d0a4').multiplyScalar(0.8 + 0.25 * rr()), 0, 0, 0.12), x + (rr() - 0.5) * 0.06, y + 0.39, z + (rr() - 0.5) * 0.06, yaw + (rr() - 0.5) * 0.4));
         rect(x, z, yaw, 0.32, 0.23);
       } else if (kind === 'sacks') {
         for (let k = 0; k < 3; k++) {
-          const u = (k - 1) * 0.36, sx = x + Math.cos(yaw) * u, sz = z - Math.sin(yaw) * u;
-          bags.add('cloth', put(paint(sackGeometry(seed + k), new THREE.Color(k % 2 ? '#a58d68' : '#8f7a5a').multiplyScalar(0.85 + 0.2 * rr()), 0.2, 0.3, 0.12), sx, y, sz, yaw + (rr() - 0.5) * 0.6, 0.9 + 0.2 * rr(), -0.12, (rr() - 0.5) * 0.2));
+          const u = (k - 1) * 0.44, sx = x + Math.cos(yaw) * u, sz = z - Math.sin(yaw) * u;
+          bags.add('cloth', put(paint(sackGeometry(seed + k, 0.58 + 0.12 * rr()), new THREE.Color(k % 2 ? '#c2aa80' : '#b09874').multiplyScalar(0.85 + 0.2 * rr()), 0.25, 0.35, 0.12), sx, y, sz, yaw + (rr() - 0.5) * 0.6, 1, (rr() - 0.5) * 0.12, (rr() - 0.5) * 0.12));
         }
-        rect(x, z, yaw, 0.55, 0.22);
+        rect(x, z, yaw, 0.68, 0.22);
       }
     };
     for (const a of anchors) {
@@ -1031,12 +1121,14 @@ export function buildStreetProps(opts: {
         spot('goods', x, floor(x, z), z, a.nx, a.nz);
       } else if (a.kind === 'gate' && h < 30) {
         // a handcart left by the gateway, clear of the guard stones
-        const side = h % 2 ? 1 : -1, u = side * (a.w / 2 + 1.35);
+        const side = h % 2 ? 1 : -1, u = side * (a.w / 2 + 0.5 + 1.3);
         const x = a.x + a.tx * u + a.nx * 0.62, z = a.z + a.tz * u + a.nz * 0.62;
-        const ends = [[x + a.tx * 1.3, z + a.tz * 1.3], [x - a.tx * 1.3, z - a.tz * 1.3]];
-        if (ends.some(([ex, ez]) => inside(ex, ez) || nearAnchor(ex, ez, 0.8))) continue;
+        const ends = [[x + a.tx * 1.3, z + a.tz * 1.3], [x - a.tx * 1.3, z - a.tz * 1.3], [x, z]];
+        const blocked = ([ex, ez]: number[]) => inside(ex, ez) || inside(ex - a.nx * 0.5, ez - a.nz * 0.5) ||
+          anchors.some(o => o !== a && o.kind !== 'pipe' && o.kind !== 'front' && Math.hypot(o.x - ex, o.z - ez) < 0.7 + o.w / 2);
+        if (ends.some(blocked) || onPavement(x, z)) continue;
         const cyaw = side > 0 ? along : along + Math.PI;   // handles pointing away from the gateway
-        bags.add('wood', put(paint(cart.wood.clone(), '#806448', 0.2, 0.25, 0.1), x, floor(x, z), z, cyaw));
+        bags.add('wood', put(paint(cart.wood.clone(), '#d4b890', 0.2, 0.25, 0.1), x, floor(x, z), z, cyaw));
         bags.add('iron', put(paint(cart.iron.clone(), '#33302b'), x, floor(x, z), z, cyaw));
         rect(x, z, cyaw, 0.48, 1.1);
         carts++;
@@ -1058,33 +1150,42 @@ export function buildStreetProps(opts: {
   }
 
   // --- Prop builders that need the bags --------------------------------------------------------------
+  /**
+   * The advertising column as on the 1901-14 postcard of the square: a hexagonal drum of framed bill
+   * panels on a granite plinth, under a flared tent roof with pinnacles at its corners and a tall finial,
+   * the ironwork painted oxblood.
+   */
   function advertisingColumn(x: number, y: number, z: number, yaw: number) {
-    const R = 0.58;
-    // granite plinth, octagonal
-    bags.add('stone', put(paint(lathe([[0, -0.1], [0.8, -0.1], [0.8, 0.2], [0.74, 0.26], [0.7, 0.28], [0, 0.28]], 8, Math.PI / 8), '#8e8a83', 0.3, 0.3, 0.08), x, y, z, yaw));
-    const green = '#2d3a2f';
-    // painted cast-iron base mouldings, cornice, a ribbed dome and a finial
-    bags.add('iron', put(paint(lathe([[0.67, 0.28], [0.67, 0.34], [0.63, 0.38], [0.63, 0.44], [0.6, 0.47], [R - 0.004, 0.52], [R - 0.004, 0.6]], 40), green, 0.3, 0.3, 0.04), x, y, z, yaw));
-    bags.add('iron', put(paint(lathe([[R - 0.004, 3.1], [0.6, 3.13], [0.61, 3.2], [0.66, 3.25], [0.71, 3.29], [0.72, 3.38], [0.69, 3.41], [0.66, 3.42]], 40), green, 0, 0, 0.04), x, y, z, yaw));
-    const dome = lathe([[0.64, 3.42], [0.63, 3.48], [0.59, 3.58], [0.5, 3.7], [0.37, 3.8], [0.22, 3.87], [0.1, 3.9], [0.07, 3.93], [0.1, 3.98], [0.11, 4.03], [0.08, 4.07], [0.045, 4.1], [0.06, 4.16], [0.05, 4.22], [0.015, 4.3], [0, 4.42]], 32);
-    const pos = dome.getAttribute('position') as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {   // twelve ribs down the dome
-      const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
-      if (py > 3.44 && py < 3.9) { const a = Math.atan2(pz, px), k = 1 + 0.035 * Math.pow(Math.abs(Math.cos(a * 6)), 6); pos.setXYZ(i, px * k, py, pz * k); }
-    }
-    dome.computeVertexNormals();
-    bags.add('iron', put(paint(dome, green, 0, 0, 0.04), x, y, z, yaw));
-    // brackets under the cornice
-    for (let k = 0; k < 16; k++) {
-      const a = (k / 16) * Math.PI * 2;
-      bags.add('iron', put(paint(roundBox(0.05, 0.12, 0.09, 0.012), green), x + Math.sin(a + yaw) * (R + 0.04), y + 3.2, z + Math.cos(a + yaw) * (R + 0.04), a + yaw));
-    }
-    // the bills: an open drum wrapped in the atlas band
+    const R = 0.62, H0 = 0.6, H1 = 3.1, red = '#5e2a22', dark = '#4a201b';
+    const hex = (prof: number[][]) => { const g = lathe(prof, 6).toNonIndexed(); g.computeVertexNormals(); return g; };   // faceted
+    // granite plinth, one step, then the painted cast-iron base mouldings
+    bags.add('stone', put(paint(hex([[0, -0.1], [0.98, -0.1], [0.98, 0.16], [0.93, 0.21], [0.9, 0.23], [0, 0.23]]), '#948f86', 0.3, 0.3, 0.08), x, y, z, yaw));
+    bags.add('iron', put(paint(hex([[0.8, 0.23], [0.8, 0.31], [0.75, 0.35], [0.74, 0.43], [0.7, 0.47], [0.68, 0.53], [R + 0.03, 0.56], [R + 0.03, H0 + 0.02]]), red, 0.3, 0.35, 0.05), x, y, z, yaw));
+    // the drum and its frame: a pilaster at each corner, a rail above and below the bills
     const [u0, v0, u1, v1] = posterAtlas().band;
-    const drum = new THREE.CylinderGeometry(R, R, 2.5, 48, 1, true).translate(0, 0.6 + 1.25, 0);
+    const drum = new THREE.CylinderGeometry(R, R, H1 - H0, 6, 1, true).toNonIndexed().translate(0, (H0 + H1) / 2, 0);
+    drum.computeVertexNormals();
     const uv = drum.getAttribute('uv') as THREE.BufferAttribute;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), v0 + uv.getY(i) * (v1 - v0));
     bags.add('poster', put(drum, x, y, z, yaw));
+    const apothem = R * Math.cos(Math.PI / 6);
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + yaw, af = a + Math.PI / 6;   // corner k, and the middle of face k
+      bags.add('iron', put(paint(roundBox(0.075, H1 - H0, 0.075, 0.02).translate(0, (H0 + H1) / 2, 0), red, 0, 0, 0.04), x + Math.sin(a) * (R + 0.01), y, z + Math.cos(a) * (R + 0.01), a));
+      for (const [hy, hh] of [[H0 + 0.03, 0.06], [H1 - 0.03, 0.06]]) bags.add('iron', put(paint(roundBox(R + 0.02, hh, 0.035, 0.012).translate(0, hy, 0), red, 0, 0, 0.04), x + Math.sin(af) * (apothem + 0.012), y, z + Math.cos(af) * (apothem + 0.012), af));
+    }
+    // frieze and eaves
+    bags.add('iron', put(paint(hex([[R + 0.03, H1 - 0.01], [R + 0.05, H1 + 0.02], [R + 0.05, H1 + 0.22], [R + 0.09, H1 + 0.25], [R + 0.13, H1 + 0.29]]), red, 0, 0, 0.04), x, y, z, yaw));
+    // the flared tent roof, pinnacles at its six corners, a knob and a tall finial
+    const eave = 1.0, yE = H1 + 0.3;
+    bags.add('iron', put(paint(hex([[R + 0.13, yE - 0.01], [eave, yE], [eave + 0.02, yE + 0.05], [eave - 0.08, yE + 0.09], [0.78, yE + 0.16], [0.62, yE + 0.25], [0.48, yE + 0.37], [0.35, yE + 0.52], [0.25, yE + 0.68], [0.17, yE + 0.84], [0.12, yE + 0.96], [0.09, yE + 1.02], [0, yE + 1.02]]), dark, 0, 0, 0.05), x, y, z, yaw));
+    const fin = lathe([[0.001, 0], [0.09, 0], [0.1, 0.03], [0.07, 0.07], [0.11, 0.13], [0.12, 0.19], [0.08, 0.25], [0.05, 0.28], [0.06, 0.32], [0.035, 0.36], [0.02, 0.62], [0.035, 0.66], [0.012, 0.72], [0, 0.86]], 12);
+    bags.add('iron', put(paint(fin, dark, 0, 0, 0.04), x, y + yE + 1.0, z, yaw));
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + yaw;
+      const pin = lathe([[0.001, 0], [0.035, 0], [0.04, 0.05], [0.022, 0.1], [0.032, 0.14], [0.018, 0.2], [0, 0.3]], 8);
+      bags.add('iron', put(paint(pin, dark, 0, 0, 0.04), x + Math.sin(a) * (eave - 0.02), y + yE + 0.05, z + Math.cos(a) * (eave - 0.02), a));
+    }
   }
 
   function standPlate(x: number, y: number, z: number, yaw: number) {
@@ -1104,46 +1205,60 @@ export function buildStreetProps(opts: {
     bags.add('iron', put(paint(roundBox(0.7, 0.025, 0.025, 0.008).translate(0.35, 2.27, 0), iron), x, y, z, yaw - Math.PI / 2));
   }
 
+  /** A cast-iron street pump: fluted column under a domed cap, the spout and bucket hook in front, the long handle at the side. */
   function pump(x: number, y: number, z: number, yaw: number) {
-    const iron = '#2f3a31';
+    const iron = '#3d5246';
     // granite slab with a channel, the pump on a plinth at its back
     const c = Math.cos(yaw), s = Math.sin(yaw);
     const cs = [[-0.45, -0.3], [0.45, -0.3], [0.45, 0.75], [-0.45, 0.75]].map(([u, v]) => [x + u * c + v * s, z - u * s + v * c]);
     const tops = cs.map(([px, pz]) => G(px, pz) + 0.07);
-    bags.add('paving', paint(slab(cs, tops, Math.min(...tops) - 0.2, 0.025), '#8a857d', 0, 0, 0.1));
+    bags.add('paving', jointed(paint(slab(cs, tops, Math.min(...tops) - 0.2, 0.03), '#9a948a', 0, 0, 0.1), 0.35));
+    for (const u of [-0.07, 0.07]) {   // the worn channel carrying the spill to the gutter
+      const ch = [[u - 0.02, 0.18], [u + 0.02, 0.18], [u + 0.02, 0.74], [u - 0.02, 0.74]].map(([uu, v]) => [x + uu * c + v * s, z - uu * s + v * c]);
+      bags.add('ironFlat', paint(slab(ch, ch.map(([px, pz]) => G(px, pz) + 0.072), G(x, z), 0.004), '#4e4a43', 0, 0, 0.1));
+    }
     const y0 = Math.max(...tops) - 0.005;
-    const col = lathe([[0.17, 0], [0.17, 0.1], [0.14, 0.14], [0.13, 0.22], [0.12, 0.26], [0.11, 1.12], [0.13, 1.16], [0.15, 1.24], [0.14, 1.3], [0.1, 1.33], [0.11, 1.4], [0.08, 1.46], [0.09, 1.52], [0.05, 1.6], [0, 1.66]], 20);
+    bags.add('iron', put(paint(roundBox(0.36, 0.14, 0.36, 0.03).translate(0, 0.07, 0), iron, 0.14, 0.3, 0.05), x, y0, z, yaw));
+    const col = lathe([[0.001, 0.14], [0.15, 0.14], [0.15, 0.2], [0.13, 0.24], [0.125, 0.3], [0.115, 0.34], [0.105, 1.2], [0.12, 1.24], [0.14, 1.3], [0.14, 1.36], [0.19, 1.385], [0.205, 1.41], [0.2, 1.43], [0.165, 1.45], [0.13, 1.48], [0.075, 1.55], [0.035, 1.6], [0.045, 1.63], [0.045, 1.66], [0.022, 1.72], [0.001, 1.84]], 20);
     const pos = col.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {   // fluted shaft
       const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
-      if (py > 0.3 && py < 1.1) { const a = Math.atan2(pz, px), k = 1 + 0.06 * Math.max(0, Math.cos(a * 10)); pos.setXYZ(i, px * k, py, pz * k); }
+      if (py > 0.36 && py < 1.18) { const a = Math.atan2(pz, px), k = 1 + 0.07 * Math.max(0, Math.cos(a * 10)); pos.setXYZ(i, px * k, py, pz * k); }
     }
     col.computeVertexNormals();
-    bags.add('iron', put(paint(col, iron, 0.25, 0.3, 0.05), x, y0, z, yaw));
-    // spout with a bucket hook, and the long handle pivoting at the top
-    bags.add('iron', put(paint(tube([[0, 0.9, 0.08], [0, 0.9, 0.24], [0, 0.86, 0.36], [0, 0.78, 0.4]], 0.035, 8), iron), x, y0, z, yaw));
-    bags.add('iron', put(paint(lathe([[0.03, 0], [0.045, 0], [0.045, 0.04], [0.03, 0.04]], 10).translate(0, 0.74, 0.4), iron), x, y0, z, yaw));
-    bags.add('iron', put(paint(tube([[0, 1.38, 0.02], [0, 1.43, -0.18], [0, 1.36, -0.45], [0, 1.2, -0.68], [0, 1.08, -0.78]], 0.022, 6), iron), x, y0, z, yaw));
-    bags.add('iron', put(paint(lathe([[0, -0.05], [0.035, -0.04], [0.04, 0], [0.035, 0.04], [0, 0.05]], 10).translate(0, 1.07, -0.8), iron), x, y0, z, yaw));
+    bags.add('iron', put(paint(col, iron, 0.4, 0.3, 0.05), x, y0, z, yaw));
+    // spout with a flared mouth, and the bucket hook under it
+    bags.add('iron', put(paint(tube([[0, 0.98, 0.06], [0, 0.99, 0.22], [0, 0.95, 0.33], [0, 0.86, 0.38]], 0.038, 8, 4), iron), x, y0, z, yaw));
+    bags.add('iron', put(paint(lathe([[0.03, 0.03], [0.05, 0], [0.058, -0.03], [0.046, -0.03]], 10).translate(0, 0.84, 0.38), iron), x, y0, z, yaw));
+    bags.add('iron', put(paint(tube([[0, 0.66, 0.1], [0, 0.66, 0.3], [0, 0.62, 0.36], [0, 0.58, 0.33]], 0.012, 5, 3), iron), x, y0, z, yaw));
+    // the handle: pivoted in a boss on the side of the cap, sweeping forward and down to a knob
+    bags.add('iron', put(paint(lathe([[0.001, -0.06], [0.05, -0.06], [0.06, -0.02], [0.06, 0.02], [0.05, 0.06], [0.001, 0.06]], 10).rotateZ(Math.PI / 2).translate(0.15, 1.33, 0), iron), x, y0, z, yaw));
+    bags.add('iron', put(paint(tube([[0.2, 1.33, -0.02], [0.24, 1.4, 0.04], [0.26, 1.38, 0.2], [0.27, 1.26, 0.38], [0.27, 1.08, 0.52], [0.26, 0.94, 0.58]], 0.022, 6, 4), iron), x, y0, z, yaw));
+    bags.add('iron', put(paint(lathe([[0.001, -0.07], [0.03, -0.06], [0.036, 0], [0.03, 0.05], [0.001, 0.06]], 10).translate(0.26, 0.9, 0.59), iron), x, y0, z, yaw));
     // a wooden pail under the spout
     const pail = barrelParts(0.3, 0.14);
-    bags.add('wood', put(paint(pail.wood, '#7a5e40', 0.1, 0.2, 0.1), x + 0.42 * s, y0, z + 0.42 * c, yaw));
-    bags.add('iron', put(paint(pail.iron, '#3a3530'), x + 0.42 * s, y0, z + 0.42 * c, yaw));
-    bags.add('iron', put(paint(tube([[-0.13, 0.3, 0], [-0.1, 0.42, 0], [0, 0.46, 0], [0.1, 0.42, 0], [0.13, 0.3, 0]], 0.006, 4), '#3a3530'), x + 0.42 * s, y0, z + 0.42 * c, yaw));
+    const py = y0 + 0.005, pxw = x + 0.4 * s, pzw = z + 0.4 * c;
+    bags.add('wood', put(paint(pail.wood, '#dcbc92', 0.1, 0.25, 0.1), pxw, py, pzw, yaw));
+    bags.add('iron', put(paint(pail.iron, '#3a3530'), pxw, py, pzw, yaw));
+    bags.add('iron', put(paint(tube([[-0.13, 0.3, 0], [-0.1, 0.42, 0], [0, 0.46, 0], [0.1, 0.42, 0], [0.13, 0.3, 0]], 0.006, 4), '#3a3530'), pxw, py, pzw, yaw));
   }
 
   function trough(x: number, y: number, z: number, yaw: number) {
-    // a horse trough of heavy planks bound with iron, on two stone blocks, brim-full of rainwater
-    const Lh = 1.05, Wd = 0.3, H = 0.42, yb = 0.24;
-    for (const u of [-0.7, 0.7]) bags.add('stone', put(paint(roundBox(0.3, yb + 0.1, 0.62, 0.03).translate(0, (yb + 0.1) / 2 - 0.1, 0), '#8d887f', 0.2, 0.3, 0.1), x + Math.sin(yaw) * u, y, z + Math.cos(yaw) * u, yaw));
-    const wood = [
-      roundBox(Wd * 2, 0.06, Lh * 2, 0.015).translate(0, yb + 0.03, 0),
-      roundBox(0.06, H, Lh * 2, 0.015).translate(Wd - 0.03, yb + H / 2, 0), roundBox(0.06, H, Lh * 2, 0.015).translate(-Wd + 0.03, yb + H / 2, 0),
-      roundBox(Wd * 2 - 0.12, H, 0.06, 0.015).translate(0, yb + H / 2, Lh - 0.03), roundBox(Wd * 2 - 0.12, H, 0.06, 0.015).translate(0, yb + H / 2, -Lh + 0.03),
-    ];
-    bags.add('wood', put(paint(merged(wood), '#6e563e', 0.25, 0.25, 0.12), x, y, z, yaw));
-    for (const v of [-0.6, 0, 0.6]) bags.add('iron', put(paint(roundBox(Wd * 2 + 0.02, 0.05, 0.03, 0.008).translate(0, yb + H - 0.06, v), '#3a3530'), x, y, z, yaw));
-    bags.add('water', put(new THREE.PlaneGeometry(Wd * 2 - 0.12, Lh * 2 - 0.12).rotateX(-Math.PI / 2).translate(0, yb + H - 0.05, 0), x, y, z, yaw));
+    // a horse trough of heavy planks, the sides splayed, strapped with iron, on two stone blocks, brim-full of rainwater
+    const Lh = 1.05, Wd = 0.3, H = 0.42, yb = 0.24, splay = 0.12;
+    for (const u of [-0.7, 0.7]) bags.add('stone', put(paint(roundBox(0.3, yb + 0.1, 0.66, 0.035).translate(0, (yb + 0.1) / 2 - 0.1, 0), '#99938a', 0.2, 0.3, 0.1), x + Math.sin(yaw) * u, y, z + Math.cos(yaw) * u, yaw));
+    const wood: THREE.BufferGeometry[] = [roundBox(Wd * 2 - 0.02, 0.06, Lh * 2, 0.015).translate(0, yb + 0.03, 0)];
+    for (const sx of [-1, 1]) for (const k of [0, 1]) {   // each side two planks, leaning out
+      const g = roundBox(0.055, H / 2 - 0.006, Lh * 2 - 0.004 * k, 0.014).rotateZ(-sx * splay);
+      wood.push(g.translate(sx * (Wd - 0.03 + Math.sin(splay) * (k + 0.5) * H / 2), yb + 0.03 + (k + 0.5) * H / 2, 0));
+    }
+    for (const sz of [-1, 1]) wood.push(roundBox(Wd * 2 - 0.02 + 2 * Math.sin(splay) * H * 0.5, H, 0.06, 0.015).translate(0, yb + 0.03 + H / 2, sz * (Lh - 0.03)));
+    bags.add('wood', put(paint(merged(wood), '#d4b48c', 0.3, 0.3, 0.14), x, y, z, yaw));
+    for (const v of [-0.72, 0.72]) for (const sx of [-1, 1]) {   // iron straps up the sides
+      const g = roundBox(0.012, H + 0.04, 0.05, 0.005).rotateZ(-sx * splay).translate(sx * (Wd + Math.sin(splay) * H / 2), yb + 0.03 + H / 2, v);
+      bags.add('iron', put(paint(g, '#3a3530', 0, 0, 0.1), x, y, z, yaw));
+    }
+    bags.add('water', put(new THREE.PlaneGeometry(Wd * 2 - 0.06, Lh * 2 - 0.12).rotateX(-Math.PI / 2).translate(0, yb + H - 0.04, 0), x, y, z, yaw));
   }
 
   function hitchingPost(x: number, y: number, z: number, yaw: number) {
@@ -1154,10 +1269,10 @@ export function buildStreetProps(opts: {
 
   function droppings(x: number, z: number, rr: () => number, n: number) {
     for (let k = 0; k < n; k++) {
-      const px = x + (rr() - 0.5) * 0.3, pz = z + (rr() - 0.5) * 0.3, s = 0.028 + rr() * 0.02;
-      const g = new THREE.SphereGeometry(s, 7, 5).scale(1.2, 0.75, 1);
-      const col = new THREE.Color(rr() < 0.5 ? '#3b2f1f' : '#4a3d24').multiplyScalar(0.8 + 0.4 * rr());
-      bags.add('litter', put(paint(g, col, 0, 0, 0.2), px, G(px, pz) + s * 0.35, pz, rr() * 6));
+      const a = rr() * Math.PI * 2, rad = Math.sqrt(rr()) * 0.13, px = x + Math.cos(a) * rad, pz = z + Math.sin(a) * rad, s = 0.022 + rr() * 0.016;
+      const g = hewn(new THREE.SphereGeometry(s, 7, 5).scale(1.15, 0.8, 1), s * 0.18, 60, k);
+      const col = new THREE.Color(rr() < 0.5 ? '#5e4c2c' : '#6a5832').multiplyScalar(0.75 + 0.4 * rr());
+      bags.add('litter', put(paint(g, col, s, 0.3, 0.25), px, G(px, pz) + s * (rad < 0.05 && k % 3 === 0 ? 1.1 : 0.4), pz, rr() * 6));
     }
   }
 
@@ -1201,19 +1316,36 @@ export function buildStreetProps(opts: {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((strands.length / 3) * 2).fill(0), 2));
     g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
     bags.add('litter', g);
-    // two small hay heaps where a cabman fed his horse
+    // two small hay heaps where a cabman fed his horse, stalks sticking out all over them
     for (let k = 0; k < 2; k++) {
-      const [x, z] = world(s0 + 3 + k * 7 + rr() * 2, t0 + 1 + rr() * 2);
-      const heap = new THREE.SphereGeometry(0.34, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.3, 0.38, 1);
-      hewn(heap, 0.05, 9, k * 7 + 3);
-      bags.add('cloth', put(paint(heap, '#a28c52', 0, 0, 0.25), x, G(x, z) - 0.02, z, rr() * 6));
+      const [x, z] = world(s0 + 3 + k * 7 + rr() * 2, t0 + 1 + rr() * 2), yaw = rr() * 6, R = 0.34, Hh = 0.2;
+      const heap = new THREE.SphereGeometry(R, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.3, Hh / R, 1);
+      hewn(heap, 0.035, 14, k * 7 + 3);
+      bags.add('cloth', put(paint(heap, '#b8a064', 0, 0, 0.3), x, G(x, z) - 0.02, z, yaw));
+      const st: number[] = [], sc: number[] = [];
+      for (let q = 0; q < 160; q++) {
+        const a = rr() * Math.PI * 2, f = Math.sqrt(rr()) * 1.05, hx = Math.cos(a) * R * 1.3 * f, hz = Math.sin(a) * R * f;
+        const hy = Hh * Math.sqrt(Math.max(0, 1 - f * f)) - 0.02 + 0.01;
+        const dir = rr() * Math.PI * 2, L = 0.1 + rr() * 0.16, up = (rr() - 0.3) * 0.08, w = 0.004;
+        const dx = Math.cos(dir) * L / 2, dz = Math.sin(dir) * L / 2, wx = -Math.sin(dir) * w, wz = Math.cos(dir) * w;
+        const quad = [[hx - dx - wx, hy - up, hz - dz - wz], [hx + dx - wx, hy + up, hz + dz - wz], [hx + dx + wx, hy + up, hz + dz + wz], [hx - dx + wx, hy - up, hz - dz + wz]];
+        for (const i of [0, 1, 2, 0, 2, 3]) st.push(...quad[i]);
+        const cc = new THREE.Color(straw[Math.floor(rr() * straw.length)]).multiplyScalar(0.8 + 0.4 * rr());
+        for (let i = 0; i < 6; i++) sc.push(cc.r, cc.g, cc.b);
+      }
+      const sg = new THREE.BufferGeometry();
+      sg.setAttribute('position', new THREE.Float32BufferAttribute(st, 3));
+      sg.setAttribute('normal', new THREE.Float32BufferAttribute(Array.from({ length: st.length / 3 }, () => [0, 1, 0]).flat(), 3));
+      sg.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((st.length / 3) * 2).fill(0), 2));
+      sg.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
+      bags.add('litter', put(sg, x, G(x, z) - 0.02, z, yaw));
     }
   }
 
   const group = new THREE.Group();
   group.name = 'street-props';
   const slots: Record<string, [THREE.Material, boolean]> = {
-    stone: [mats.stone, true], paving: [mats.stone, false], wood: [mats.wood, true], iron: [mats.iron, true], ironFlat: [mats.iron, false],
+    stone: [mats.stone, true], paving: [mats.paving, false], wood: [mats.wood, true], iron: [mats.iron, true], ironFlat: [mats.iron, false],
     cloth: [mats.cloth, true], litter: [mats.litter, false], poster: [mats.poster, true], water: [mats.water, false],
   };
   for (const m of bags.meshes(slots, stats)) group.add(m);

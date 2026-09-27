@@ -218,7 +218,9 @@ async function main(force = false): Promise<void> {
   // In the rain the lamps start dark and the lamplighter lights them; on the clear morning he puts them out.
   const lamps = new StreetLamps(lampSpots, !RAIN, RAIN ? 30 : 12);
   scene.add(lamps.group);
-  const barriers = buildBarriers(data, terrain, thx, thz, data.meta.walkRadius, createWoodMaterial(aniso));
+  const barrierWood = createWoodMaterial(aniso);
+  if (RAIN) wet(barrierWood, 'roof');
+  const barriers = buildBarriers(data, terrain, thx, thz, data.meta.walkRadius, barrierWood, propMats.iron);
   if (barriers) scene.add(barriers);
 
   // Walker: start on the square, north of the Town Hall, facing it
