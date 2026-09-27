@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loadArea } from './world/area';
-import { buildWalls, buildRoofs, hasTileRoof } from './world/buildings';
+import { buildWalls, buildRoofs, buildSoffits, hasTileRoof } from './world/buildings';
 import { Terrain } from './world/terrain';
 import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial } from './world/materials';
 import { buildBarriers } from './world/props';
@@ -125,6 +125,10 @@ async function main(force = false): Promise<void> {
   }
   const facades = buildFacades(data, terrain, houseMats, openGround(data, thx, thz, 240));
   scene.add(facades.group);
+  // Eave soffits: the limewashed undersides of the overhanging roofs (buildings.ts)
+  const soffits = new THREE.Mesh(buildSoffits(data), houseMats.trim);
+  soffits.receiveShadow = true;
+  scene.add(soffits);
   const townHallData = data.buildings.find(b => b.role === 'townhall');
   if (townHallData) {
     const m = createTownHallMaterials(aniso);
