@@ -251,10 +251,14 @@ function shell(B: BodyGeo, o: ShellOpts, out: Geo, taken: Uint8Array): Shell {
   if (o.cut) {
     for (const w of nb.keys()) if (border[w]) { tmp.fromArray(wpos, w * 3); o.cut(tmp); tmp.toArray(wpos, w * 3); }
     // the skin meets the garment on the same line (B.P is this outfit's own copy)
-    if (!o.keepSkin) for (const t of tris) for (let k = 0; k < 3; k++) {
-      const v = I[t * 3 + k], w = wid[v];
-      if (!border[w]) continue;
-      tmp.set(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]); o.cut(tmp); tmp.toArray(P, v * 3);
+    if (!o.keepSkin) {
+      for (const t of tris) for (let k = 0; k < 3; k++) {
+        const v = I[t * 3 + k], w = wid[v];
+        if (!border[w]) continue;
+        tmp.set(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]); o.cut(tmp); tmp.toArray(P, v * 3);
+      }
+      // skin vertices on the covered side that no garment triangle reached would poke through the hem
+      for (let v = 0; v < inV.length; v++) if (inV[v] && !used[wid[v]]) { tmp.set(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]); o.cut(tmp); tmp.toArray(P, v * 3); }
     }
   }
   // Taubin smoothing (lambda/mu), border pinned
@@ -866,8 +870,8 @@ const HATS: Record<string, { band: number; tilt: number; prof: [number, number][
   bowler: { band: 0.048, tilt: -0.05, brimCurl: 0.016, ribbon: [0.002, 0.022], prof: [[0, 0.118], [0.45, 0.112], [0.8, 0.09], [0.98, 0.05], [1.02, 0.01], [1.06, 0.0], [1.48, 0.004], [1.53, 0.014], [1.47, -0.004], [1.04, -0.01], [0, -0.01]] },
   felt: { band: 0.05, tilt: -0.04, ribbon: [0.002, 0.03], prof: [[0, 0.085], [0.3, 0.1], [0.7, 0.112], [0.95, 0.09], [1.02, 0.01], [1.07, 0.0], [1.62, -0.012], [1.66, -0.018], [1.6, -0.022], [1.04, -0.012], [0, -0.012]] },
   wide: { band: 0.05, tilt: -0.03, ribbon: [0.002, 0.025], prof: [[0, 0.1], [0.9, 0.1], [0.98, 0.09], [1.01, 0.01], [1.07, 0.0], [1.95, -0.006], [1.99, -0.012], [1.94, -0.016], [1.04, -0.012], [0, -0.012]] },
-  cap: { band: 0.03, tilt: 0.04, peak: true, prof: [[0, 0.075], [1.12, 0.07], [1.2, 0.058], [1.08, 0.03], [1.0, 0.0], [0.96, -0.012], [0, -0.012]] },
-  flatcap: { band: 0.035, tilt: 0.12, peak: true, prof: [[0, 0.055], [0.9, 0.06], [1.12, 0.042], [1.06, 0.015], [1.0, 0.0], [0.96, -0.01], [0, -0.01]] },
+  cap: { band: 0.056, tilt: 0.0, peak: true, prof: [[0, 0.075], [1.12, 0.07], [1.2, 0.058], [1.08, 0.03], [1.0, 0.0], [0.96, -0.012], [0, -0.012]] },
+  flatcap: { band: 0.046, tilt: 0.1, peak: true, prof: [[0, 0.055], [0.9, 0.06], [1.12, 0.042], [1.06, 0.015], [1.0, 0.0], [0.96, -0.01], [0, -0.01]] },
   // women: a wide hat worn on top of the hair, a small toque
   brim: { band: 0.088, tilt: 0.06, ribbon: [0.004, 0.034], feather: true, prof: [[0, 0.07], [0.55, 0.074], [0.88, 0.066], [1.0, 0.04], [1.02, 0.004], [1.12, 0.0], [1.6, -0.004], [2.0, -0.016], [2.06, -0.014], [2.0, -0.024], [1.6, -0.014], [1.1, -0.01], [0, -0.01]] },
   toque: { band: 0.085, tilt: -0.14, ribbon: [0.004, 0.03], feather: true, prof: [[0, 0.07], [0.8, 0.074], [1.02, 0.062], [1.08, 0.03], [1.06, 0.004], [1.14, 0.0], [1.42, 0.012], [1.46, 0.02], [1.4, 0.004], [1.1, -0.008], [0, -0.008]] },
@@ -1050,7 +1054,9 @@ export function figureMaterial(F: FolkBody, pal: Palette, o: { exposed: number; 
   const vee = male ? new THREE.Vector4(buttoned ? m.neckY - 0.075 : vBot, m.neckY - 0.005, buttoned ? 0.04 : 0.07, 1) : new THREE.Vector4(m.waistY - 0.005, m.waistY + 0.03, m.neckY - 0.01, 0);
   const uniforms = {
     uPal: { value: cols }, uRough: { value: rough }, tHair: { value: F.tex.hair }, tEye: { value: F.tex.eye }, tCloth: { value: clothTex },
-    uWet: WET, uExposed: { value: o.exposed }, uVee: { value: vee }, uHatBand: { value: o.paint }, uPattern: { value: new THREE.Vector2(...(o.pattern ?? [0, 0])) },
+    uWet: WET, uExposed: { value: o.exposed }, uVee: { value: vee }, uHatBand: { value: o.paint },
+    // behind: two buttons at the top of the vent (frock coat), a half-belt (greatcoats)
+    uBack: { value: new THREE.Vector2(m.waistY, !male || ot.coat === 'jacket' ? 0 : ot.coat === 'frock' || ot.coat === 'long' ? 1 : 2) }, uPattern: { value: new THREE.Vector2(...(o.pattern ?? [0, 0])) },
   };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = s => {
@@ -1069,6 +1075,7 @@ uniform float uRough[${NSLOT}];
 uniform sampler2D tHair, tEye, tCloth;
 uniform float uWet, uExposed;
 uniform vec4 uVee, uHatBand;
+uniform vec2 uBack;
 uniform vec2 uPattern;   // printed cloth on the kerchief (x) and the shawl or apron (y): 1 check, 2 flowers, 3 stripes
 float fRough; float fBump; float fWet;
 vec3 printed(vec3 c, float kind, vec3 p) {
@@ -1123,6 +1130,11 @@ else {
   if (sl == 3 && uVee.w < 0.5 && vBind.y > uVee.x && vBind.y < uVee.y && abs(vBind.x) < 0.2) { col = uPal[8]; fRough = uRough[8]; }
   if (sl == 3 && uVee.w < 0.5 && vBind.y > uVee.z && abs(vBind.x) < 0.075) { col = uPal[5]; fRough = uRough[5]; }
   if (sl == 6 && uHatBand.y > 0.0 && vBind.y > uHatBand.x && vBind.y < uHatBand.y) { col = uPal[8] * 0.8; fRough = 0.3; }
+  if (sl == 3 && uBack.y > 0.5 && vBind.z < -0.04 && abs(vBind.y - uBack.x) < 0.05) {
+    float by = vBind.y - uBack.x;
+    if (uBack.y > 1.5 && abs(vBind.x) < 0.13 && by > -0.018 && by < 0.022) { col *= 0.78; fRough = 0.8; }
+    if (length(vec2(abs(vBind.x) - 0.045, by)) < 0.009) { col = uPal[7]; fRough = 0.35; }
+  }
   if (sl == 6) col = printed(col, uPattern.x, vBind);
   if (sl == 8) col = printed(col, uPattern.y, vBind);
   // wool weave, darker in the grooves; a little of it on everything woven

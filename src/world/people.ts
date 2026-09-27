@@ -42,6 +42,7 @@ interface Person {
   idle: THREE.AnimationAction; walk: THREE.AnimationAction; natural: number;   // walk speed at timeScale 1 (m/s, this figure's size)
   mode: 'stand' | 'walk' | 'pause';
   target: THREE.Vector2; speed: number; timer: number; yaw: number; wIdle: number; acc: number;
+  stoop: number;                                        // the old walk a little bent
   job?: LampJob;
   hold?: { upper: THREE.Object3D; lower: THREE.Object3D; hand: THREE.Object3D; grip: THREE.Vector3; side: number };
 }
@@ -107,7 +108,8 @@ export async function buildCrowd(opts: {
     const o = outfit(female, lamplighter, umbrella);
     const geo = dress(F, o);
     const cloth = pick(female ? WOMEN : MEN);
-    const hairC = new THREE.Color(pick(HAIR));
+    const grey = !lamplighter && rnd() < 0.18;
+    const hairC = new THREE.Color(grey ? pick(['#8a8680', '#a8a49c', '#6e6a64']) : pick(HAIR));
     const pal: Palette = { ...cloth, skin: pick(SKIN), hair: `#${hairC.getHexString()}`, brolly: lamplighter ? '#ffcf7a' : pick(BROLLY), wood: '#3a2a1e' };
     // a little variety within a palette: the same cloth never quite matches
     const j = 0.88 + rnd() * 0.24;
@@ -136,7 +138,8 @@ export async function buildCrowd(opts: {
     idle.timeScale = 0.85 + rnd() * 0.3;
     const person: Person = {
       root, fig, mixer, idle, walk, natural: natural(F, walkClip) * s, mode, target: new THREE.Vector2(x, z),
-      speed: (female ? 1.0 : 1.1) + rnd() * 0.3, timer: rnd() * 6, yaw, wIdle: walking ? 0 : 1, acc: 0,
+      speed: ((female ? 1.0 : 1.1) + rnd() * 0.3) * (grey ? 0.8 : 1), timer: rnd() * 6, yaw, wIdle: walking ? 0 : 1, acc: 0,
+      stoop: grey ? 0.1 + rnd() * 0.1 : 0,
     };
     if (geo.grip) person.hold = { upper: fig.bone('upperarm_r'), lower: fig.bone('lowerarm_r'), hand: fig.bone('hand_r'), grip: geo.grip, side: -1 };
     people.push(person);
@@ -177,6 +180,16 @@ export async function buildCrowd(opts: {
   };
 
   const tmp = new THREE.Vector2(), ikT = new THREE.Vector3(), ikP = new THREE.Vector3();
+  const qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), qp = new THREE.Quaternion(), side = new THREE.Vector3();
+  /** Pitches a bone forward (about the figure's side axis) on top of the animated pose. */
+  const bend = (b: THREE.Object3D, root: THREE.Object3D, a: number) => {
+    root.getWorldQuaternion(qp);
+    qa.setFromAxisAngle(side.set(1, 0, 0).applyQuaternion(qp), a);
+    b.getWorldQuaternion(qb).premultiply(qa);
+    b.parent!.getWorldQuaternion(qp);
+    b.quaternion.copy(qb.premultiply(qp.invert()));
+    b.updateMatrixWorld(true);
+  };
   return {
     group, count: people.length,
     addLamplighter(o) {
@@ -258,6 +271,12 @@ export async function buildCrowd(opts: {
         if (p.acc < (dist < 25 ? 0 : dist < 60 ? 1 / 30 : 1 / 15)) continue;
         p.mixer.update(p.acc);
         p.acc = 0;
+        if (p.stoop && dist < 45) {
+          // bent at the back, the head raised again to look ahead
+          p.root.updateMatrixWorld(true);
+          bend(p.fig.bone('spine_02'), p.root, p.stoop);
+          bend(p.fig.bone('neck_01'), p.root, -p.stoop * 0.8);
+        }
         if (p.hold && dist < 60) {
           // right hand on the umbrella shaft (or the lamplighter's pole)
           p.root.updateMatrixWorld(true);
