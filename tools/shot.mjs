@@ -28,7 +28,10 @@ const QUERY = opt('query', '');
 const SCALE = Number(opt('scale', 1.5));
 const [W, H] = opt('size', '1600x900').split('x').map(Number);
 const WAIT = Number(opt('wait', 14));
-const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.CHROME || (process.platform === 'darwin' ? MAC_CHROME : 'chromium');
+// ANGLE backend: Metal on macOS, software rasterisation elsewhere (Linux containers have no GPU).
+const ANGLE = process.env.ANGLE || (process.platform === 'darwin' ? 'metal' : 'swiftshader');
 
 // Named views. walk: third-person camera behind the walking figure (x, z, look-at x, z, pitch);
 // free: the figure hidden, camera at eye (x, z, height above the ground there) looking at target (x, z, height).
@@ -66,7 +69,7 @@ for (let i = 0; i < args.length; i++) if (args[i] === '--js-view') {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'walkshot-'));
 const chrome = spawn(CHROME, [
   '--headless=new', `--user-data-dir=${tmp}`, '--remote-debugging-port=0', `--window-size=${W},${H}`,
-  '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=metal', '--enable-webgl', '--mute-audio',
+  '--enable-gpu', '--ignore-gpu-blocklist', `--use-angle=${ANGLE}`, '--enable-webgl', '--mute-audio',
   '--no-first-run', '--no-default-browser-check', '--hide-scrollbars', 'about:blank',
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 let stderr = '';
