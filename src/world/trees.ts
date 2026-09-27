@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
 /**
- * Young lindens for the promenade (the 1797 watercolour shows them newly planted): a tapered trunk
- * with a few limbs, and a canopy of alpha-cut leaf-cluster cards. Card normals point out from the
+ * Young lindens for the promenade (the 1797 watercolour shows them newly planted): a tapering,
+ * slightly wandering trunk with a flared root collar, four curving limbs with side shoots, and a canopy of alpha-cut leaf-cluster cards. Card normals point out from the
  * canopy centre, so the crown shades as one soft mass the way foliage does, not card by card.
  * The canopy sways gently in the wind (vertex shader).
  */
@@ -69,19 +69,31 @@ export function treeGeometry(seed: number, size = 1): { wood: THREE.BufferGeomet
   const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   const woodParts: THREE.BufferGeometry[] = [];
   const H = 2.4 * size;
-  woodParts.push(new THREE.CylinderGeometry(0.06 * size, 0.1 * size, H, 7).translate(0, H / 2, 0));
+  // trunk: a slightly wandering, tapering stem with a flared root collar
+  const lean = new THREE.Vector3(r() - 0.5, 0, r() - 0.5).multiplyScalar(0.12 * size);
+  const stem: THREE.Vector3[] = [], stemR: number[] = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8, y = -0.05 + t * (H * 1.08);
+    stem.push(new THREE.Vector3(lean.x * t * t + Math.sin(t * 5 + seed) * 0.015 * size, y, lean.z * t * t + Math.cos(t * 4 + seed) * 0.015 * size));
+    stemR.push(size * (0.1 - 0.04 * t) * (1 + 0.7 * Math.exp(-t * 9)));
+  }
+  woodParts.push(tube(stem, stemR, 10));
   const crownY = H + 1.0 * size, crownR = 1.25 * size;
   const limbs: THREE.Vector3[] = [];
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + r();
     const tip = new THREE.Vector3(Math.cos(a) * crownR * 0.6, crownY + (r() - 0.3) * 0.6 * size, Math.sin(a) * crownR * 0.6);
-    const base = new THREE.Vector3(0, H * (0.75 + 0.2 * r()), 0);
-    const dir = tip.clone().sub(base);
-    const len = dir.length();
-    const limb = new THREE.CylinderGeometry(0.025 * size, 0.045 * size, len, 5).translate(0, len / 2, 0);
-    limb.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()));
-    limb.translate(base.x, base.y, base.z);
-    woodParts.push(limb);
+    const k = 0.75 + 0.2 * r();
+    const base = new THREE.Vector3(lean.x * k * k, H * k, lean.z * k * k);
+    // limbs leave the stem steeply and bend outwards (a quadratic curve), with two side shoots each
+    const mid = base.clone().lerp(tip, 0.5).setY(base.y + (tip.y - base.y) * 0.75);
+    const path = [0, 0.25, 0.5, 0.75, 1].map(t => base.clone().multiplyScalar((1 - t) ** 2).addScaledVector(mid, 2 * t * (1 - t)).addScaledVector(tip, t * t));
+    woodParts.push(tube(path, path.map((_, j) => size * (0.048 - 0.036 * (j / 4))), 6));
+    for (const t of [0.45, 0.7]) {
+      const from = path[Math.round(t * 4)], side = new THREE.Vector3(Math.cos(a + (r() - 0.5) * 2.4), 0.6 + r() * 0.5, Math.sin(a + (r() - 0.5) * 2.4)).normalize();
+      const to = from.clone().addScaledVector(side, crownR * (0.35 + 0.25 * r()));
+      woodParts.push(tube([from, from.clone().lerp(to, 0.5).add(new THREE.Vector3(0, 0.08 * size, 0)), to], [0.02 * size, 0.014 * size, 0.008 * size], 5));
+    }
     limbs.push(tip);
   }
   const wood = mergeSimple(woodParts);
@@ -116,6 +128,35 @@ export function treeGeometry(seed: number, size = 1): { wood: THREE.BufferGeomet
   leaves.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   leaves.setAttribute('aSway', new THREE.Float32BufferAttribute(sway, 1));
   return { wood, leaves };
+}
+
+/** A tube along `path` with a radius per point, `radial` sides; bark UVs in metres (around, along). */
+function tube(path: THREE.Vector3[], radii: number[], radial: number): THREE.BufferGeometry {
+  const pos: number[] = [], nor: number[] = [], uv: number[] = [], idx: number[] = [];
+  const t = new THREE.Vector3(), n = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3(), p = new THREE.Vector3();
+  let along = 0;
+  for (let i = 0; i < path.length; i++) {
+    t.subVectors(path[Math.min(i + 1, path.length - 1)], path[Math.max(i - 1, 0)]).normalize();
+    n.set(Math.abs(t.y) < 0.9 ? 0 : 1, Math.abs(t.y) < 0.9 ? 1 : 0, 0).cross(t).normalize();
+    b.crossVectors(t, n);
+    if (i > 0) along += path[i].distanceTo(path[i - 1]);
+    for (let k = 0; k <= radial; k++) {
+      const a = (k / radial) * Math.PI * 2;
+      d.copy(n).multiplyScalar(Math.cos(a)).addScaledVector(b, Math.sin(a));
+      p.copy(path[i]).addScaledVector(d, radii[i]);
+      pos.push(p.x, p.y, p.z); nor.push(d.x, d.y, d.z); uv.push((k / radial) * Math.PI * 2 * radii[0], along);
+    }
+  }
+  for (let i = 0; i + 1 < path.length; i++) for (let k = 0; k < radial; k++) {
+    const a0 = i * (radial + 1) + k, a1 = a0 + 1, b0 = a0 + radial + 1, b1 = b0 + 1;
+    idx.push(a0, a1, b0, a1, b1, b0);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
 }
 
 function mergeSimple(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
