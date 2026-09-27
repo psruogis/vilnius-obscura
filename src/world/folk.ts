@@ -426,7 +426,7 @@ export interface Outfit {
 }
 export const outfitKey = (o: Outfit) => [o.sex, o.coat, o.hat, o.beard, o.hair, o.stout, o.apron, o.wrap, o.umbrella, o.pole].join('|');
 
-export interface FigureGeometry { lods: THREE.BufferGeometry[]; grip: THREE.Vector3 | null; top: number; paint: THREE.Vector4 }
+export interface FigureGeometry { lods: THREE.BufferGeometry[]; grip: THREE.Vector3 | null; top: number; paint: THREE.Vector4; legs: Float32Array | null }
 const outfitCache = new Map<string, FigureGeometry>();
 
 /** The dressed figure, in bind pose, with two lower levels of detail sharing its vertices. */
@@ -496,8 +496,8 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
   }
   // legs: trousers (men); under a floor-length skirt nothing shows, so they go
   const bootTop = m.ankleY + (male ? 0.07 : 0.1);
-  if (male) shell(B, { inside: (x, y) => y < m.waistY + 0.03 && y > m.ankleY + 0.035 && !isHand(x) && Math.abs(x) < 0.3, shape: tube, offset: () => 0.012, smooth: 8, slot: SLOT.LOWER, rim: SLOT.LOWER }, out, taken);
-  else for (let t = 0; t < taken.length; t++) {
+  const trousers = male ? shell(B, { inside: (x, y) => y < m.waistY + 0.03 && y > m.ankleY + 0.035 && !isHand(x) && Math.abs(x) < 0.3, shape: tube, offset: () => 0.012, smooth: 8, slot: SLOT.LOWER, rim: SLOT.LOWER }, out, taken) : null;
+  if (!male) for (let t = 0; t < taken.length; t++) {
     const ys = [0, 1, 2].map(k => B.P[B.I[t * 3 + k] * 3 + 1]);
     if (Math.max(...ys) < m.waistY - 0.02 && Math.min(...ys) > bootTop - 0.02) taken[t] = 1;
   }
@@ -505,6 +505,7 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
   shell(B, { inside: (_x, y) => y < bootTop, offset: () => 0.006, smooth: 14, slot: SLOT.LEATHER, rim: SLOT.LEATHER }, out, taken);
 
   // --- hanging garments
+  const drape0 = out.count;
   const zc = m.zc;
   const upperPts = upper.pos;
   const lowerY = male ? (o.coat === 'jacket' ? m.hipY - 0.1 : long ? m.kneeY - 0.2 : m.kneeY + 0.02) : 0.012;
@@ -517,6 +518,12 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
   const hangW = (thigh: number) => (x: number, _y: number, _z: number, t: number) => {
     const l = clamp(0.5 + x / 0.24, 0, 1), th = thigh * Math.pow(t, 1.4);
     return new Map([[sp1, 0.35 * (1 - ss(t, 0, 0.25))], [pel, 1 - th], [tl, th * l], [tr, th * (1 - l)]]);
+  };
+  const cl = bi('calf_l'), cr = bi('calf_r');
+  const coatW = (x: number, y: number, z: number, t: number) => {
+    const l = clamp(0.5 + x / 0.24, 0, 1), th = 0.9 * ss(t, 0, 0.6);
+    const c = 0.4 * ss(-(z - zc) / Math.max(1e-6, Math.hypot(x, z - zc)), -0.3, 0.7) * (1 - ss(y, m.kneeY - 0.2, m.kneeY + 0.02));
+    return new Map([[sp1, 0.35 * (1 - ss(t, 0, 0.25))], [pel, 1 - th], [tl, th * l * (1 - c)], [tr, th * (1 - l) * (1 - c)], [cl, th * l * c], [cr, th * (1 - l) * c]]);
   };
   const rng = seeded(key);
   const ph = [rng() * 6, rng() * 6, rng() * 6];
@@ -544,7 +551,7 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
       radius: (k, _t, th) => coatR(k, th),
       open: o.coat === 'frock' ? t => 0.07 + 0.3 * t * t : o.coat === 'jacket' ? t => 0.05 + 0.2 * t : t => 0.03 + 0.05 * t,
       vent: o.coat === 'jacket' ? undefined : t => (t > 0.25 ? 0.035 * ss(t, 0.25, 0.4) : 0),
-      slot: SLOT.COAT, inner: SLOT.LINING, thick: 0.005, weights: hangW(long ? 0.5 : 0.6),
+      slot: SLOT.COAT, inner: SLOT.LINING, thick: 0.005, weights: o.coat === 'jacket' ? hangW(0.6) : coatW,
     }, out);
     if (o.apron) {
       // over the coat skirt where there is one, then clear of the legs down to the knee
@@ -594,6 +601,8 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
       }, out);
     }
   }
+  // the legs as capsules the coat skirts and aprons are kept out of as they move (see figureMaterial)
+  const legs = trousers ? legCapsules(F, out, trousers, drape0, out.count) : null;
   // capes and shawls hang from the shoulders
   const wrap = male ? (o.coat === 'caped' ? 'cape' : 'none') : (o.wrap ?? 'none');
   if (wrap !== 'none') shoulderWrap(F, upperPts, wrap as 'cape' | 'shawl', male, out, rng);
@@ -646,7 +655,7 @@ export function dress(F: FolkBody, o: Outfit): FigureGeometry {
     pole(out, new THREE.Vector3(-0.25, 0, 0.2), root);
   }
   const lod0 = out.geometry();
-  const r: FigureGeometry = { lods: [lod0, ...lods(lod0)], grip, top: H, paint: hat.paint };
+  const r: FigureGeometry = { lods: [lod0, ...lods(lod0)], grip, top: H, paint: hat.paint, legs };
   outfitCache.set(key, r);
   return r;
 }
@@ -657,6 +666,53 @@ function smoothRows(T: Float32Array, rows: number, cols: number, passes: number)
     for (let c = 0; c < cols; c++) tmp[c] = (T[k * cols + ((c + cols - 1) % cols)] + 2 * T[k * cols + c] + T[k * cols + ((c + 1) % cols)]) / 4;
     T.set(tmp, k * cols);
   }
+}
+
+// Skirts and legs: a coat skirt hangs 1-2 cm clear of the trousers in the bind pose but only half
+// follows the thighs (it is cloth, not a trouser leg), so the stance and the stride carried the legs
+// straight through it. The legs are capsules (thigh, calf; each side) and the vertex shader pushes the
+// cloth out of them, round the outside of the leg; a coat at rest keeps its shape exactly.
+const DRAPE_PAD = 0.008, DRAPE_SOFT = 0.02, DRAPE_MAX = 0.2;   // clearance past the capsule (the cloth spans ~8 cm between rows); soft zone; the most it moves
+const DRAPE_BONES = ['thigh_l', 'calf_l', 'thigh_r', 'calf_r'];
+
+/** Bind-pose capsules round the trouser legs, in DRAPE_BONES order: [a.xyz, ra, b.xyz, rb] each. */
+function legCapsules(F: FolkBody, out: Geo, legs: Shell, d0: number, d1: number): Float32Array {
+  const m = F.m, P = out.p, caps = new Float32Array(32);
+  const lv = [...new Set(legs.verts.values())];
+  const segD = (x: number, y: number, z: number, a: number[], b: number[]): [number, number] => {
+    const abx = b[0] - a[0], aby = b[1] - a[1], abz = b[2] - a[2];
+    const u = clamp(((x - a[0]) * abx + (y - a[1]) * aby + (z - a[2]) * abz) / (abx * abx + aby * aby + abz * abz), 0, 1);
+    return [Math.hypot(x - a[0] - abx * u, y - a[1] - aby * u, z - a[2] - abz * u), u];
+  };
+  for (const [side, s] of [[0, 1], [1, -1]]) {
+    const mine = lv.filter(v => P[v * 3] * s > 0.01);
+    // the leg's centre at a height: the middle of the trouser leg's cross-section there
+    const centre = (y: number) => {
+      let x0 = 9, x1 = -9, z0 = 9, z1 = -9;
+      for (const v of mine) if (Math.abs(P[v * 3 + 1] - y) < 0.025) { x0 = Math.min(x0, P[v * 3]); x1 = Math.max(x1, P[v * 3]); z0 = Math.min(z0, P[v * 3 + 2]); z1 = Math.max(z1, P[v * 3 + 2]); }
+      return [(x0 + x1) / 2, y, (z0 + z1) / 2];
+    };
+    const ys = [m.hipY - 0.15, m.kneeY, m.ankleY + 0.12];
+    for (let seg = 0; seg < 2; seg++) {
+      const a = centre(ys[seg]), b = centre(ys[seg + 1]);
+      // wide enough for the leg...
+      let ra = 0, rb = 0;
+      for (const v of mine) {
+        const y = P[v * 3 + 1];
+        if (y > a[1] + 0.03 || y < b[1] - 0.03) continue;
+        const [d, u] = segD(P[v * 3], y, P[v * 3 + 2], a, b);
+        if (u < 0.5) ra = Math.max(ra, d); else rb = Math.max(rb, d);
+      }
+      // ...but not touching the cloth as it hangs in the bind pose
+      for (let it = 0; it < 3; it++) for (let v = d0; v < d1; v++) {
+        const [d, u] = segD(P[v * 3], P[v * 3 + 1], P[v * 3 + 2], a, b);
+        const e = ra * (1 - u) + rb * u - (d - DRAPE_PAD - DRAPE_SOFT);
+        if (e > 0) { const n2 = (1 - u) ** 2 + u * u; ra -= e * (1 - u) / n2; rb -= e * u / n2; }
+      }
+      caps.set([...a, Math.max(0, ra), ...b, Math.max(0, rb)], (side * 2 + seg) * 8);
+    }
+  }
+  return caps;
 }
 
 /** Simpler levels of detail: new index buffers over the same vertices (meshoptimizer, MIT). */
@@ -1057,14 +1113,45 @@ export function figureMaterial(F: FolkBody, pal: Palette, o: { exposed: number; 
     uWet: WET, uExposed: { value: o.exposed }, uVee: { value: vee }, uHatBand: { value: o.paint },
     // behind: two buttons at the top of the vent (frock coat), a half-belt (greatcoats)
     uBack: { value: new THREE.Vector2(m.waistY, !male || ot.coat === 'jacket' ? 0 : ot.coat === 'frock' || ot.coat === 'long' ? 1 : 2) }, uPattern: { value: new THREE.Vector2(...(o.pattern ?? [0, 0])) },
+    // the legs (posed, mesh space) for the cloth to keep out of; set per frame by figure(), off until then
+    uLegA: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uLegB: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uDrape: { value: new THREE.Vector2(-1, m.zc) },
   };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = s => {
     Object.assign(s.uniforms, uniforms);
     s.vertexShader = s.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float slot;\nflat varying int vSlot;\nvarying vec3 vBind;\nvarying vec3 vBindN;')
+      .replace('#include <common>', '#include <common>\nattribute float slot;\nflat varying int vSlot;\nvarying vec3 vBind;\nvarying vec3 vBindN;\nuniform vec4 uLegA[4], uLegB[4];\nuniform vec2 uDrape;')
       .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvBindN = objectNormal;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = position; vSlot = int(slot + 0.5);');
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = position; vSlot = int(slot + 0.5);')
+      .replace('#include <skinning_vertex>', `#include <skinning_vertex>
+// coat skirts and aprons (below the bodice) pushed out of the leg capsules, to the outside of the leg
+#ifdef USE_SKINNING
+if (position.y < uDrape.x && (vSlot == ${SLOT.COAT} || vSlot == ${SLOT.LINING} || vSlot == ${SLOT.ACCENT})) {
+  float side = vSlot == ${SLOT.LINING} ? -1.0 : 1.0;   // the lining faces in
+  vec3 outside = normalize((skinMatrix * vec4(position.x, 0.0, position.z - uDrape.y, 0.0)).xyz);   // away from the axis the skirt hangs round
+  for (int i = 0; i < 4; i++) {
+    vec3 a = uLegA[i].xyz, ab = uLegB[i].xyz - a;
+    float u = clamp(dot(transformed - a, ab) / max(dot(ab, ab), 1e-8), 0.0, 1.0), c = mix(uLegA[i].w, uLegB[i].w, u);
+    vec3 q = a + ab * u, w = transformed - q, ax = normalize(ab), op = outside - ax * dot(outside, ax);
+    float along = length(op), ww = dot(w, w);   // along ~0: the leg points straight out through the cloth (a knee raised high)
+    if (c <= 0.0 || ww > (c + 0.3) * (c + 0.3)) continue;
+    float C = c + ${DRAPE_PAD.toFixed(3)}, S = ${DRAPE_SOFT.toFixed(3)}, f = smoothstep(0.2, 0.45, along);
+    // out along the cloth's own outward direction (square to the leg) until clear of the leg, so a leg
+    // that has gone right through takes the cloth over it rather than tearing it; straight away from
+    // the leg where that direction runs along it
+    op = along > 1e-4 ? op / along : outside;
+    float wo = dot(w, op), disc = wo * wo - ww + C * C;
+    float t = ww <= C * C || (wo < 0.0 && disc >= 0.0) ? -wo + sqrt(max(disc, 0.0)) : C - sqrt(ww);   // exit distance, or minus the gap
+    float r = C - sqrt(ww);   // the same, straight out from the leg
+    t = mix(r, t, f);
+    float k = min(t > S ? t : t > -S ? (t + S) * (t + S) / (4.0 * S) : 0.0, ${DRAPE_MAX.toFixed(3)});
+    if (k <= 0.0) continue;
+    transformed += normalize(mix(ww > 1e-10 ? w / sqrt(ww) : outside, op, f)) * k;
+    vec3 n = transformed - q - ax * dot(transformed - q, ax);
+    vNormal = normalize(vNormal + normalMatrix * normalize(n) * side * 0.6 * clamp(k / S, 0.0, 1.0));
+  }
+}
+#endif`);
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>
 flat varying int vSlot;
@@ -1198,6 +1285,20 @@ export function figure(F: FolkBody, fg: FigureGeometry, mat: THREE.Material): Fi
   mesh.boundingSphere = fg.lods[0].boundingSphere!.clone();
   mesh.boundingSphere.radius += 0.25;
   root.add(mesh);
+  // the leg capsules, posed into mesh space just before each draw, for the skirt to keep out of
+  const U = (mat.userData as { uniforms?: Record<string, THREE.IUniform> }).uniforms;
+  if (fg.legs && U?.uLegA) {
+    const L = fg.legs, bones = DRAPE_BONES.map(n => byName.get(n)!), inv = DRAPE_BONES.map(n => F.boneInverses[F.bone(n)]);
+    const A = U.uLegA.value as THREE.Vector4[], Bv = U.uLegB.value as THREE.Vector4[], M = new THREE.Matrix4();
+    (U.uDrape.value as THREE.Vector2).x = F.m.waistY - 0.03;
+    mesh.onBeforeRender = () => {
+      for (let i = 0; i < 4; i++) {
+        M.multiplyMatrices(mesh.bindMatrixInverse, bones[i].matrixWorld).multiply(inv[i]);
+        A[i].set(L[i * 8], L[i * 8 + 1], L[i * 8 + 2], 1).applyMatrix4(M).setW(L[i * 8 + 3]);
+        Bv[i].set(L[i * 8 + 4], L[i * 8 + 5], L[i * 8 + 6], 1).applyMatrix4(M).setW(L[i * 8 + 7]);
+      }
+    };
+  }
   const f: Figure = {
     root, mesh, lods: fg.lods, lod: 0, bone: n => byName.get(n)!,
     setLod(i) { if (i !== f.lod) { f.lod = i; mesh.geometry = fg.lods[i]; } },
