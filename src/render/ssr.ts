@@ -212,7 +212,9 @@ const COMPOSITE = () => /* glsl */ `
         // lights reflect a little brighter too; a dark object only dims the sheen of rough stone a little,
         // while open water mirrors it fully
         d = max(d, 0.0) * uGlow + min(d, 0.0) * mix(1.0, uDarkRough, smoothstep(0.06, 0.4, rk.x));
-        col = max(col + d * k + (k - rk.y) * r.a * skyLight(reflect(V, vec3(0.0, 1.0, 0.0)), rk.x), col * (1.0 - 0.8 * k));
+        vec3 add = d * k;
+        if (k - rk.y > 0.002) add += (k - rk.y) * r.a * skyLight(reflect(V, vec3(0.0, 1.0, 0.0)), rk.x);
+        col = max(col + add, col * (1.0 - 0.8 * k));
       }
     }
     if (uDebug == 1) col = c.a < 0.7 ? vec3(wt_ssrUnpack(c.a).y, 1.0 - wt_ssrUnpack(c.a).x / 0.7, 0.0) : vec3(0.0);

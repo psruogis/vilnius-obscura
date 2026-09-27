@@ -133,7 +133,7 @@ export class Post {
     this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
     this.gtao.blendIntensity = 0.9;
     this.composer.addPass(this.gtao);
-    // After GTAO (which keeps the street's roughness in alpha), before bloom: reflected lamps bloom too.
+    // After GTAO (which keeps the street's mask in alpha), before bloom: reflected lamps bloom too.
     if (wetStreets) { this.ssr = new SSRPass(camera, depth, scene); this.composer.addPass(this.ssr); }
 
     // Bloom samples the linear HDR image before tone mapping: only real highlights (sun glints, sky) pass.

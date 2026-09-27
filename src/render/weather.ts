@@ -147,8 +147,8 @@ export function createRain(count = 9000, box = new THREE.Vector3(44, 26, 44)): {
 }
 
 // --- Wet surfaces --------------------------------------------------------------------------------------
-/** 1 while the reflection pass (render/ssr.ts) runs: the wet ground then writes its roughness into the alpha
- * of the HDR image (every other opaque surface writes 1), which is the pass's only mask. */
+/** 1 while the reflection pass (render/ssr.ts) runs: the wet ground then packs its roughness and reflectance
+ * into the alpha of the HDR image (wt_ssrPack; every other opaque surface writes 1), the pass's only mask. */
 export const SSR_MASK = { value: 0 };
 /** How bright the wet street's mirror image of the sky is, relative to the sky light (the environment map):
  * a mirror shows the sky as seen, which in the rain is darker than the light the sky sheds into the shade. */
@@ -180,7 +180,7 @@ export const WET_GLSL = /* glsl */ `
   vec2 wt_flowDir(vec4 fm) { vec2 d = fm.gb * 2.0 - 1.0; float l = length(d); return l > 0.05 ? d / l : vec2(0.0, 1.0); }
   // gutters running with water
   float wt_stream(float flowAmt) { return smoothstep(0.5, 0.62, flowAmt) * uWet; }
-  // hollows in the paving where rain stands: > 0.5 holds water
+  // hollows in the paving where rain stands: above ~0.55 holds water
   float wt_puddleField(vec2 xz) { return wt_fbm(xz * 0.22); }
   // rings spreading from raindrops: gradient of the ripple height in world xz (two staggered layers of 0.55 m cells)
   vec2 wt_ripples(vec2 xz) {
