@@ -13,8 +13,12 @@ import * as THREE from 'three';
  * neighbouring patches meet along a height blend (the taller stone wins), so the seams look like stones
  * set against stones rather than a smear, and the repeat no longer reads across the square.
  *
+ * Optional cavity term: the deepest joints are darkened by their height, the occlusion the soft
+ * overcast needs to read the relief (the sun's self-shadow does it in clear weather).
+ *
  * Exposes `float gPomHeight` (0 = deepest joint … 1 = stone top, at the visible point) under
- * `#define POM_HEIGHT`, so later shader code (rain) can fill the joints first.
+ * `#define POM_HEIGHT`, valid from `#include <map_fragment>` on, so later shader code (rain) can fill
+ * the joints first. The uniforms are on `material.userData.pom` (e.g. pomFade for tuning).
  *
  * Chained like wet()/age(): the material's own onBeforeCompile runs first, customProgramCacheKey is
  * extended. The patched maps are switched in three's shared chunks behind `#ifdef USE_POM`, so the
@@ -34,6 +38,8 @@ export interface ParallaxOptions {
   antiTile?: number;
   /** Soft self-shadowing of the relief towards the sun (only where the sun is strong: clear weather). */
   shadow?: boolean;
+  /** Darkening of the deepest joints (0 = none): the sky can't reach them, which the overcast needs to read depth. */
+  cavity?: number;
 }
 
 // --- Shared chunks: the map lookups, switched to the offset UV for POM materials only -------------------
@@ -57,6 +63,7 @@ const PARS = /* glsl */ `
 uniform sampler2D pomHeightMap;
 uniform vec4 pomParams;   // depth (m), min steps, max steps, 1 / anti-tiling patch size
 uniform vec2 pomFade;     // fade start, end (m)
+uniform float pomCavity;
 // the visible point: base UV (all maps share it), explicit gradients (continuous across the offsets)
 vec2 gPomUv = vec2(0.0), gPomDx = vec2(0.0), gPomDy = vec2(0.0);
 // anti-tiling: two patch layers (mirror signs, offsets), patch weight, and the height blend at the visible point
@@ -116,7 +123,7 @@ vec3 pomNormal(sampler2D s) {
 // The sun's direct light is dimmed by the relief's own shadow (sun = the first directional light;
 // CSM's cascades all share its direction; the gas lamps are point lights and stay unshadowed).
 const SHADOW_PARS = /* glsl */ `
-#if defined( POM_SHADOW ) && NUM_DIR_LIGHTS > 0
+#if defined( USE_POM ) && defined( POM_SHADOW ) && NUM_DIR_LIGHTS > 0
   IncidentLight pomLit(IncidentLight l) {
     if (dot(l.direction, directionalLights[0].direction) > 0.999) l.color *= gPomShadow;
     return l;
@@ -127,6 +134,7 @@ const SHADOW_PARS = /* glsl */ `
 `;
 
 const MAIN = /* glsl */ `
+#ifdef USE_POM
 {
   vec2 uv0 = vMapUv;
   gPomUv = uv0;
@@ -202,6 +210,14 @@ const MAIN = /* glsl */ `
   }
   #endif
 }
+#endif
+`;
+
+// after the colour map: occlusion in the joints, from the height at the visible point
+const CAVITY = /* glsl */ `
+#ifdef USE_POM
+  diffuseColor.rgb *= 1.0 - pomCavity * (1.0 - smoothstep(0.12, 0.45, gPomHeight));
+#endif
 `;
 
 /** Adds parallax occlusion mapping (and optionally anti-tiling) to a standard material with a map. */
@@ -214,6 +230,7 @@ export function parallax<T extends THREE.MeshStandardMaterial>(m: T, o: Parallax
     pomHeightMap: { value: o.heightMap },
     pomParams: { value: new THREE.Vector4(o.depth, o.minSteps ?? 8, o.maxSteps ?? 24, anti > 0 ? 1 / anti : 0) },
     pomFade: { value: new THREE.Vector2(o.fadeStart ?? 18, o.fadeEnd ?? 28) },
+    pomCavity: { value: o.cavity ?? 0 },
   };
   m.defines = { ...m.defines, USE_POM: '', POM_HEIGHT: '', ...(anti > 0 ? { POM_ANTITILE: '' } : {}), ...(o.shadow ? { POM_SHADOW: '' } : {}) };
   m.onBeforeCompile = (shader, renderer) => {
@@ -222,7 +239,7 @@ export function parallax<T extends THREE.MeshStandardMaterial>(m: T, o: Parallax
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `${PARS}\n#include <common>`)
       .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${SHADOW_PARS}`)
-      .replace('#include <map_fragment>', `${MAIN}\n#include <map_fragment>`);
+      .replace('#include <map_fragment>', `${MAIN}\n#include <map_fragment>\n${CAVITY}`);
   };
   m.customProgramCacheKey = () => `${ownKey}|pom${anti > 0 ? '-at' : ''}${o.shadow ? '-sh' : ''}`;
   m.userData.pom = uniforms;

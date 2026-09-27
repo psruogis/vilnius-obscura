@@ -80,11 +80,12 @@ export function createGroundMaterial(anisotropy: number): THREE.MeshStandardMate
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${GROUND_NOISE}`)
       .replace('#include <map_fragment>', `#include <map_fragment>\n${GROUND_MACRO}`)
-      // Dry, dusty stone: no sheen at grazing angles.
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = max(roughnessFactor, 0.82);');
+      // Dry, dusty stone: no sheen at grazing angles. Broad patches of more and less worn stone
+      // (the rain shows them as glossier and duller stretches of paving).
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = max(roughnessFactor, 0.82) * (0.88 + 0.24 * gr_noise(vMapUv * 0.6 + 2.7));');
   };
   // Joints 5 cm deep; laid in irregular patches of about 2.5 repeats (8 m) that meet stone against stone.
-  return parallax(m, { heightMap: heightMap('cobblestone_floor_08'), depth: 0.05, minSteps: 8, maxSteps: 28, fadeStart: 16, fadeEnd: 30, antiTile: 2.5, shadow: true });
+  return parallax(m, { heightMap: heightMap('cobblestone_floor_08'), depth: 0.05, minSteps: 8, maxSteps: 28, fadeStart: 16, fadeEnd: 30, antiTile: 2.5, shadow: true, cavity: 0.4 });
 }
 
 /** Weathered timber for fences, barrels, carts and stalls. */
@@ -202,11 +203,7 @@ export function createPromenadeMaterials(anisotropy: number) {
       map: worldTex('plastered_wall_04', 'diff', true, anisotropy, 3),
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     }),
-    roof: new THREE.MeshStandardMaterial({
-      color: '#d9b8a6', roughness: 0.9,
-      map: worldTex('clay_roof_tiles', 'diff', true, anisotropy, ROOF_TILE_M),
-      normalMap: worldTex('clay_roof_tiles', 'nor', false, anisotropy, ROOF_TILE_M),
-    }),
+    roof: tileRoof(new THREE.MeshStandardMaterial({ ...pbrSet('clay_roof_tiles', anisotropy, true), color: '#d9b8a6', roughness: 0.9 }), 1),
   };
 }
 export type PromenadeMaterials = ReturnType<typeof createPromenadeMaterials>;
@@ -239,7 +236,7 @@ export function createMetalRoofMaterial(): THREE.MeshStandardMaterial {
 function tileRoof(m: THREE.MeshStandardMaterial, uvUnit: number): THREE.MeshStandardMaterial {
   tile(m, uvUnit / ROOF_TILE_M);
   // Barrel tiles: the courses stand ~4 cm proud of the gaps between them.
-  return parallax(m, { heightMap: heightMap('clay_roof_tiles'), depth: 0.04, minSteps: 6, maxSteps: 20, fadeStart: 22, fadeEnd: 40, shadow: true });
+  return parallax(m, { heightMap: heightMap('clay_roof_tiles'), depth: 0.04, minSteps: 6, maxSteps: 20, fadeStart: 22, fadeEnd: 40, shadow: true, cavity: 0.3 });
 }
 
 /** Hand-made clay tile roofs (skeleton roof UVs are in 2.2 m units, buildings.ts). */
