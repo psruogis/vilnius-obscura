@@ -1175,8 +1175,12 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
               lamps.push({ pos: P(e, uL, GROUND_F + 0.72, 0.85), ground: new THREE.Vector2(g.x, g.z) });
             }
           }
-          // cornice brackets (c.1900 houses): modillions under the corona, on the street fronts
-          if (bracketed && front >= 5) for (let u = 0.5; u < e.L - 0.3; u += 0.95) box(flat, e, u, topH + T - 0.215, 0.085, 0.055, 0.055, 0.085, trimC, true);
+          // cornice brackets (c.1900 houses): consoles through the frieze and bed mouldings, carrying the
+          // corona, on the street fronts
+          if (bracketed && front >= 5) for (let u = 0.5; u < e.L - 0.3; u += 0.9) {
+            box(trim, e, u, topH + T - 0.21, 0.088, 0.06, 0.05, 0.088, trimC, true);
+            box(trim, e, u, topH + T - 0.31, 0.055, 0.05, 0.05, 0.055, trimC, true);
+          }
           // the eave gutter: half-round sheet metal hung just off the fascia, with a rolled bead, turning the
           // corners; straight like the eave it hangs from (a copy of the edge without the wall's warp)
           const pipeC = new THREE.Color('#6f7478'), eg: Edge = { ...e, knots: undefined };
