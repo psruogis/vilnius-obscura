@@ -10,10 +10,11 @@ export class SunShadows {
   readonly csm: CSM;
   private done = new WeakSet<THREE.Material>();
 
-  constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, sunDir: THREE.Vector3, color: THREE.ColorRepresentation, intensity: number) {
+  /** reach: how far the cascades go (m) and how many; the rain's mist hides everything past ~160 m. */
+  constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, sunDir: THREE.Vector3, color: THREE.ColorRepresentation, intensity: number, reach = { far: 320, cascades: 3 }) {
     this.csm = new CSM({
       camera, parent: scene,
-      cascades: 3, maxFar: 320, mode: 'practical', practicalModeLambda: 0.75,
+      cascades: reach.cascades, maxFar: reach.far, mode: 'practical', practicalModeLambda: 0.75,
       shadowMapSize: 2048, shadowBias: -0.00025,
       lightDirection: sunDir.clone().negate(), lightIntensity: intensity,
       lightNear: 1, lightFar: 900, lightMargin: 150,

@@ -132,6 +132,10 @@ export class Post {
     this.gtao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.4, thickness: 1.6, scale: 1.15, samples: 16, distanceFallOff: 1.0 });
     this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
     this.gtao.blendIntensity = 0.9;
+    // AO is soft and low-frequency: trace and denoise it at half resolution (a quarter of the pixels),
+    // then let the blend upsample it; at full resolution it was the most expensive thing in the frame
+    const gtaoSize = this.gtao.setSize.bind(this.gtao);
+    this.gtao.setSize = (width: number, height: number) => gtaoSize(Math.ceil(width / 2), Math.ceil(height / 2));
     this.composer.addPass(this.gtao);
     // After GTAO (which keeps the street's mask in alpha), before bloom: reflected lamps bloom too.
     if (wetStreets) { this.ssr = new SSRPass(camera, depth, scene); this.composer.addPass(this.ssr); }

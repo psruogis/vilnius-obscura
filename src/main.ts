@@ -90,7 +90,8 @@ async function main(force = false): Promise<void> {
   if (rain) rainScene.add(rain.mesh);
 
   // Sun: cascaded shadows, sharp near the walker and still present on distant buildings.
-  const shadows = new SunShadows(scene, camera, sunDir, LIGHT.sun, LIGHT.sunI);
+  // (in the rain the mist closes the view at ~160 m, so two cascades over that distance are enough)
+  const shadows = new SunShadows(scene, camera, sunDir, LIGHT.sun, LIGHT.sunI, RAIN ? { far: 160, cascades: 2 } : undefined);
   // Warm bounce from sunlit cobbles and façades into the shade.
   scene.add(new THREE.HemisphereLight(LIGHT.hemi[0], LIGHT.hemi[1], LIGHT.hemi[2]));
 
