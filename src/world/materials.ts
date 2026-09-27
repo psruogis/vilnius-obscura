@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { age } from './ageing';
+import { parallax } from '../render/pom';
 import { createTreeMaterials } from './trees';
 
 const loader = new THREE.TextureLoader();
@@ -24,28 +25,66 @@ function tex(url: string, srgb: boolean, anisotropy: number): THREE.Texture {
   return t;
 }
 
-function pbrSet(id: string, anisotropy: number) {
+/** Colour, normal and roughness maps; `packed` sets read roughness (G) and ambient occlusion (R) from one arm.jpg. */
+function pbrSet(id: string, anisotropy: number, packed = false) {
   const base = `assets/tex/${id}`;
+  const arm = packed ? tex(`${base}/arm.jpg`, false, anisotropy) : null;
   return {
     map: tex(`${base}/diff.jpg`, true, anisotropy),
     normalMap: tex(`${base}/nor.jpg`, false, anisotropy),
-    roughnessMap: tex(`${base}/rough.jpg`, false, anisotropy),
+    roughnessMap: arm ?? tex(`${base}/rough.jpg`, false, anisotropy),
+    ...(arm ? { aoMap: arm } : {}),
   };
 }
 
-/** Rounded fieldstone cobbles for streets and the square. */
+/** Poly Haven height ('Displacement') map for parallax, 0 = deepest joint … 1 = top. */
+function heightMap(id: string): THREE.Texture {
+  return tex(`assets/tex/${id}/height.jpg`, false, 1);
+}
+
+/** Sets the tiling of every map of a material at once (parallax needs them to share one UV). */
+function tile<T extends THREE.MeshStandardMaterial>(m: T, repeat: number): T {
+  for (const t of [m.map, m.normalMap, m.roughnessMap, m.aoMap]) t?.repeat.set(repeat, repeat);
+  return m;
+}
+
+// Real sizes of the Poly Haven scans: cobblestone_floor_08 is 2 m square, clay_roof_tiles 4 m.
+// The cobbles are laid at 3.4 m (larger, rounder fieldstones, as in the period photographs); the tiles
+// at their true size: monk-and-nun barrel tiles about 15 cm across.
+const ROOF_TILE_M = 4.0;
+
+// Large-scale variation across the square, so the 3.4 m repeat doesn't read from standing height:
+// patches of greyer and of warmer, sandier stone, darker trodden ground. In texture repeats (3.4 m).
+const GROUND_MACRO = /* glsl */ `
+  {
+    vec2 q = vMapUv;
+    float m1 = gr_noise(q * 0.47), m2 = gr_noise(q * 1.9 + 7.3), m3 = gr_noise(q * 0.16 + 3.1);
+    diffuseColor.rgb *= 0.84 + 0.2 * m1 + 0.12 * m2;
+    float grey = dot(diffuseColor.rgb, vec3(0.3333));
+    diffuseColor.rgb = mix(diffuseColor.rgb, grey * vec3(0.97, 0.99, 1.03), smoothstep(0.5, 0.85, m3) * 0.45);
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.0, 0.9), smoothstep(0.55, 0.9, 1.0 - m3) * 0.5);
+  }
+`;
+const GROUND_NOISE = /* glsl */ `
+  float gr_hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float gr_noise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(gr_hash(i), gr_hash(i + vec2(1, 0)), u.x), mix(gr_hash(i + vec2(0, 1)), gr_hash(i + vec2(1, 1)), u.x), u.y); }
+`;
+
+/** Rounded fieldstone cobbles for streets and the square: real relief (parallax), no visible repeat. */
 export function createGroundMaterial(anisotropy: number): THREE.MeshStandardMaterial {
   // Warm, sandy tint: the period views show dusty ochre paving, not grey stone.
-  const m = new THREE.MeshStandardMaterial({ ...pbrSet('cobblestone_floor_08', anisotropy), color: '#f2e2c4', vertexColors: true, roughness: 1 });
+  const m = new THREE.MeshStandardMaterial({ ...pbrSet('cobblestone_floor_08', anisotropy, true), color: '#f2e2c4', vertexColors: true, roughness: 1 });
   m.normalScale.set(1.3, 1.3);
-  // Dry, dusty stone: no sheen at grazing angles.
   m.onBeforeCompile = shader => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <roughnessmap_fragment>',
-      '#include <roughnessmap_fragment>\nroughnessFactor = max(roughnessFactor, 0.82);',
-    );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\n${GROUND_NOISE}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>\n${GROUND_MACRO}`)
+      // Dry, dusty stone: no sheen at grazing angles.
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = max(roughnessFactor, 0.82);');
   };
-  return m;
+  // Joints 5 cm deep; laid in irregular patches of about 2.5 repeats (8 m) that meet stone against stone.
+  return parallax(m, { heightMap: heightMap('cobblestone_floor_08'), depth: 0.05, minSteps: 8, maxSteps: 28, fadeStart: 16, fadeEnd: 30, antiTile: 2.5, shadow: true });
 }
 
 /** Weathered timber for fences, barrels, carts and stalls. */
@@ -121,13 +160,7 @@ export function createTownHallMaterials(anisotropy: number) {
   };
   const stone = plaster('#e3cb9c');
   const plinth = plaster('#a8998a', 1.6);
-  const roof = new THREE.MeshStandardMaterial({
-    roughness: 1, color: '#b98f7c',
-    map: worldTex('clay_roof_tiles', 'diff', true, anisotropy, 2.2),
-    normalMap: worldTex('clay_roof_tiles', 'nor', false, anisotropy, 2.2),
-    roughnessMap: worldTex('clay_roof_tiles', 'rough', false, anisotropy, 2.2),
-    side: THREE.DoubleSide,
-  });
+  const roof = tileRoof(new THREE.MeshStandardMaterial({ ...pbrSet('clay_roof_tiles', anisotropy, true), roughness: 1, color: '#b98f7c', side: THREE.DoubleSide }), 1);
   const glass = new THREE.MeshStandardMaterial({ map: windowPaneTexture(), roughness: 0.25, metalness: 0 });
   const wood = new THREE.MeshStandardMaterial({
     color: '#6b5240', roughness: 1,
@@ -171,8 +204,8 @@ export function createPromenadeMaterials(anisotropy: number) {
     }),
     roof: new THREE.MeshStandardMaterial({
       color: '#d9b8a6', roughness: 0.9,
-      map: worldTex('clay_roof_tiles', 'diff', true, anisotropy, 2.2),
-      normalMap: worldTex('clay_roof_tiles', 'nor', false, anisotropy, 2.2),
+      map: worldTex('clay_roof_tiles', 'diff', true, anisotropy, ROOF_TILE_M),
+      normalMap: worldTex('clay_roof_tiles', 'nor', false, anisotropy, ROOF_TILE_M),
     }),
   };
 }
@@ -202,9 +235,16 @@ export function createMetalRoofMaterial(): THREE.MeshStandardMaterial {
   return m;
 }
 
-/** Hand-made clay tile roofs. */
+/** Clay tiles at their true size with parallax relief; `uvUnit` = metres per UV unit of the roof geometry. */
+function tileRoof(m: THREE.MeshStandardMaterial, uvUnit: number): THREE.MeshStandardMaterial {
+  tile(m, uvUnit / ROOF_TILE_M);
+  // Barrel tiles: the courses stand ~4 cm proud of the gaps between them.
+  return parallax(m, { heightMap: heightMap('clay_roof_tiles'), depth: 0.04, minSteps: 6, maxSteps: 20, fadeStart: 22, fadeEnd: 40, shadow: true });
+}
+
+/** Hand-made clay tile roofs (skeleton roof UVs are in 2.2 m units, buildings.ts). */
 export function createRoofMaterial(anisotropy: number): THREE.MeshStandardMaterial {
-  const m = new THREE.MeshStandardMaterial({ ...pbrSet('clay_roof_tiles', anisotropy), vertexColors: true, roughness: 1 });
+  const m = tileRoof(new THREE.MeshStandardMaterial({ ...pbrSet('clay_roof_tiles', anisotropy, true), vertexColors: true, roughness: 1 }), 2.2);
   m.side = THREE.DoubleSide; // skeleton faces are thin; show them from below the eave too
   age(m, { roof: true, strength: 1 });
   return m;
