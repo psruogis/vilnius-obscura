@@ -242,7 +242,7 @@ async function main(force = false): Promise<void> {
 
   // Everything built so far receives the cascades; late arrivals (figure, market) are added when they load.
   shadows.apply(scene);
-  const post = new Post(renderer, scene, camera, rainScene);
+  const post = new Post(renderer, scene, camera, rainScene, RAIN); // RAIN: reflections in the wet streets
   if (RAIN) post.paint.uniforms.uVarnish.value = 0.2; // keep the rain light cool and grey
 
   window.addEventListener('resize', () => {

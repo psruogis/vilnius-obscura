@@ -6,12 +6,15 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import { SSRPass } from './ssr';
+import { WET, SSR_MASK } from './weather';
 
 /**
  * The image pipeline: scene -> ground-truth ambient occlusion (contact shadows in corners, reveals,
- * under eaves) -> a faint bloom on sunlit highlights -> filmic tone mapping -> colour grade and
- * vignette in the spirit of the period oils -> SMAA anti-aliasing.
- * P toggles the effects off and on (for comparison and slow machines).
+ * under eaves) -> in the rain, reflections in the wet street (ssr.ts) -> a faint bloom on sunlit
+ * highlights -> filmic tone mapping -> colour grade and vignette in the spirit of the period oils ->
+ * SMAA anti-aliasing.
+ * P toggles the effects off and on (for comparison and slow machines), O the paint filter, R the reflections.
  */
 
 // Display-space grade: warm highlights, cooler shadows, gentle S-curve, a touch of saturation, vignette.
@@ -108,9 +111,12 @@ export class Post {
   readonly bloom: UnrealBloomPass;
   private grade: ShaderPass;
   readonly paint: ShaderPass;
+  /** Street reflections: built when the weather can be wet; run while WET > 0 and `reflections` is on. */
+  readonly ssr: SSRPass | null = null;
+  reflections = true;
   enabled = true;
 
-  constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera, overlay?: THREE.Scene) {
+  constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera, overlay?: THREE.Scene, wetStreets = false) {
     const w = window.innerWidth, h = window.innerHeight;
     // One depth buffer shared by both ping-pong targets: the AO pass reads the main render's depth and
     // rebuilds normals from it, instead of drawing the whole scene again.
@@ -127,6 +133,8 @@ export class Post {
     this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
     this.gtao.blendIntensity = 0.9;
     this.composer.addPass(this.gtao);
+    // After GTAO (which keeps the street's roughness in alpha), before bloom: reflected lamps bloom too.
+    if (wetStreets) { this.ssr = new SSRPass(camera, depth, scene); this.composer.addPass(this.ssr); }
 
     // Bloom samples the linear HDR image before tone mapping: only real highlights (sun glints, sky) pass.
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.12, 0.4, 6.0);
@@ -160,6 +168,7 @@ export class Post {
     window.addEventListener('keydown', e => {
       if (e.code === 'KeyP') this.enabled = !this.enabled;
       if (e.code === 'KeyO') this.paint.enabled = !this.paint.enabled;
+      if (e.code === 'KeyR') this.reflections = !this.reflections;
     });
   }
 
@@ -184,6 +193,9 @@ export class Post {
   }
 
   render(dt: number): void {
+    // the street writes its reflection mask only while the pass will read it (alpha stays 1 otherwise)
+    if (this.ssr) this.ssr.enabled = this.reflections && WET.value > 0;
+    SSR_MASK.value = this.enabled && this.ssr?.enabled ? 1 : 0;
     if (this.enabled) this.composer.render(dt);
     else this.renderer.render(this.scene, this.camera);
     if (dt <= 0 || this.fixedScale !== null) return;

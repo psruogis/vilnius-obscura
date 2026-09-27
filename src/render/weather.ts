@@ -12,9 +12,27 @@ export const RAIN_TIME = { value: 0 };     // seconds, drives drops and ripples
 export const FLOW = { map: { value: null as THREE.Texture | null }, box: { value: new THREE.Vector4(0, 0, 1, 0) } };
 
 // --- Height fog --------------------------------------------------------------------------------------
+/** GLSL for the height fog's opacity, wt_heightFog(camera y, point y, view depth, density); set by
+ * installHeightFog. The street reflections (render/ssr.ts) fade with the same mist. */
+export let HEIGHT_FOG_GLSL = '';
+
 // Replaces three's fog chunks for every built-in material: exponential fog whose density rises
 // near the ground, so streets fill with mist while roofs and towers loom out of it.
 export function installHeightFog(groundY: number, mistHeight: number, mistBoost: number): void {
+  HEIGHT_FOG_GLSL = `
+    // mist thickest at street level, thinning with height (integrated along the view ray)
+    float wt_heightFog(float camY, float y, float depth, float density) {
+      float fy0 = camY - ${groundY.toFixed(2)}, fy1 = y - ${groundY.toFixed(2)};
+      float fk = 1.0 / ${mistHeight.toFixed(2)};
+      float fdy = fy1 - fy0;
+      // average of exp(-y/H) along the ray; near-level rays use the midpoint (avoids a precision seam at eye height)
+      // (no clamping of heights: streets below the reference level just get a little more mist)
+      float avgMist = abs(fdy) * fk > 0.05
+        ? (exp(-fy0 * fk) - exp(-fy1 * fk)) / (fdy * fk)
+        : exp(-0.5 * (fy0 + fy1) * fk);
+      float fd = density * depth * (1.0 + ${mistBoost.toFixed(2)} * clamp(avgMist, 0.0, 1.6));
+      return clamp(1.0 - exp(-fd * fd * 0.6 - fd * 0.4), 0.0, 1.0);
+    }`;
   const C = THREE.ShaderChunk as unknown as Record<string, string>;
   C.fog_pars_vertex = `#ifdef USE_FOG
     varying float vFogDepth; varying vec3 vFogWorld;
@@ -28,23 +46,14 @@ export function installHeightFog(groundY: number, mistHeight: number, mistBoost:
     varying float vFogDepth; varying vec3 vFogWorld;
     #ifdef FOG_EXP2
       uniform float fogDensity;
+      ${HEIGHT_FOG_GLSL}
     #else
       uniform float fogNear; uniform float fogFar;
     #endif
   #endif`;
   C.fog_fragment = `#ifdef USE_FOG
     #ifdef FOG_EXP2
-      // mist thickest at street level, thinning with height (integrated along the view ray)
-      float fy0 = cameraPosition.y - ${groundY.toFixed(2)}, fy1 = vFogWorld.y - ${groundY.toFixed(2)};
-      float fk = 1.0 / ${mistHeight.toFixed(2)};
-      float fdy = fy1 - fy0;
-      // average of exp(-y/H) along the ray; near-level rays use the midpoint (avoids a precision seam at eye height)
-      // (no clamping of heights: streets below the reference level just get a little more mist)
-      float avgMist = abs(fdy) * fk > 0.05
-        ? (exp(-fy0 * fk) - exp(-fy1 * fk)) / (fdy * fk)
-        : exp(-0.5 * (fy0 + fy1) * fk);
-      float fd = fogDensity * vFogDepth * (1.0 + ${mistBoost.toFixed(2)} * clamp(avgMist, 0.0, 1.6));
-      float fogFactor = 1.0 - exp(-fd * fd * 0.6 - fd * 0.4);
+      float fogFactor = wt_heightFog(cameraPosition.y, vFogWorld.y, vFogDepth, fogDensity);
     #else
       float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
     #endif
@@ -138,7 +147,17 @@ export function createRain(count = 9000, box = new THREE.Vector3(44, 26, 44)): {
 }
 
 // --- Wet surfaces --------------------------------------------------------------------------------------
-const NOISE = /* glsl */ `
+/** 1 while the reflection pass (render/ssr.ts) runs: the wet ground then writes its roughness into the alpha
+ * of the HDR image (every other opaque surface writes 1), which is the pass's only mask. */
+export const SSR_MASK = { value: 0 };
+
+/**
+ * GLSL shared by the wet street shader and the reflection pass (render/ssr.ts): noise, the flow-map lookup,
+ * puddles, raindrop rings and running water. One copy, so the reflections are broken by the very ripples the
+ * street is shaded with. Declares uWet, uRainTime, uFlowMap and uFlowBox (bind WET, RAIN_TIME and FLOW).
+ */
+export const WET_GLSL = /* glsl */ `
+  uniform float uWet; uniform float uRainTime; uniform sampler2D uFlowMap; uniform vec4 uFlowBox;
   float wt_hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float wt_noise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
     return mix(mix(wt_hash(i), wt_hash(i + vec2(1, 0)), u.x), mix(wt_hash(i + vec2(0, 1)), wt_hash(i + vec2(1, 1)), u.x), u.y); }
@@ -146,6 +165,46 @@ const NOISE = /* glsl */ `
   // running-water surface height in flow coordinates (s along, t across), two layers scrolling downstream
   float wt_water(float s, float t, float ph1, float ph2) {
     return wt_noise(vec2(s * 3.0 - ph1 * 3.0, t * 7.0)) * 0.6 + wt_noise(vec2(s * 5.5 - ph2 * 5.5, t * 11.0 + 4.0)) * 0.4;
+  }
+  // the baked flow map at a world position, wobbled so the gutters don't follow its 1 m grid:
+  // r = how much water runs here, gb = direction, a = distance to the nearest wall / 8 m
+  vec4 wt_flowAt(vec2 xz) {
+    vec2 fuv = (xz - uFlowBox.xy) * uFlowBox.z;
+    float inMap = step(0.0, fuv.x) * step(fuv.x, 1.0) * step(0.0, fuv.y) * step(fuv.y, 1.0);
+    vec2 wob = vec2(wt_noise(xz * 1.3), wt_noise(xz.yx * 1.3 + 5.0)) - 0.5;
+    return mix(vec4(0.0, 0.5, 1.0, 1.0), texture2D(uFlowMap, fuv + wob * uFlowBox.z * 0.45), inMap);
+  }
+  vec2 wt_flowDir(vec4 fm) { vec2 d = fm.gb * 2.0 - 1.0; float l = length(d); return l > 0.05 ? d / l : vec2(0.0, 1.0); }
+  // gutters running with water
+  float wt_stream(float flowAmt) { return smoothstep(0.5, 0.62, flowAmt) * uWet; }
+  // hollows in the paving where rain stands: > 0.5 holds water
+  float wt_puddleField(vec2 xz) { return wt_fbm(xz * 0.22); }
+  // rings spreading from raindrops: gradient of the ripple height in world xz (two staggered layers of 0.55 m cells)
+  vec2 wt_ripples(vec2 xz) {
+    vec2 q = xz / 0.55, grad = vec2(0.0);
+    for (int k = 0; k < 2; k++) {
+      vec2 cell = floor(q + float(k) * 0.5), f = q + float(k) * 0.5 - cell;
+      vec2 c0 = vec2(wt_hash(cell), wt_hash(cell + 17.0)) * 0.6 + 0.2;
+      float ph = fract(uRainTime * (0.9 + 0.4 * wt_hash(cell + 3.0)) + wt_hash(cell + 9.0));
+      vec2 d = f - c0; float r = length(d);
+      float ring = sin((r - ph * 0.45) * 55.0) * (1.0 - ph) * smoothstep(ph * 0.45 + 0.07, ph * 0.45, r) * smoothstep(ph * 0.45 - 0.12, ph * 0.45, r);
+      grad += normalize(d + 1e-4) * ring;
+    }
+    return grad;
+  }
+  // how much the rings tilt the surface: strong on open water, faint on wet stone
+  float wt_rippleStrength(float water) { return (0.06 + 0.25 * water) * uWet; }
+  // ripple detail fades out with distance: finer than a pixel it would only sparkle (and scatter reflections)
+  float wt_detail(float dist) { return 1.0 - smoothstep(8.0, 30.0, dist); }
+  // running water: a level surface with ripples carried downstream (world-space normal); gentle enough
+  // that the reflections stay recognisable, broken into wavering bands
+  vec3 wt_runNormal(vec2 xz, vec2 fdir, float flowAmt) {
+    vec2 perp = vec2(-fdir.y, fdir.x);
+    float s = dot(xz, fdir), t = dot(xz, perp), spd = 0.7 + 1.9 * flowAmt;
+    float ph1 = uRainTime * spd, ph2 = uRainTime * spd * 1.37 + 3.1, e = 0.04;
+    float h0 = wt_water(s, t, ph1, ph2), hs = wt_water(s + e, t, ph1, ph2), ht = wt_water(s, t + e, ph1, ph2);
+    vec2 gw = fdir * (hs - h0) / e + perp * (ht - h0) / e;
+    return normalize(vec3(-gw.x * 0.035, 1.0, -gw.y * 0.035));
   }
 `;
 
@@ -169,40 +228,56 @@ export function wet(m: THREE.Material, kind: WetKind, groundY = 0, hExpr?: strin
         vWetNormal = mat3(modelMatrix) * objectNormal;`);
     let frag = shader.fragmentShader.replace('#include <common>', `#include <common>
       varying vec3 vWetWorld; varying vec3 vWetNormal;
-      uniform float uWet; uniform float uRainTime; uniform sampler2D uFlowMap; uniform vec4 uFlowBox;
-      ${NOISE}`);
+      ${WET_GLSL}`);
     if (kind === 'ground') {
+      shader.uniforms.uSsrMask = SSR_MASK;
       frag = frag
+        .replace('#include <common>', '#include <common>\nuniform float uSsrMask;')
         .replace('#include <color_fragment>', `#include <color_fragment>
-          // --- mud and running water, from the baked flow map --------------------------------------
-          vec2 fuv = (vWetWorld.xz - uFlowBox.xy) * uFlowBox.z;
-          float inMap = step(0.0, fuv.x) * step(fuv.x, 1.0) * step(0.0, fuv.y) * step(fuv.y, 1.0);
-          vec2 wob = vec2(wt_noise(vWetWorld.xz * 1.3), wt_noise(vWetWorld.zx * 1.3 + 5.0)) - 0.5;
-          vec4 fm = texture2D(uFlowMap, fuv + wob * uFlowBox.z * 0.45) * inMap;
+          // --- mud, puddles and running water, from the baked flow map --------------------------------
+          vec4 fm = wt_flowAt(vWetWorld.xz);
           float flowAmt = fm.r;
-          vec2 fdir = fm.gb * 2.0 - 1.0; float fdl = length(fdir); fdir = fdl > 0.05 ? fdir / fdl : vec2(0.0, 1.0);
-          float wallD = inMap > 0.5 ? fm.a * 8.0 : 8.0;
+          vec2 fdir = wt_flowDir(fm);
+          float wallD = fm.a * 8.0;
           float lum = dot(diffuseColor.rgb, vec3(0.333));
+          // stone relief, 0 in the joints .. 1 on the crowns: the parallax height map where there is one,
+          // otherwise the texel brightness (the joints are the darkest texels)
+          #ifdef POM_HEIGHT
+            float relief = gPomHeight;
+          #else
+            float relief = smoothstep(0.14, 0.32, lum);
+          #endif
+          float joint = 1.0 - smoothstep(0.1, 0.5, relief);
           float mudZone = wt_fbm(vWetWorld.xz * 0.3 + 11.0) * 0.75 + 0.22 * (1.0 - smoothstep(0.4, 2.0, wallD)) + 0.3 * smoothstep(0.28, 0.45, flowAmt) * (1.0 - smoothstep(0.52, 0.64, flowAmt));
           float mud = smoothstep(0.62, 0.86, mudZone);
-          float jointMud = smoothstep(0.46, 0.66, mudZone) * (1.0 - smoothstep(0.14, 0.32, lum));   // mud settles in the joints first
-          float mudAll = max(mud * 0.88, jointMud);
+          float jointMud = smoothstep(0.46, 0.66, mudZone) * joint;   // mud settles in the joints first
+          float mudAll = max(mud * 0.7, jointMud);
           vec3 mudC = mix(vec3(0.19, 0.15, 0.11), vec3(0.33, 0.27, 0.19), wt_noise(vWetWorld.xz * 2.1)) * mix(1.3, 0.8, uWet);
           diffuseColor.rgb = mix(diffuseColor.rgb, mudC, mudAll);
-          float stream = smoothstep(0.5, 0.62, flowAmt) * uWet;                                       // gutters running with water
-          float film = smoothstep(0.28, 0.46, flowAmt) * uWet * (1.0 - smoothstep(0.14, 0.34, lum));    // water trickling in the joints
-          float puddle = smoothstep(0.53, 0.6, wt_fbm(vWetWorld.xz * 0.22)) * uWet * (1.0 - stream);
+          float stream = wt_stream(flowAmt);                                           // gutters running with water
+          float film = smoothstep(0.28, 0.46, flowAmt) * uWet * joint;                  // water trickling in the joints
+          // puddles: water stands in the hollows, filling the joints first; the stone crowns break the surface
+          // at the shallow margins, and a dark ring of soaked stone surrounds each one
+          float pf = wt_puddleField(vWetWorld.xz);
+          float level = smoothstep(0.5, 0.6, pf) * 1.25;
+          float puddle = smoothstep(-0.05, 0.05, level - relief) * smoothstep(0.49, 0.515, pf) * uWet * (1.0 - stream);
+          float depth = clamp(level - relief, 0.0, 1.0) * puddle;
+          float rim = smoothstep(0.42, 0.5, pf) * (1.0 - puddle) * uWet * (1.0 - stream);
           diffuseColor.rgb *= mix(1.0, 0.62, uWet);
-          diffuseColor.rgb *= 1.0 - 0.35 * puddle;
-          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.5, 0.44, 0.36) + vec3(0.035, 0.026, 0.014), max(stream, film * 0.6)); // muddy water
+          diffuseColor.rgb *= 1.0 - 0.3 * rim;
+          // under clear water the stones stay visible, darker, and murkier with depth
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.5, 0.48, 0.45), max(puddle, stream));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.02, 0.019, 0.017), depth * 0.45);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.66, 0.58) + vec3(0.012, 0.009, 0.005), film * 0.6); // silt in the trickles
           // flecks of foam carried downstream
           { vec2 pp = vWetWorld.xz, pr = vec2(-fdir.y, fdir.x); float fs = dot(pp, fdir) * 4.0 - uRainTime * (1.2 + 2.5 * flowAmt) * 4.0, ft = dot(pp, pr) * 9.0;
             float foam = smoothstep(0.78, 0.9, wt_noise(vec2(fs, ft))) * stream;
             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.58, 0.5), foam * 0.5); }`)
         .replace('#include <metalnessmap_fragment>', `roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.42, uWet);
           roughnessFactor = mix(roughnessFactor, mix(0.95, 0.3, uWet), mud);        // mud: dull when dry, glossy when wet
-          roughnessFactor = mix(roughnessFactor, 0.04, puddle);
+          roughnessFactor *= 1.0 - 0.35 * rim;
           roughnessFactor = mix(roughnessFactor, 0.07, film * 0.8);
+          roughnessFactor = mix(roughnessFactor, 0.03, puddle);
           roughnessFactor = mix(roughnessFactor, 0.02, stream);
           #include <metalnessmap_fragment>`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -210,30 +285,16 @@ export function wet(m: THREE.Material, kind: WetKind, groundY = 0, hExpr?: strin
             vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
             normal = normalize(mix(normal, upV, puddle * 0.9));   // water fills the joints: flat mirror
             // ripples from falling drops, in puddles and faintly on the wet stones
-            vec2 q = vWetWorld.xz / 0.55;
-            vec2 grad = vec2(0.0);
-            for (int k = 0; k < 2; k++) {
-              vec2 cell = floor(q + float(k) * 0.5), f = q + float(k) * 0.5 - cell;
-              vec2 c0 = vec2(wt_hash(cell), wt_hash(cell + 17.0)) * 0.6 + 0.2;
-              float ph = fract(uRainTime * (0.9 + 0.4 * wt_hash(cell + 3.0)) + wt_hash(cell + 9.0));
-              vec2 d = f - c0; float r = length(d);
-              float ring = sin((r - ph * 0.45) * 55.0) * (1.0 - ph) * smoothstep(ph * 0.45 + 0.07, ph * 0.45, r) * smoothstep(ph * 0.45 - 0.12, ph * 0.45, r);
-              grad += normalize(d + 1e-4) * ring;
-            }
-            vec3 rip = (viewMatrix * vec4(grad.x, 0.0, grad.y, 0.0)).xyz;
-            normal = normalize(normal + rip * (0.06 + 0.25 * puddle) * uWet);
+            float detail = wt_detail(length(vWetWorld - cameraPosition));
+            vec2 grad = wt_ripples(vWetWorld.xz) * detail;
+            normal = normalize(normal + (viewMatrix * vec4(grad.x, 0.0, grad.y, 0.0)).xyz * wt_rippleStrength(puddle));
             // running water: a flat surface with ripples carried downstream
-            float runW = clamp(stream + film * 0.7, 0.0, 1.0);
-            if (runW > 0.01) {
-              vec2 p = vWetWorld.xz, perp = vec2(-fdir.y, fdir.x);
-              float s = dot(p, fdir), t = dot(p, perp), spd = 0.7 + 1.9 * flowAmt;
-              float ph1 = uRainTime * spd, ph2 = uRainTime * spd * 1.37 + 3.1, e = 0.04;
-              float h0 = wt_water(s, t, ph1, ph2), hs = wt_water(s + e, t, ph1, ph2), ht = wt_water(s, t + e, ph1, ph2);
-              vec2 gw = fdir * (hs - h0) / e + perp * (ht - h0) / e;
-              vec3 wn = normalize(vec3(-gw.x * 0.07, 1.0, -gw.y * 0.07));
-              normal = normalize(mix(normal, normalize((viewMatrix * vec4(wn, 0.0)).xyz), runW));
-            }
-          }`);
+            float runW = clamp(stream + film * 0.7, 0.0, 1.0) * detail;
+            if (runW > 0.01) normal = normalize(mix(normal, normalize((viewMatrix * vec4(wt_runNormal(vWetWorld.xz, fdir, flowAmt), 0.0)).xyz), runW));
+          }`)
+        // the reflection pass's mask: this pixel is wet street, this rough (see render/ssr.ts)
+        .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+          gl_FragColor.a = mix(gl_FragColor.a, clamp(roughnessFactor, 0.0, 0.7), uSsrMask);`);
     } else if (kind === 'roof') {
       frag = frag
         .replace('#include <color_fragment>', `#include <color_fragment>
