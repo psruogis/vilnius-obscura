@@ -7,7 +7,7 @@ import { mbox, merged, trianglesToGeometry } from './geom';
 import { treeGeometry } from './trees';
 import { bevelBox, sweep, lathe, steadyAge, type P2 } from './classical';
 import { buildLawn, type LawnPanel } from './lawn';
-import { WET, RAIN_TIME } from '../render/weather';
+import { WET, RAIN_TIME, SKY_MIRROR } from '../render/weather';
 import { age } from './ageing';
 import type { LampSpot } from './lamps';
 
@@ -372,7 +372,14 @@ function damp(m: THREE.MeshStandardMaterial, dark: number, kind: 'plain' | 'grav
           }
           vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
           normal = normalize(mix(normal, upV, dpPuddle) + (viewMatrix * vec4(g.x, 0.0, g.y, 0.0)).xyz * 0.25 * dpPuddle);
-        }`);
+        }`)
+      // wet gravel and its puddles mirror the sky as it is seen, as the street does (render/weather.ts)
+      .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
+        #if defined( RE_IndirectSpecular )
+          radiance *= mix(1.0, uDampMirror, uDampWet);
+        #endif`)
+      .replace('uniform float uDampTime;', 'uniform float uDampTime; uniform float uDampMirror;');
+    shader.uniforms.uDampMirror = SKY_MIRROR;
   };
   m.customProgramCacheKey = () => `${ownKey}|damp-${kind}${dark}`;
   m.needsUpdate = true;

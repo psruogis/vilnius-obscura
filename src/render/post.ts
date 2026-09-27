@@ -201,9 +201,28 @@ export class Post {
     if (s !== null && s !== this.scale) { this.scale = s; this.renderer.setPixelRatio(s); this.setSize(window.innerWidth, window.innerHeight); }
   }
 
+  // Blended surfaces (lamp glass, the film of water along the kerbs, falling water) keep the alpha beneath
+  // them, so the street's reflection mask packed there survives; checked now and then for late arrivals.
+  private keptAlpha = new WeakSet<THREE.Material>();
+  private alphaCheck = 0;
+  private keepAlpha(): void {
+    this.scene.traverse(o => {
+      const mats = (o as THREE.Mesh).material;
+      if (!mats) return;
+      for (const m of (Array.isArray(mats) ? mats : [mats]) as THREE.Material[]) {
+        if (!m.transparent || this.keptAlpha.has(m) || m.blending !== THREE.NormalBlending || m.premultipliedAlpha) continue;
+        this.keptAlpha.add(m);
+        m.blending = THREE.CustomBlending;
+        m.blendEquation = THREE.AddEquation; m.blendSrc = THREE.SrcAlphaFactor; m.blendDst = THREE.OneMinusSrcAlphaFactor;
+        m.blendEquationAlpha = THREE.AddEquation; m.blendSrcAlpha = THREE.ZeroFactor; m.blendDstAlpha = THREE.OneFactor;
+      }
+    });
+  }
+
   render(dt: number): void {
     // the street writes its reflection mask only while the pass will read it (alpha stays 1 otherwise)
     if (this.ssr) this.ssr.enabled = this.reflections && WET.value > 0;
+    if (this.ssr && --this.alphaCheck <= 0) { this.alphaCheck = 120; this.keepAlpha(); }
     SSR_MASK.value = this.enabled && this.ssr?.enabled ? 1 : 0;
     if (this.enabled) this.composer.render(dt);
     else this.renderer.render(this.scene, this.camera);
