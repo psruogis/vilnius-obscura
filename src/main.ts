@@ -25,6 +25,7 @@ import { WallGrid } from './world/collision';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
 import { Walker } from './player/walker';
+import { TouchControls } from './player/touch';
 import { createOverlay, createStats, showUnsupported, unsupportedReason } from './ui/overlay';
 
 // A late-September afternoon, in Vilnius local mean time (UT + 1h41m): 16:00 LMT.
@@ -54,7 +55,7 @@ async function main(force = false): Promise<void> {
   }
   const app = document.getElementById('app')!;
   let ambience: Ambience | null = null;
-  const overlay = createOverlay(() => { input.requestLock(); ambience?.start(); });
+  const overlay = createOverlay(() => { input.requestLock(); ambience?.start(); touch.setActive(true); });
   THREE.DefaultLoadingManager.onProgress = (_url, loaded, total) => overlay.setProgress(loaded / total);
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -226,6 +227,10 @@ async function main(force = false): Promise<void> {
 
   // Walker: start on the square, north of the Town Hall, facing it
   const input = new Input(renderer.domElement);
+  // Phones and tablets: the stick in the corner, look anywhere else, pinch to zoom, pause and mute buttons
+  const pauseWalk = () => { touch.setActive(false); overlay.setVisible(true); };
+  const touch = new TouchControls(renderer.domElement, input, { pause: pauseWalk, mute: () => ambience?.toggleMute() ?? false });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && touch.isActive) pauseWalk(); });
   const walker = new Walker(input, walls, { cx: thx, cz: thz, radius: data.meta.walkRadius }, (x, z) => terrain.heightAt(x, z));
   walker.place(thx + 4, thz - 42, Math.PI);
   scene.add(walker.object);
@@ -243,7 +248,7 @@ async function main(force = false): Promise<void> {
     stCasimirData.rings[0].reduce((a, p) => a + p[1], 0) / stCasimirData.rings[0].length) : null;
   ambience = new Ambience(camera, scene, { square: new THREE.Vector3(thx, terrain.heightAt(thx, thz - 30), thz - 30), bells: bellsAt }, RAIN);
   scene.add(camera);
-  window.addEventListener('keydown', e => { if (e.code === 'KeyM') ambience?.toggleMute(); });
+  window.addEventListener('keydown', e => { if (e.code === 'KeyM' && ambience) touch.setMuted(ambience.toggleMute()); });
 
   document.addEventListener('pointerlockchange', () => overlay.setVisible(!input.locked));
   // Ready once every texture queued above has arrived.

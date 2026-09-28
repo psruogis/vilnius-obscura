@@ -107,7 +107,7 @@ export class Walker {
     this.input.moveAxis(this.move);
     const len = Math.hypot(this.move.x, this.move.y);
     this.jogging = this.input.jog && len > 0;
-    const maxSpeed = len > 0 ? (this.jogging ? JOG_SPEED : WALK_SPEED) : 0;
+    const maxSpeed = len > 0 ? (this.jogging ? JOG_SPEED : WALK_SPEED) * Math.min(1, len) : 0; // a half-pushed stick strolls
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     // forward = (-sin, -cos) in XZ; right = (cos, -sin)
     const ix = len > 0 ? (this.move.x * cos - this.move.y * sin) / len : 0;
