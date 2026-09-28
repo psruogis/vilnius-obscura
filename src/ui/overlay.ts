@@ -24,8 +24,9 @@ export interface Overlay {
   ready(): void;
 }
 
-/** Title screen: loading bar, "Click to walk", credits. */
+/** Title screen: loading bar, "Click to walk" (or "Tap to walk"), credits. Also the pause screen. */
 export function createOverlay(onStart: () => void): Overlay {
+  const touch = window.matchMedia('(pointer: coarse)').matches;
   const el = document.createElement('div');
   el.className = 'overlay';
   el.innerHTML = `
@@ -33,8 +34,10 @@ export function createOverlay(onStart: () => void): Overlay {
       <h1>Vilnius Town Hall</h1>
       <p>Town Hall Square, around 1900</p>
       <div class="bar"><div class="fill"></div></div>
-      <div class="cta" data-start hidden>Click to walk</div>
-      <p class="hint">W A S D to walk · Shift to jog · mouse to look · M to mute · Esc to pause</p>
+      <div class="cta" data-start hidden>${touch ? 'Tap to walk' : 'Click to walk'}</div>
+      <p class="hint">${touch
+        ? 'The ring in the corner walks, pushed to its edge it jogs · drag anywhere else to look · pinch to zoom'
+        : 'W A S D to walk · Shift to jog · mouse to look · M to mute · Esc to pause'}</p>
       <p class="links"><a href="#" data-credits>Credits</a></p>
     </div>
     <div class="panel credits" hidden>${CREDITS_HTML}</div>`;
@@ -68,11 +71,8 @@ export function createOverlay(onStart: () => void): Overlay {
   };
 }
 
-/** Phones and old GPUs get a friendly card instead of a broken 3D scene. */
+/** Browsers without WebGL 2 get a friendly card instead of a broken 3D scene. (Phones walk by touch.ts.) */
 export function unsupportedReason(): string | null {
-  // Touch-only devices. (Screen size alone misfires on desktops showing the walk in a narrow pane.)
-  const coarse = window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(pointer: fine)').matches;
-  if (coarse) return 'phone';
   const gl = document.createElement('canvas').getContext('webgl2');
   if (!gl) return 'webgl';
   return null;
@@ -86,9 +86,9 @@ export function showUnsupported(reason: string, onTryAnyway: (() => void) | null
     <div class="panel">
       <h1>Vilnius Town Hall</h1>
       <p>Town Hall Square, around 1900</p>
-      <p style="margin-top:22px">${reason === 'phone'
-        ? 'This walk needs a keyboard and a mouse. Open it on a desktop or laptop.'
-        : 'This walk needs WebGL 2, which this browser or device does not support.'}</p>
+      <p style="margin-top:22px">${reason === 'webgl'
+        ? 'This walk needs WebGL 2, which this browser or device does not support.'
+        : 'This walk cannot run in this browser.'}</p>
       ${onTryAnyway ? '<button class="cta" type="button" data-try>Try anyway</button>' : ''}
     </div>`;
   el.querySelector('[data-try]')?.addEventListener('click', () => { el.remove(); onTryAnyway?.(); });

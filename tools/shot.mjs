@@ -9,7 +9,7 @@
 //                       [--js-view 'name:<js>']   (camera from page JS; `w` is window.__walk; the expression
 //                                                  returns {eye: [x, y, z], target: [x, y, z]} in world coordinates)
 //                       [--pre '<js>']            (page JS run once after loading, e.g. to pause something)
-//                       [--scale 1.5] [--size 1600x900] [--wait 14] [--bench]
+//                       [--scale 1.5] [--size 1600x900] [--wait 14] [--hold 3000] [--bench]
 //                       [--static]                (a production build: load, screenshot, report errors)
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -28,7 +28,11 @@ const QUERY = opt('query', '');
 const SCALE = Number(opt('scale', 1.5));
 const [W, H] = opt('size', '1600x900').split('x').map(Number);
 const WAIT = Number(opt('wait', 14));
-const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const HOLD = Number(opt('hold', 3000));   // ms each framing is held on screen before the shot
+const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.CHROME || (process.platform === 'darwin' ? MAC_CHROME : 'chromium');
+// ANGLE backend: Metal on macOS, software rasterisation elsewhere (Linux containers have no GPU).
+const ANGLE = process.env.ANGLE || (process.platform === 'darwin' ? 'metal' : 'swiftshader');
 
 // Named views. walk: third-person camera behind the walking figure (x, z, look-at x, z, pitch);
 // free: the figure hidden, camera at eye (x, z, height above the ground there) looking at target (x, z, height).
@@ -66,7 +70,7 @@ for (let i = 0; i < args.length; i++) if (args[i] === '--js-view') {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'walkshot-'));
 const chrome = spawn(CHROME, [
   '--headless=new', `--user-data-dir=${tmp}`, '--remote-debugging-port=0', `--window-size=${W},${H}`,
-  '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=metal', '--enable-webgl', '--mute-audio',
+  '--enable-gpu', '--ignore-gpu-blocklist', `--use-angle=${ANGLE}`, '--enable-webgl', '--mute-audio',
   '--no-first-run', '--no-default-browser-check', '--hide-scrollbars', 'about:blank',
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 let stderr = '';
@@ -108,7 +112,7 @@ const evaluate = async (expr, timeout = 120000) => {
 
 await send('Runtime.enable');
 await send('Page.enable');
-await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 2, mobile: false });
+await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: SCALE, mobile: false });
 const url = `http://localhost:${PORT}/?${QUERY}`;
 await send('Page.navigate', { url });
 
@@ -144,7 +148,7 @@ if (opt('pre')) console.log('pre:', JSON.stringify(await evaluate(`(async () => 
 fs.mkdirSync(OUT, { recursive: true });
 
 for (const v of views) {
-  const data = await evaluate(`(async () => {
+  await evaluate(`(async () => {
     const w = window.__walk, v = ${JSON.stringify(v)};
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const yawTo = (x, z, tx, tz) => Math.atan2(-(tx - x), -(tz - z));
@@ -178,13 +182,24 @@ for (const v of views) {
       w.camera.lookAt(tx, gy + th, tz);
       w.camera.updateMatrixWorld();
     }
+    // Hold this framing: the animation loop keeps drawing, but the walker no longer moves the camera,
+    // so every frame it presents is the shot. The page is photographed from the browser side below
+    // (reading the canvas back mid-frame gives a half-drawn picture under a software rasteriser).
+    w.__frozen = w.walker.update.bind(w.walker);
+    w.walker.update = () => {};
     w.post.render(0);
-    const url = w.renderer.domElement.toDataURL('image/jpeg', 0.88);
+  })()`);
+  // The first frames of a new framing are slow (shaders compile as they are needed) and a software
+  // rasteriser gets photographed mid-draw: hold it long enough for the frame to be drawn whole.
+  await sleep(HOLD);
+  const shot = await send('Page.captureScreenshot', { format: 'jpeg', quality: 88 });
+  await evaluate(`(() => {
+    const w = window.__walk;
+    if (w.__frozen) { w.walker.update = w.__frozen; w.__frozen = null; }
     w.walker.object.visible = true;
-    return url;
   })()`);
   const file = path.join(OUT, `${PREFIX}${v.name}.jpg`);
-  fs.writeFileSync(file, Buffer.from(data.slice(data.indexOf(',') + 1), 'base64'));
+  fs.writeFileSync(file, Buffer.from(shot.data, 'base64'));
   console.log(file);
 }
 
