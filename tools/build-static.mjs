@@ -41,9 +41,15 @@ function build(dir) {
 }
 build(path.join(ROOT, 'src'));
 
+// Vercel Web Analytics: Vercel serves the counting script itself, from an absolute path that exists
+// nowhere else, so it goes in only when Vercel is doing the build (it sets VERCEL). Every other copy of
+// dist/ stays as it was: relative URLs throughout, and nothing phoning home. Web Analytics also has to
+// be turned on for the project in the Vercel dashboard, or the script 404s there too.
+const ANALYTICS = process.env.VERCEL ? '\n    <script defer src="/_vercel/insights/script.js"></script>' : '';
+
 // Page
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
-  .replace('<head>', `<head>\n    <script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>`)
+  .replace('<head>', `<head>\n    <script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>${ANALYTICS}`)
   .replace('href="/src/style.css"', 'href="src/style.css"')
   .replace('src="/src/main.ts"', 'src="src/main.js"');
 fs.writeFileSync(path.join(DIST, 'index.html'), html);
