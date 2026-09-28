@@ -1,5 +1,10 @@
 # SHADOWS OF VILNIUS — the prompt ladder
 
+> **Superseded (2026-09-28).** This describes an earlier stealth-game concept. The project is now
+> **Vilnius Obscura**, a walk through Town Hall Square c. 1900, live at https://vilnius.gg. Start from
+> `CLAUDE.md` and `docs/ROADMAP.md`. This file is kept for history only.
+
+
 Thirteen levels. Each one is a single paste-ready prompt for a fresh Claude Code session. Each assumes the previous level shipped and is committed and tagged. The ladder exists because "build me an AAA-looking game" fails as one prompt, but "make the wetness system excellent, given this working renderer" succeeds.
 
 **Rule: never skip a level, and never start a level until the previous one's Definition of Done is actually met.** The compounding is the whole point — L3's rain looks expensive only because L0's wetness uniform and L2's porosity masks exist.

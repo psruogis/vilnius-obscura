@@ -1,5 +1,10 @@
 # SHADOWS OF VILNIUS — Master Handoff Document
 
+> **Superseded (2026-09-28).** This describes an earlier stealth-game concept. The project is now
+> **Vilnius Obscura**, a walk through Town Hall Square c. 1900, live at https://vilnius.gg. Start from
+> `CLAUDE.md` and `docs/ROADMAP.md`. This file is kept for history only.
+
+
 **An Assassin's Creed–inspired third-person stealth-parkour game, built in three.js for the browser, art-directed to read as console-quality, set in Vilnius Old Town.**
 
 Version 1.0 · created 2026-09-26 · single-file portable handoff

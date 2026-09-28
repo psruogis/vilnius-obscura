@@ -1,5 +1,8 @@
 # Fidelity pass: plan (approved by the owner 2026-09-26, "do all of them")
 
+> **Status: complete.** All seven streams are merged (`c601047`…`05c4625`). Shipping is now a push to
+> `main`, which Vercel deploys to https://vilnius.gg. The artifact step under "Ship" is historical.
+
 Owner's complaint: "still a bit boxy". Wanted: console-game / Unreal-like fidelity with the flair of the period paintings — everything old and unique. Stay on three.js.
 
 Baseline (commit 44e7314): `node tools/shot.mjs --bench` → ~44 ms/frame GPU-synced at 2400×1350, ~1560 draw calls, ~4.1 M triangles (headless Chrome on the M4 Pro; compare runs, not absolutes).

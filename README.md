@@ -1,8 +1,11 @@
-# Vilnius Town Hall Walk
+# Vilnius Obscura — Town Hall Walk
+
+Live at **https://vilnius.gg**.
 
 A browser walk-through of Vilnius Town Hall Square around 1900, in the rain, built from
 real map data: the Town Hall (finished 1799), the square's houses and shops, townsfolk, cabs.
-The brief is in `TOWN-HALL-WALK-BUILD-PROMPT.md`.
+The original brief is in `TOWN-HALL-WALK-BUILD-PROMPT.md`. The current plan is `docs/ROADMAP.md`,
+and `CLAUDE.md` holds the working context.
 
 ## Run it
 
@@ -41,7 +44,7 @@ then `npm run dev`.
 ## Milestones
 
 - [x] M1: walkable real footprints, sky with the real 1800 sun, shadows, placeholder walker, follow camera, collisions
-- [ ] M2: roofs, period façades, cobbles, heights, backdrop, lighting polish
-- [ ] M3: the Town Hall model, St Casimir's, market square props
-- [ ] M4: character and animations, sound, start screen, credits, deploy
+- [x] M2: roofs, period façades, cobbles, heights, backdrop, lighting polish
+- [x] M3: the Town Hall model, St Casimir's, market square props
+- [x] M4: character and animations, sound, start screen, credits, deploy
 - [ ] M5 (optional): info points, people, Lithuanian
