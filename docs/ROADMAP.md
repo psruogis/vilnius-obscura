@@ -10,7 +10,7 @@ reorder freely.
   title screen, credits. See `README.md` and the git log.
 - **The map:** a round plan in the corner that follows the walker (north up, with the view cone), and
   a full-screen view (Tab, or a tap on the corner map) with pan, zoom, street names and an "About this
-  map" note on what each layer is and from when. Three looks: light (default), dark, glow. `src/ui/map.ts`, `docs/map-sources.md`.
+  map" note on what each layer is and from when. Three looks: pastel (default), dark, glow. `src/ui/map.ts`, `docs/map-sources.md`.
 - **Fidelity pass:** seven parallel streams covering surfaces, house geometry, wet reflections,
   cabs, people, street props and landmarks, all merged (`docs/FIDELITY-PLAN.md`).
 - **Shipping:** GitHub → Vercel. Every push to `main` goes live at https://vilnius.gg.

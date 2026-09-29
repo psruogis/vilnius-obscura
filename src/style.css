@@ -79,20 +79,18 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 .minimap .n { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font: 600 11px/1 Georgia, serif; color: var(--map-n, rgba(244, 239, 230, 0.7)); text-shadow: 0 0 3px var(--map-ground, #1e1710), 0 0 3px var(--map-ground, #1e1710); pointer-events: none; }
 .minimap:focus-visible, .mapview button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
-/* Looks of the map. Dark is the base; light overrides what differs (glow differs only in the canvas, and in the ground
+/* Looks of the map. Dark is the base; pastel overrides what differs (glow differs only in the canvas, and in the ground
    colour that ui/map.ts sets as --map-ground and --sw-ground). --sw-* colour the legend swatches. */
 .minimap { --map-n: rgba(244, 239, 230, 0.7); }
-.minimap.look-light { --map-n: rgba(58, 40, 20, 0.85); }
 .mapview {
   --sw-today: #b3904f; --sw-plan: #96aaa0; --sw-hall: #7b2a1b; --sw-hall-line: #c9a45f; --sw-you: #d24a26; --sw-ring: #f0e2bd; --sw-edge: #c9a45f;
   --mv-panel: rgba(12, 10, 8, 0.86); --mv-panel-solid: rgba(12, 10, 8, 0.95); --mv-btn: rgba(20, 18, 16, 0.78); --mv-btn-hi: rgba(20, 18, 16, 0.92);
   --mv-edge: rgba(244, 239, 230, 0.12); --mv-line: rgba(244, 239, 230, 0.5); --mv-title: #d9bb7c; --mv-accent: #c9a45f; --mv-accent-ink: #1e1710;
 }
-.mapview.look-light {
-  --sw-today: #7a5420; --sw-plan: #3a6f68; --sw-hall: #b53a1e; --sw-hall-line: #6b4514; --sw-you: #c8371a; --sw-ring: #2b1a0e; --sw-edge: #7a5418;
-  --ink: #2c1a0c; --ink-dim: rgba(44, 26, 12, 0.74);
-  --mv-panel: rgba(240, 230, 202, 0.92); --mv-panel-solid: rgba(240, 230, 202, 0.97); --mv-btn: rgba(240, 230, 202, 0.9); --mv-btn-hi: rgba(250, 243, 222, 0.98);
-  --mv-edge: rgba(70, 46, 18, 0.28); --mv-line: rgba(70, 46, 18, 0.55); --mv-title: #6b4514; --mv-accent: #6b4514; --mv-accent-ink: #f5ecd2;
+.mapview.look-pastel {
+  --sw-today: #e2d0aa; --sw-plan: #bed4d2; --sw-hall: #b8867a; --sw-hall-line: #f0e2c6; --sw-you: #ee9a80; --sw-ring: #f8efdc; --sw-edge: #e2d0aa;
+  --mv-panel: rgba(46, 41, 38, 0.88); --mv-panel-solid: rgba(46, 41, 38, 0.95); --mv-btn: rgba(54, 49, 46, 0.82); --mv-btn-hi: rgba(66, 60, 56, 0.92);
+  --mv-title: #eadcb8; --mv-accent: #e2d0aa; --mv-accent-ink: #2e2926;
 }
 
 .mapview { position: fixed; inset: 0; z-index: 40; background: var(--map-ground); color: var(--ink); }

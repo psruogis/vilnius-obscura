@@ -5,7 +5,7 @@ import type { AreaData, XZ } from '../world/area';
  * (pan, zoom, street names, and a note on where every layer of it comes from).
  *
  * It is drawn from public/data/area.json, so it shows exactly what stands in the 3D world, in the
- * style of a vellum manuscript: ink, hatching, hand-wobbled outlines, in one of three looks (light, dark,
+ * style of a vellum manuscript: ink, hatching, hand-wobbled outlines, in one of three looks (pastel, dark,
  * glow). The legend and the note in ABOUT_HTML must be kept in step with docs/map-sources.md and with
  * tools/build-area.mjs.
  */
@@ -22,10 +22,10 @@ export interface MapUI {
 }
 
 // ---- the look --------------------------------------------------------------------------------
-/** The map comes in three looks: light vellum in dark ink (the default), dark vellum in gold ink, and the dark
- *  one lit from behind. A look is one table of colours; nothing below it names a colour. */
-export type Look = 'light' | 'dark' | 'glow';
-const LOOKS: Look[] = ['light', 'dark', 'glow'];
+/** The map comes in three looks: faded pastel ink on dusky vellum (the default), dark vellum in gold ink, and the
+ *  dark one lit from behind. A look is one table of colours; nothing below it names a colour. */
+export type Look = 'pastel' | 'dark' | 'glow';
+const LOOKS: Look[] = ['pastel', 'dark', 'glow'];
 interface Theme {
   glow: boolean;
   ground: string;
@@ -62,22 +62,22 @@ const THEMES: Record<Look, Theme> = {
   dark: DARK,
   // the same ink on warmer ground, with light given off by the ink and the landmarks
   glow: { ...DARK, glow: true, ground: '#2a1e13', seed: 4242, todayHat: 'rgba(179, 144, 79, 0.34)', planHat: 'rgba(150, 170, 160, 0.38)' },
-  // aged vellum, walnut ink, verdigris for the 1842 plan, vermilion for the landmarks
-  light: {
+  // faded: a dusky, lifted ground with chalky pastel ink, low in contrast, as if left in the sun
+  pastel: {
     glow: false,
-    ground: '#e6d9b7',
-    grain: 9, seed: 777,
-    fibre: '112, 80, 38', fibreBase: 0.035, fibreRange: 0.04,
-    square: 'rgba(255, 249, 230, 0.36)', foot: 'rgba(96, 66, 30, 0.4)',
-    todayFill: 'rgba(150, 104, 44, 0.16)', todayHat: 'rgba(120, 82, 32, 0.34)', todayLine: 'rgba(104, 70, 26, 0.82)', todayInk: '#8a6220',
-    planFill: 'rgba(58, 108, 100, 0.17)', planHat: 'rgba(46, 96, 90, 0.36)', planLine: 'rgba(40, 88, 82, 0.78)', planInk: '#3a6f68',
-    hall: '#b53a1e', hallLine: '#6b4514',
-    edge: 'rgba(122, 84, 24, 0.88)',
-    veil: '230, 217, 183',
-    vignette: '120, 84, 36', vignetteAlpha: 0.34,
-    you: '#c8371a', youRgb: '200, 55, 26', ring: '#2b1a0e',
-    text: '#2c1a0c', name: 'rgba(52, 36, 18, 0.9)', halo: 'rgba(233, 222, 190, 0.92)', note: '#7a5418',
-    compassDisc: 'rgba(236, 225, 196, 0.85)',
+    ground: '#3b3633',
+    grain: 8, seed: 909,
+    fibre: '255, 244, 224', fibreBase: 0.025, fibreRange: 0.03,
+    square: 'rgba(236, 224, 196, 0.07)', foot: 'rgba(236, 224, 196, 0.24)',
+    todayFill: 'rgba(226, 208, 170, 0.15)', todayHat: 'rgba(226, 208, 170, 0.2)', todayLine: 'rgba(226, 208, 170, 0.5)', todayInk: '#e2d0aa', // sand
+    planFill: 'rgba(146, 176, 176, 0.3)', planHat: 'rgba(190, 212, 210, 0.22)', planLine: 'rgba(190, 212, 210, 0.5)', planInk: '#bed4d2',       // powder blue-green
+    hall: '#b8867a', hallLine: '#f0e2c6',              // dusty rose, cream-edged
+    edge: 'rgba(226, 208, 170, 0.62)',
+    veil: '59, 54, 51',
+    vignette: '26, 22, 20', vignetteAlpha: 0.36,
+    you: '#ee9a80', youRgb: '238, 154, 128', ring: '#f8efdc',
+    text: '#f2e8d2', name: 'rgba(232, 221, 198, 0.74)', halo: 'rgba(52, 46, 43, 0.9)', note: '#e2d0aa',
+    compassDisc: 'rgba(42, 37, 34, 0.55)',
   },
 };
 const F_STREET = 'italic 400 15px Almendra, Georgia, serif';
@@ -600,8 +600,8 @@ const ICON = {
   here: '<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.2"/><path d="M10 2V5.5M10 14.5V18M2 10H5.5M14.5 10H18"/></svg>',
 };
 
-const LOOK_NAMES: Record<Look, string> = { light: 'Light', dark: 'Dark', glow: 'Glow' };
-/** The look last chosen (or asked for with ?map=light|dark|glow); light when nothing was. */
+const LOOK_NAMES: Record<Look, string> = { pastel: 'Pastel', dark: 'Dark', glow: 'Glow' };
+/** The look last chosen (or asked for with ?map=pastel|dark|glow); pastel when nothing was. */
 function savedLook(): Look {
   try {
     const q = new URLSearchParams(location.search).get('map');
@@ -609,7 +609,7 @@ function savedLook(): Look {
     const v = localStorage.getItem('vo.map.look');
     if (v && (LOOKS as string[]).includes(v)) return v as Look;
   } catch { /* storage or the address is not readable: use the default */ }
-  return 'light';
+  return 'pastel';
 }
 
 export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks): MapUI {
