@@ -19,14 +19,20 @@ export interface MapUI {
   update(): void;
 }
 
-const PAPER = '#e8dec8';
-const SQUARE = '#f2ead7';
-const INK = '#3b2e25';
-const TODAY = { fill: '#b8a184', line: '#7d6a54' };  // houses on today's plots
-const PLAN = { fill: '#a7b3bf', line: '#566a7e' };   // houses redrawn from the 1842 plan
-const HALL = { fill: '#4a3a2f', line: '#2b2119' };   // Town Hall and St Casimir's
-const STREET = 'rgba(96, 76, 56, 0.42)';
-const YOU = '#d9481c';
+// A dark plan in the game's own colours: the warm near-black of its screens (style.css --ink, the
+// body ground), cream ink, and the amber of its jog ring. The legend swatches read these too.
+const GROUND = '#1b1713';
+const SQUARE = '#2a231b';
+const INK = '#f4efe6';
+const TODAY = { fill: '#3e362c', line: '#6a5c4b' };                 // houses on today's plots
+const PLAN = { fill: '#2b343d', line: '#566a7b', hatch: '#7b8f98' }; // houses redrawn from the 1842 plan
+const HALL = { fill: '#b8945a', line: '#e6c893' };                  // Town Hall and St Casimir's
+const STREET = 'rgba(244, 239, 230, 0.2)';
+const STREET_NAME = 'rgba(244, 239, 230, 0.8)';
+const EDGE = 'rgba(233, 184, 114, 0.9)';
+const HALO = 'rgba(27, 23, 19, 0.92)';
+const VEIL = 'rgba(27, 23, 19, 0.6)';
+const YOU = '#ff6a3d';
 
 const MINI_SPAN = 170;       // metres across the corner map
 const S_MAX = 9;             // closest zoom of the full map, CSS px per metre
@@ -138,8 +144,8 @@ function hatchPattern(g: CanvasRenderingContext2D, dpr: number): CanvasPattern |
   const c = document.createElement('canvas');
   c.width = c.height = n;
   const h = c.getContext('2d')!;
-  h.strokeStyle = PLAN.line;
-  h.globalAlpha = 0.55;
+  h.strokeStyle = PLAN.hatch;
+  h.globalAlpha = 0.5;
   h.lineWidth = Math.max(1, dpr * 0.9);
   h.beginPath();
   h.moveTo(-1, n + 1); h.lineTo(n + 1, -1);
@@ -152,7 +158,7 @@ function hatchPattern(g: CanvasRenderingContext2D, dpr: number): CanvasPattern |
 function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number, v: View, pose: MapPose, L: Layers, hatch: CanvasPattern | null, full: boolean): void {
   const s = v.s;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.fillStyle = PAPER;
+  g.fillStyle = GROUND;
   g.fillRect(0, 0, W, H);
   g.setTransform(dpr * s, 0, 0, dpr * s, dpr * (W / 2 - v.cx * s), dpr * (H / 2 - v.cz * s));
   const x0 = v.cx - W / 2 / s, x1 = v.cx + W / 2 / s, z0 = v.cz - H / 2 / s, z1 = v.cz + H / 2 / s;
@@ -192,9 +198,9 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   for (const b of L.hall) if (seen(b)) { g.fill(b.path, 'evenodd'); g.stroke(b.path); }
 
   // Past the walk the town is only to be looked at: fade it, and mark the edge.
-  g.fillStyle = 'rgba(232, 222, 200, 0.55)';
+  g.fillStyle = VEIL;
   g.fill(L.veil, 'evenodd');
-  g.strokeStyle = 'rgba(140, 58, 38, 0.85)';
+  g.strokeStyle = EDGE;
   g.lineWidth = px * (full ? 1.6 : 1.3);
   g.setLineDash([6 * px, 5 * px]);
   g.stroke(L.edge);
@@ -216,7 +222,7 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
 function halo(g: CanvasRenderingContext2D, text: string, x: number, y: number): void {
   g.lineWidth = 3.5;
   g.lineJoin = 'round';
-  g.strokeStyle = 'rgba(232, 222, 200, 0.94)';
+  g.strokeStyle = HALO;
   g.strokeText(text, x, y);
   g.fillText(text, x, y);
 }
@@ -245,12 +251,14 @@ function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, 
   }
   if (s > 0.7) {
     g.font = 'italic 11px Georgia, serif';
+    g.fillStyle = '#e9b872';
     const x = sx(L.centre[0]), y = sy(L.centre[1] - L.radius) + 15;
     halo(g, 'edge of the walk', x, y);
     placed.push({ x, y, r: g.measureText('edge of the walk').width / 2 + 4, name: 'edge' });
   }
 
   // Streets, longest first, each only where its name fits along it.
+  g.fillStyle = STREET_NAME;
   for (const l of L.labels) {
     const x = sx(l.x), y = sy(l.z);
     if (x < -40 || y < -40 || x > W + 40 || y > H + 40) continue;
@@ -273,8 +281,8 @@ function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number,
   const a = Math.atan2(-Math.cos(yaw), -Math.sin(yaw));
   const R = full ? 34 : 30, half = 0.62;
   const grad = g.createRadialGradient(x, y, 4, x, y, R);
-  grad.addColorStop(0, 'rgba(217, 72, 28, 0.55)');
-  grad.addColorStop(1, 'rgba(217, 72, 28, 0)');
+  grad.addColorStop(0, 'rgba(255, 106, 61, 0.6)');
+  grad.addColorStop(1, 'rgba(255, 106, 61, 0)');
   g.fillStyle = grad;
   g.beginPath();
   g.moveTo(x, y);
@@ -286,7 +294,7 @@ function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number,
   g.fillStyle = YOU;
   g.fill();
   g.lineWidth = 2;
-  g.strokeStyle = '#fff';
+  g.strokeStyle = INK;
   g.stroke();
 }
 
@@ -365,6 +373,12 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
   const closeBtn = full.querySelector<HTMLButtonElement>('.mv-close')!;
   const hatchFull = hatchPattern(g, dpr), hatchMini = hatchPattern(miniG, dpr);
   document.body.append(mini, full);
+  // One palette: the constants above also colour the two containers and the legend swatches (style.css)
+  const palette: Record<string, string> = {
+    '--map-ground': GROUND, '--sw-today': TODAY.fill, '--sw-today-line': TODAY.line, '--sw-plan': PLAN.fill,
+    '--sw-plan-line': PLAN.line, '--sw-hatch': PLAN.hatch, '--sw-hall': HALL.fill, '--sw-hall-line': HALL.line, '--sw-edge': EDGE,
+  };
+  for (const el of [mini, full]) for (const [name, value] of Object.entries(palette)) el.style.setProperty(name, value);
 
   let walking = false, isOpen = false, dirty = true;
   let miniSize = 0, last = { x: NaN, z: NaN, yaw: NaN };
