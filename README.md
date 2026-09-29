@@ -19,8 +19,21 @@ Needs Node.js 22.18 or newer (for `stripTypeScriptTypes`) and nothing else; runs
 Windows and Linux. A static copy for any web server: `node tools/build-static.mjs` → `dist/`.
 
 Controls: W A S D to walk, Shift to jog, mouse (or click-drag) to look, mouse wheel to
-zoom the camera in and out, M to mute, backtick (`` ` ``) toggles the stats overlay.
+zoom the camera in and out, Tab opens the full-screen map (Tab or Esc closes it), M to mute,
+backtick (`` ` ``) toggles the stats overlay. On a phone, tap the round map in the corner. The full map has a
+Pastel / Dark / Glow switch (pastel is the default; or `?map=dark`, `?map=glow`).
 `?weather=clear` for the dry morning.
+
+Music: none, except klezmer that drifts in as you walk west towards the Jewish quarter (`docs/music.md`; the Music
+slider is in Options).
+
+When you settle onto a new street its name shows at the top for a few seconds and fades (the square's name at the
+start); names are today's, as on the map.
+
+The title and pause screens (Esc) have Walk / Continue, Options and Credits. Options (Picture, Sound, Keys; Touch on a
+phone) are kept in the browser: weather, brightness, saturation, map look, quality, wet-street reflections and the
+volumes. Accept keeps them, Cancel goes back, Default resets; a change of weather reloads the walk. `?quality=low` and
+`?weather=` in the address override what was kept.
 
 ### Why not `npm run dev`?
 
@@ -35,6 +48,7 @@ then `npm run dev`.
 
 - `shadows-of-vilnius-seed/`: pinned inputs (see its README): GRPK footprints,
   the heritage register extract, and an OpenStreetMap snapshot.
+- The in-game map draws `area.json`; where each layer of it comes from is in `docs/map-sources.md`.
 - `tools/build-area.mjs` turns them into `public/data/area.json` in a local frame:
   X = E − 583000, Z = −(N − 6061000), metres, Y up (EPSG:3346 / LKS94).
 - Heights: national LiDAR if `tools/lidar/heights.json` exists, else OSM

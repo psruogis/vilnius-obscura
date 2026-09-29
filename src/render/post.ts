@@ -115,6 +115,8 @@ export class Post {
   readonly ssr: SSRPass | null = null;
   reflections = true;
   enabled = true;
+  /** Highest pixel ratio the dynamic resolution may climb to (the quality setting). */
+  private maxScale = Math.min(window.devicePixelRatio, 2);
 
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.PerspectiveCamera, overlay?: THREE.Scene, wetStreets = false) {
     const w = window.innerWidth, h = window.innerHeight;
@@ -231,11 +233,23 @@ export class Post {
     if (this.acc < 1.5) return;
     const fps = this.frames / this.acc;
     this.acc = 0; this.frames = 0;
-    const max = Math.min(window.devicePixelRatio, 2);
+    const max = this.maxScale;
     const next = fps < 48 ? Math.max(0.75, this.scale - 0.25) : fps > 58 && this.scale < max ? Math.min(max, this.scale + 0.125) : this.scale;
     if (next !== this.scale) {
       this.scale = next;
       this.renderer.setPixelRatio(next);
+      this.setSize(window.innerWidth, window.innerHeight);
+    }
+  }
+
+  /** Low, medium or high: the top pixel ratio, and whether the bloom runs. (The AO pass stays: the reflections' mask rides on it.) */
+  setQuality(q: 'low' | 'medium' | 'high'): void {
+    const top = { low: 1, medium: 1.5, high: 2 }[q];
+    this.maxScale = Math.min(window.devicePixelRatio, top);
+    this.bloom.enabled = q !== 'low';
+    if (this.fixedScale === null && this.scale > this.maxScale) {
+      this.scale = this.maxScale;
+      this.renderer.setPixelRatio(this.scale);
       this.setSize(window.innerWidth, window.innerHeight);
     }
   }

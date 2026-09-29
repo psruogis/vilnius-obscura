@@ -1,0 +1,19 @@
+{
+  "zones": [
+    {
+      "id": "jewish-quarter-west",
+      "title": "Klezmer from the Jewish quarter, west of Vokiečių g. and north towards Stiklių g.",
+      "files": [
+        "klezmer-kandel-kiever-bulgar.mp3",
+        "klezmer-kandel-lustige-chsideem.mp3",
+        "klezmer-kandel-roumainische-bulgar.mp3",
+        "klezmer-kandel-choosin-kalle-mazeltov.mp3"
+      ],
+      "sites": [[-125, -6], [5, -140]],
+      "near": 25,
+      "far": 80,
+      "level": 0.5,
+      "height": 3
+    }
+  ]
+}

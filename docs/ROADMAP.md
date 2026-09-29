@@ -8,6 +8,15 @@ reorder freely.
 - **The walk (M1–M4):** real footprints and heights, period façades and roofs, cobbles, the Town Hall
   and St Casimir's (in its c. 1900 Orthodox form), townsfolk, cabs, the market, rain, sound, the
   title screen, credits. See `README.md` and the git log.
+- **Street title:** the name of the street you are walking on shows at the top for a few seconds, then fades
+  (`src/ui/place.ts`). Today's names from OpenStreetMap, like the map's: what each street was called around 1900 is
+  not researched (open question 4), so the title will need a second source when it is.
+- **The menu:** title and pause screens in the "iron and oxblood" style (`src/ui/overlay.ts`, `options.ts`,
+  `settings.ts`; the approved artboards are in the Design canvas "Main menu styles", set A), with Options and Credits, for
+  desktop, phone upright and phone on its side. The 1900s "gilt and green" set B was not chosen.
+- **The map:** a round plan in the corner that follows the walker (north up, with the view cone), and
+  a full-screen view (Tab, or a tap on the corner map) with pan, zoom, street names and an "About this
+  map" note on what each layer is and from when. Three looks: pastel (default), dark, glow. `src/ui/map.ts`, `docs/map-sources.md`.
 - **Fidelity pass:** seven parallel streams covering surfaces, house geometry, wet reflections,
   cabs, people, street props and landmarks, all merged (`docs/FIDELITY-PLAN.md`).
 - **Shipping:** GitHub → Vercel. Every push to `main` goes live at https://vilnius.gg.
@@ -32,6 +41,14 @@ reorder freely.
 7. **Info points and Lithuanian (README M5).**
 
 ## Small jobs
+
+- **Music:** klezmer (Harry Kandel's Orchestra, 1921) that drifts in near the west and north edges of the walk, where
+  the German Street meets the Jewish quarter, and nowhere else: there is no music everywhere. See `docs/music.md`. Free
+  in Europe, not only in the US. Open: more places with their own music (a German Street zone), a piece by Čiurlionis or
+  Moniuszko.
+- **Map:** the 1842 tracing cannot be re-run from the repo (its georeference and helper module live in
+  a scratch folder; see `docs/map-sources.md`, Known gaps). Trace the 1866 plan into a second layer, or
+  find a plan from about 1900, and let the map show which era each block comes from.
 
 - **Web Analytics.** There is currently no visitor counting. The owner enables it under the
   project's Analytics in Vercel, which gives a unique script path; then add the two-line HTML
