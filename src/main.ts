@@ -236,10 +236,12 @@ async function main(force = false): Promise<void> {
   walker.place(thx + 4, thz - 42, Math.PI);
   scene.add(walker.object);
   // The map: a round plan in the corner while walking; Tab (or a tap on it) opens it full-screen and holds the walk still
+  let hadLock = false; // embedded pages (claude.ai artifacts) never get the lock: nothing to give back, no pause screen
   const map = createMap(data, () => ({ x: walker.position.x, z: walker.position.z, yaw: walker.yaw }), {
-    onOpen: () => { touch.setActive(false); input.releaseLock(); },
+    onOpen: () => { hadLock = input.locked; touch.setActive(false); input.releaseLock(); },
     onClose: () => {
       touch.setActive(true);
+      if (!hadLock) return;
       // Esc is not a user gesture in some browsers, so the lock can be refused: then the pause screen takes over
       input.requestLock().then(ok => { if (!ok && !touch.isActive) overlay.setVisible(true); });
     },
