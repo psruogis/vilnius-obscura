@@ -72,8 +72,8 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 .minimap {
   position: fixed; right: calc(16px + env(safe-area-inset-right)); bottom: calc(24px + env(safe-area-inset-bottom));
   width: clamp(112px, 26vmin, 176px); aspect-ratio: 1; box-sizing: border-box; padding: 0; overflow: hidden;
-  border-radius: 50%; border: 2px solid rgba(244, 239, 230, 0.7); background: var(--map-ground, #100e0b); cursor: pointer;
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  border-radius: 50%; border: 1px solid #000; background: var(--map-ground, #100e0b); cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 .minimap canvas { display: block; width: 100%; height: 100%; }
 .minimap .n { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font: 600 11px/1 Georgia, serif; color: var(--ink); text-shadow: 0 0 3px #100e0b, 0 0 3px #100e0b; pointer-events: none; }
