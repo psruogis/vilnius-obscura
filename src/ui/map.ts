@@ -20,19 +20,19 @@ export interface MapUI {
 }
 
 // A dark plan in the game's own colours: a warm black a step below its screens (style.css body,
-// #1a1714), cream ink, and the amber of its jog ring. The legend swatches read these too.
+// #1a1714), cream ink, and a deepened amber (the game's jog ring, turned down). The legend swatches read these too.
 const GROUND = '#100e0b';
 const SQUARE = '#19150f';
 const INK = '#f4efe6';
 const TODAY = { fill: '#2a241d', line: '#4e4336' };                 // houses on today's plots
-const PLAN = { fill: '#1e262e', line: '#465a6b', hatch: '#63777f' }; // houses redrawn from the 1842 plan
-const HALL = { fill: '#a98650', line: '#d8ba84' };                  // Town Hall and St Casimir's
+const PLAN = { fill: '#1b2229', line: '#3e5060', hatch: '#536871' }; // houses redrawn from the 1842 plan
+const HALL = { fill: '#7b6039', line: '#aa8d61' };                  // Town Hall and St Casimir's
 const STREET = 'rgba(244, 239, 230, 0.15)';
 const STREET_NAME = 'rgba(244, 239, 230, 0.72)';
-const EDGE = 'rgba(233, 184, 114, 0.85)';
+const EDGE = 'rgba(190, 148, 90, 0.8)';
 const HALO = 'rgba(16, 14, 11, 0.92)';
 const VEIL = 'rgba(16, 14, 11, 0.66)';
-const YOU = '#ff6a3d';
+const YOU = '#e0562c';
 
 const MINI_SPAN = 170;       // metres across the corner map
 const S_MAX = 9;             // closest zoom of the full map, CSS px per metre
@@ -251,7 +251,7 @@ function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, 
   }
   if (s > 0.7) {
     g.font = 'italic 11px Georgia, serif';
-    g.fillStyle = '#e9b872';
+    g.fillStyle = '#b98f58';
     const x = sx(L.centre[0]), y = sy(L.centre[1] - L.radius) + 15;
     halo(g, 'edge of the walk', x, y);
     placed.push({ x, y, r: g.measureText('edge of the walk').width / 2 + 4, name: 'edge' });
@@ -281,8 +281,8 @@ function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number,
   const a = Math.atan2(-Math.cos(yaw), -Math.sin(yaw));
   const R = full ? 34 : 30, half = 0.62;
   const grad = g.createRadialGradient(x, y, 4, x, y, R);
-  grad.addColorStop(0, 'rgba(255, 106, 61, 0.6)');
-  grad.addColorStop(1, 'rgba(255, 106, 61, 0)');
+  grad.addColorStop(0, 'rgba(224, 86, 44, 0.55)');
+  grad.addColorStop(1, 'rgba(224, 86, 44, 0)');
   g.fillStyle = grad;
   g.beginPath();
   g.moveTo(x, y);
