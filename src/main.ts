@@ -265,7 +265,10 @@ async function main(force = false): Promise<void> {
   const bellsAt = stCasimirData ? new THREE.Vector3(
     stCasimirData.rings[0].reduce((a, p) => a + p[0], 0) / stCasimirData.rings[0].length, stCasimirData.eaveY,
     stCasimirData.rings[0].reduce((a, p) => a + p[1], 0) / stCasimirData.rings[0].length) : null;
-  ambience = new Ambience(camera, scene, { square: new THREE.Vector3(thx, terrain.heightAt(thx, thz - 30), thz - 30), bells: bellsAt }, RAIN);
+  ambience = new Ambience(camera, scene, {
+    square: new THREE.Vector3(thx, terrain.heightAt(thx, thz - 30), thz - 30), bells: bellsAt,
+    townHall: { x: thx, z: thz }, ground: (x, z) => terrain.heightAt(x, z),
+  }, RAIN);
   scene.add(camera);
   window.addEventListener('keydown', e => { if (e.code === 'KeyM' && ambience) touch.setMuted(ambience.toggleMute()); });
 

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { Music } from './music';
+import { Zones } from './zones';
+import { loadManifest } from './manifest';
 
 /**
  * Ambient sound for the square (all CC0 recordings from Freesound, see CREDITS.md):
@@ -21,11 +23,17 @@ type Key = keyof typeof FILES;
 /** The player's mix, each 0 to 1 (1 is the level the sounds were balanced at). */
 export interface Mix { master: number; street: number; bells: number; steps: number; music: number }
 
-export interface AmbienceSites { square: THREE.Vector3; bells: THREE.Vector3 | null }
+export interface AmbienceSites {
+  square: THREE.Vector3; bells: THREE.Vector3 | null;
+  /** The Town Hall, which the music zones are placed from, and the ground height there. */
+  townHall: { x: number; z: number }; ground: (x: number, z: number) => number;
+}
 
 export class Ambience {
   private readonly listener = new THREE.AudioListener();
-  private readonly music = new Music(this.listener);
+  private readonly manifest = loadManifest();
+  private readonly music = new Music(this.listener, this.manifest);
+  private readonly zones: Zones;
   private readonly buffers = new Map<Key, AudioBuffer>();
   private crowd?: THREE.Audio; private scene2?: THREE.Audio; private sparrows?: THREE.Audio; private steps?: THREE.Audio; private rainLoop?: THREE.Audio;
   private bells?: THREE.PositionalAudio; private horses?: THREE.PositionalAudio;
@@ -42,6 +50,7 @@ export class Ambience {
   constructor(camera: THREE.Camera, private readonly world: THREE.Scene, private readonly sites: AmbienceSites, private readonly raining = false) {
     camera.add(this.listener);
     world.add(this.bellAnchor, this.horseAnchor);
+    this.zones = new Zones(this.listener, world, sites.townHall, sites.ground, this.manifest);
     if (sites.bells) this.bellAnchor.position.copy(sites.bells).setY(sites.bells.y + 30);
     const loader = new THREE.AudioLoader(new THREE.LoadingManager()); // don't hold up the loading bar
     for (const [k, url] of Object.entries(FILES) as [Key, string][]) {
@@ -55,6 +64,7 @@ export class Ambience {
   start(): void {
     void this.listener.context.resume();
     this.music.start();
+    this.zones.start();
     if (this.started) return;
     this.started = true;
     for (const k of this.buffers.keys()) this.wire(k);
@@ -65,7 +75,7 @@ export class Ambience {
     return {
       context: this.listener.context.state, loaded: [...this.buffers.keys()],
       playing: { crowd: !!this.crowd?.isPlaying, scene: !!this.scene2?.isPlaying, sparrows: !!this.sparrows?.isPlaying },
-      music: this.music.status(), steps: this.stepOnsets.length, nextBells: Math.round(this.nextBells), nextHorses: Math.round(this.nextHorses),
+      music: this.music.status(), zones: this.zones.status(), steps: this.stepOnsets.length, nextBells: Math.round(this.nextBells), nextHorses: Math.round(this.nextHorses),
     };
   }
 
@@ -101,6 +111,7 @@ export class Ambience {
     this.mix = m;
     this.listener.setMasterVolume(this.muted ? 0 : m.master);
     this.music.setLevel(m.music);
+    this.zones.setLevel(m.music);
   }
 
   private loop(k: Key, volume: number, rate = 1): THREE.Audio {
@@ -138,7 +149,9 @@ export class Ambience {
 
   update(dt: number, walker: THREE.Vector3, speed: number): void {
     if (!this.started) return;
-    this.music.update(dt, !!this.bells?.isPlaying);
+    // the piece under the walk gives way to the bells, and to a place's own music as it is neared
+    const zone = this.zones.update(dt, walker.x, walker.z);
+    this.music.update(dt, Math.min(this.bells?.isPlaying ? 0.45 : 1, 1 - 0.8 * zone));
     // Market bed: full on the square, fading into the side streets
     const d = Math.hypot(walker.x - this.sites.square.x, walker.z - this.sites.square.z);
     const k = THREE.MathUtils.clamp((d - 35) / 70, 0, 1);

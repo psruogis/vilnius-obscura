@@ -39,11 +39,9 @@ reorder freely.
 
 ## Small jobs
 
-- **Music:** the player is built (`src/audio/music.ts`, list in `public/assets/music/tracks.json`, currently empty) but no
-  pieces are in it. The plan: public-domain composers of the setting (Moniuszko, Čiurlionis, Chopin) in CC0 or
-  public-domain recordings, each checked for licence and listed in `CREDITS.md`. Blocked on fetching recordings:
-  this environment's network policy denies commons.wikimedia.org, archive.org and musopen.org. Not Gothic 2's
-  soundtrack: it is under copyright.
+- **Music:** done in a first form, see `docs/music.md`: three Chopin pieces under the walk, and klezmer (Harry Kandel's
+  Orchestra, 1921) that drifts in near the west edge, where the German Street meets the Jewish quarter. Everything
+  is free in Europe, not only in the US. Open: a piece by Čiurlionis or Moniuszko; a zone for the German Street.
 - **Map:** the 1842 tracing cannot be re-run from the repo (its georeference and helper module live in
   a scratch folder; see `docs/map-sources.md`, Known gaps). Trace the 1866 plan into a second layer, or
   find a plan from about 1900, and let the map show which era each block comes from.

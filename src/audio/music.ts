@@ -1,22 +1,21 @@
 import * as THREE from 'three';
+import { MUSIC_BASE, type Manifest, type Piece } from './manifest';
 
 /**
- * Quiet music under the walk: the pieces listed in public/assets/music/tracks.json, one at a time in a
+ * Quiet music under the walk: the pieces listed in public/assets/music/tracks.json (see manifest.ts), one at a time in a
  * shuffled order, with a long silence between them. The first swells in slowly after the walk begins; each
  * one fades out at its end, and all of it sinks under St Casimir's bells. It shares Ambience's audio graph,
  * so the master mute (M) silences it too. A piece streams from an <audio> element, so a long recording is not
  * decoded into memory. With an empty list nothing plays and nothing is requested.
  *
- * Every file must be public domain or CC0, recording as well as composition, and be listed in CREDITS.md.
+ * Every file must be free to use in Europe too (see manifest.ts) and be listed in CREDITS.md.
  */
-export interface Track { file: string; title?: string; by?: string }
+export type Track = Piece;
 
-const BASE = 'assets/music/';
 const LEVEL = 0.22;                      // gain at full, against the market bed's 0.1 to 0.38
 const FADE = 8;                          // s in and out of each piece
 const FADE_FIRST = 20;                   // s: the first piece rises more slowly
 const GAP: [number, number] = [40, 90];  // s of silence between pieces
-const DUCK = 0.45;                       // level while the bells ring
 // A silent, empty WAV. Playing it inside the tap that starts the walk unlocks the <audio> element on phones,
 // so later pieces may start without a tap.
 const SILENCE = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
@@ -34,7 +33,7 @@ export class Music {
   private current: Track | null = null;
   private level = 1;                    // the player's Music slider, 0 to 1
 
-  constructor(listener: THREE.AudioListener) {
+  constructor(listener: THREE.AudioListener, manifest: Promise<Manifest>) {
     this.el.preload = 'auto';
     this.out = new THREE.Audio(listener);
     this.out.setMediaElementSource(this.el);
@@ -42,10 +41,10 @@ export class Music {
     const done = () => { if (this.state === 'playing') this.rest(); };
     this.el.addEventListener('ended', done);
     this.el.addEventListener('error', () => { if (this.state === 'playing') console.warn('audio', this.el.src); done(); });
-    fetch(BASE + 'tracks.json').then(r => (r.ok ? r.json() : [])).then((list: unknown) => {
-      this.tracks = Array.isArray(list) ? list.filter((t): t is Track => !!t && typeof (t as Track).file === 'string') : [];
+    void manifest.then(m => {
+      this.tracks = m.pieces;
       if (this.started && this.tracks.length) this.next();
-    }).catch(() => { /* no list, no music */ });
+    });
   }
 
   /** Call from a user gesture, as Ambience.start does. */
@@ -63,9 +62,10 @@ export class Music {
 
   setLevel(v: number): void { this.level = v; }
 
-  update(dt: number, bells: boolean): void {
+  /** `quiet` is what the piece should give way to, 1 (nothing) down to 0: the bells, a zone's music. */
+  update(dt: number, quiet: number): void {
     if (!this.started || this.state === 'idle') return;
-    this.duck += ((bells ? DUCK : 1) - this.duck) * Math.min(1, dt / 1.5);
+    this.duck += (quiet - this.duck) * Math.min(1, dt / 1.5);
     if (this.state === 'gap') {
       this.out.setVolume(0);
       if ((this.gap -= dt) <= 0) this.next();
@@ -91,7 +91,7 @@ export class Music {
     }
     this.current = this.queue.pop()!;
     this.state = 'playing';
-    this.el.src = BASE + this.current.file;
+    this.el.src = MUSIC_BASE + this.current.file;
     this.el.play().catch(() => { this.rest(); this.gap = 10; }); // blocked or unreadable: try again shortly
   }
 }

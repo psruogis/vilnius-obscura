@@ -1,1 +1,22 @@
-[]
+{
+  "pieces": [
+    { "file": "chopin-nocturne-eflat-op9-no2.mp3", "title": "Nocturne in E-flat major, Op. 9 No. 2", "by": "Chopin, played by Frank Levy (Musopen)" },
+    { "file": "chopin-nocturne-e-minor-op72-no1.mp3", "title": "Nocturne in E minor, Op. posth. 72 No. 1", "by": "Chopin, played by Luke Faulkner (Musopen)" },
+    { "file": "chopin-waltz-aflat-op69-no1.mp3", "title": "Waltz in A-flat major, Op. 69 No. 1", "by": "Chopin, played by Luke Faulkner (Musopen)" }
+  ],
+  "zones": [
+    {
+      "id": "jewish-quarter-west",
+      "title": "Klezmer from the Jewish quarter, west of Vokiečių g.",
+      "files": [
+        "klezmer-kandel-kiever-bulgar.mp3",
+        "klezmer-kandel-lustige-chsideem.mp3",
+        "klezmer-kandel-roumainische-bulgar.mp3",
+        "klezmer-kandel-choosin-kalle-mazeltov.mp3"
+      ],
+      "sites": [[-125, -6], [5, -135]],
+      "near": 25,
+      "far": 95
+    }
+  ]
+}
