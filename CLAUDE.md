@@ -17,7 +17,7 @@ looks bad. Their design hours are the scarce resource.
 
 ```bash
 node tools/dev-server.mjs      # http://localhost:5173 ; ?weather=clear for the dry morning
-node tools/build-static.mjs    # dist/ (about 33.5 MB)
+node tools/build-static.mjs    # dist/ (about 51 MB, 17 of it music)
 ```
 
 - **No npm.** three.js, suncalc and meshoptimizer are vendored in `public/vendor/`. Node ≥ 22.18
