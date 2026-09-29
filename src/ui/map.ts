@@ -19,19 +19,19 @@ export interface MapUI {
   update(): void;
 }
 
-// A dark plan in the game's own colours: the warm near-black of its screens (style.css --ink, the
-// body ground), cream ink, and the amber of its jog ring. The legend swatches read these too.
-const GROUND = '#1b1713';
-const SQUARE = '#2a231b';
+// A dark plan in the game's own colours: a warm black a step below its screens (style.css body,
+// #1a1714), cream ink, and the amber of its jog ring. The legend swatches read these too.
+const GROUND = '#100e0b';
+const SQUARE = '#19150f';
 const INK = '#f4efe6';
-const TODAY = { fill: '#3e362c', line: '#6a5c4b' };                 // houses on today's plots
-const PLAN = { fill: '#2b343d', line: '#566a7b', hatch: '#7b8f98' }; // houses redrawn from the 1842 plan
-const HALL = { fill: '#b8945a', line: '#e6c893' };                  // Town Hall and St Casimir's
-const STREET = 'rgba(244, 239, 230, 0.2)';
-const STREET_NAME = 'rgba(244, 239, 230, 0.8)';
-const EDGE = 'rgba(233, 184, 114, 0.9)';
-const HALO = 'rgba(27, 23, 19, 0.92)';
-const VEIL = 'rgba(27, 23, 19, 0.6)';
+const TODAY = { fill: '#2a241d', line: '#4e4336' };                 // houses on today's plots
+const PLAN = { fill: '#1e262e', line: '#465a6b', hatch: '#63777f' }; // houses redrawn from the 1842 plan
+const HALL = { fill: '#a98650', line: '#d8ba84' };                  // Town Hall and St Casimir's
+const STREET = 'rgba(244, 239, 230, 0.15)';
+const STREET_NAME = 'rgba(244, 239, 230, 0.72)';
+const EDGE = 'rgba(233, 184, 114, 0.85)';
+const HALO = 'rgba(16, 14, 11, 0.92)';
+const VEIL = 'rgba(16, 14, 11, 0.66)';
 const YOU = '#ff6a3d';
 
 const MINI_SPAN = 170;       // metres across the corner map
