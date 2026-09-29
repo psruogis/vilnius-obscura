@@ -8,6 +8,9 @@ reorder freely.
 - **The walk (M1–M4):** real footprints and heights, period façades and roofs, cobbles, the Town Hall
   and St Casimir's (in its c. 1900 Orthodox form), townsfolk, cabs, the market, rain, sound, the
   title screen, credits. See `README.md` and the git log.
+- **The map:** a round plan in the corner that follows the walker (north up, with the view cone), and
+  a full-screen view (Tab, or a tap on the corner map) with pan, zoom, street names and an "About this
+  map" note on what each layer is and from when. `src/ui/map.ts`, `docs/map-sources.md`.
 - **Fidelity pass:** seven parallel streams covering surfaces, house geometry, wet reflections,
   cabs, people, street props and landmarks, all merged (`docs/FIDELITY-PLAN.md`).
 - **Shipping:** GitHub → Vercel. Every push to `main` goes live at https://vilnius.gg.
@@ -32,6 +35,10 @@ reorder freely.
 7. **Info points and Lithuanian (README M5).**
 
 ## Small jobs
+
+- **Map:** the 1842 tracing cannot be re-run from the repo (its georeference and helper module live in
+  a scratch folder; see `docs/map-sources.md`, Known gaps). Trace the 1866 plan into a second layer, or
+  find a plan from about 1900, and let the map show which era each block comes from.
 
 - **Web Analytics.** There is currently no visitor counting. The owner enables it under the
   project's Analytics in Vercel, which gives a unique script path; then add the two-line HTML

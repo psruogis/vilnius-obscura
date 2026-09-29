@@ -30,9 +30,13 @@ export class Input {
     return document.pointerLockElement === this.el;
   }
 
-  requestLock(): void {
-    // Not allowed in some embedded browsers; click-drag looking still works.
-    Promise.resolve(this.el.requestPointerLock?.()).catch(() => {});
+  /** Resolves false when the browser refuses (no user gesture, or not allowed here); click-drag looking still works. */
+  requestLock(): Promise<boolean> {
+    return Promise.resolve(this.el.requestPointerLock?.()).then(() => true, () => false);
+  }
+
+  releaseLock(): void {
+    document.exitPointerLock?.();
   }
 
   /**

@@ -19,7 +19,8 @@ Needs Node.js 22.18 or newer (for `stripTypeScriptTypes`) and nothing else; runs
 Windows and Linux. A static copy for any web server: `node tools/build-static.mjs` → `dist/`.
 
 Controls: W A S D to walk, Shift to jog, mouse (or click-drag) to look, mouse wheel to
-zoom the camera in and out, M to mute, backtick (`` ` ``) toggles the stats overlay.
+zoom the camera in and out, Tab opens the full-screen map (Tab or Esc closes it), M to mute,
+backtick (`` ` ``) toggles the stats overlay. On a phone, tap the round map in the corner.
 `?weather=clear` for the dry morning.
 
 ### Why not `npm run dev`?
@@ -35,6 +36,7 @@ then `npm run dev`.
 
 - `shadows-of-vilnius-seed/`: pinned inputs (see its README): GRPK footprints,
   the heritage register extract, and an OpenStreetMap snapshot.
+- The in-game map draws `area.json`; where each layer of it comes from is in `docs/map-sources.md`.
 - `tools/build-area.mjs` turns them into `public/data/area.json` in a local frame:
   X = E − 583000, Z = −(N − 6061000), metres, Y up (EPSG:3346 / LKS94).
 - Heights: national LiDAR if `tools/lidar/heights.json` exists, else OSM

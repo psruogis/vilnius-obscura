@@ -20,6 +20,8 @@ const CREDITS_HTML = `
 
 export interface Overlay {
   setVisible(v: boolean): void;
+  /** Called whenever the title or pause screen appears (true) or goes (false). */
+  onVisibility(fn: (visible: boolean) => void): void;
   setProgress(p: number): void;
   ready(): void;
 }
@@ -36,8 +38,8 @@ export function createOverlay(onStart: () => void): Overlay {
       <div class="bar"><div class="fill"></div></div>
       <div class="cta" data-start hidden>${touch ? 'Tap to walk' : 'Click to walk'}</div>
       <p class="hint">${touch
-        ? 'The ring in the corner walks, pushed to its edge it jogs · drag anywhere else to look · pinch to zoom'
-        : 'W A S D to walk · Shift to jog · mouse to look · M to mute · Esc to pause'}</p>
+        ? 'The ring in the corner walks, pushed to its edge it jogs · drag anywhere else to look · pinch to zoom · tap the map to open it'
+        : 'W A S D to walk · Shift to jog · mouse to look · Tab for the map · M to mute · Esc to pause'}</p>
       <p class="links"><a href="#" data-credits>Credits</a></p>
     </div>
     <div class="panel credits" hidden>${CREDITS_HTML}</div>`;
@@ -47,6 +49,12 @@ export function createOverlay(onStart: () => void): Overlay {
   const bar = el.querySelector<HTMLElement>('.bar')!;
   const start = el.querySelector<HTMLElement>('[data-start]')!;
   let isReady = false;
+  const listeners: ((visible: boolean) => void)[] = [];
+  const setVisible = (v: boolean) => {
+    const was = !el.classList.contains('hidden');
+    el.classList.toggle('hidden', !v);
+    if (v !== was) for (const fn of listeners) fn(v);
+  };
 
   el.addEventListener('click', e => {
     const t = e.target as HTMLElement;
@@ -61,11 +69,12 @@ export function createOverlay(onStart: () => void): Overlay {
     }
     if (!isReady || !credits.hidden) return;
     onStart();
-    el.classList.add('hidden');
+    setVisible(false);
   });
   document.body.appendChild(el);
   return {
-    setVisible: v => el.classList.toggle('hidden', !v),
+    setVisible,
+    onVisibility: fn => { listeners.push(fn); },
     setProgress: p => { fill.style.width = `${Math.round(Math.min(1, Math.max(0, p)) * 100)}%`; },
     ready: () => { isReady = true; bar.hidden = true; start.hidden = false; },
   };

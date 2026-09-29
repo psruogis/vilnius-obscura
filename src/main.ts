@@ -27,6 +27,7 @@ import { Input } from './player/input';
 import { Walker } from './player/walker';
 import { TouchControls } from './player/touch';
 import { createOverlay, createStats, showUnsupported, unsupportedReason } from './ui/overlay';
+import { createMap } from './ui/map';
 
 // A late-September afternoon, in Vilnius local mean time (UT + 1h41m): 16:00 LMT.
 // Light presets. 'golden' (default) follows Zaleski's view: warm, low sun raking across the portico.
@@ -234,6 +235,16 @@ async function main(force = false): Promise<void> {
   const walker = new Walker(input, walls, { cx: thx, cz: thz, radius: data.meta.walkRadius }, (x, z) => terrain.heightAt(x, z));
   walker.place(thx + 4, thz - 42, Math.PI);
   scene.add(walker.object);
+  // The map: a round plan in the corner while walking; Tab (or a tap on it) opens it full-screen and holds the walk still
+  const map = createMap(data, () => ({ x: walker.position.x, z: walker.position.z, yaw: walker.yaw }), {
+    onOpen: () => { touch.setActive(false); input.releaseLock(); },
+    onClose: () => {
+      touch.setActive(true);
+      // Esc is not a user gesture in some browsers, so the lock can be refused: then the pause screen takes over
+      input.requestLock().then(ok => { if (!ok && !touch.isActive) overlay.setVisible(true); });
+    },
+  });
+  overlay.onVisibility(visible => map.setWalking(!visible));
   // The character model streams in; the placeholder capsule stands in until then.
   let character: Character | null = null;
   const spec = new URLSearchParams(location.search).get('char') === 'townsman' ? TOWNSMAN : TRAVELLER;
@@ -250,7 +261,7 @@ async function main(force = false): Promise<void> {
   scene.add(camera);
   window.addEventListener('keydown', e => { if (e.code === 'KeyM' && ambience) touch.setMuted(ambience.toggleMute()); });
 
-  document.addEventListener('pointerlockchange', () => overlay.setVisible(!input.locked));
+  document.addEventListener('pointerlockchange', () => { if (!map.isOpen) overlay.setVisible(!input.locked); });
   // Ready once every texture queued above has arrived.
   THREE.DefaultLoadingManager.onLoad = () => overlay.ready();
   const stats = createStats(renderer);
@@ -273,6 +284,7 @@ async function main(force = false): Promise<void> {
   renderer.setAnimationLoop((time: number) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
+    if (map.isOpen) { map.update(); return; } // the world holds still under the full map
     walker.update(dt, camera);
     RAIN_TIME.value += dt;
     rain?.update(dt, camera.position);
@@ -285,13 +297,14 @@ async function main(force = false): Promise<void> {
     lamps.update(dt, camera.position);
     shadows.update();
     post.render(dt);
+    map.update();
     stats.update(dt);
   });
 
   if (import.meta.env.DEV) {
     // Test hooks for screenshots and debugging.
     (window as unknown as Record<string, unknown>).__walk = {
-      data, walker, camera, renderer, scene,
+      data, walker, camera, renderer, scene, map,
       get character() { return character; },
       get ambience() { return ambience; },
       get crowd() { return crowd; }, get traffic() { return traffic; },
