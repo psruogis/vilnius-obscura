@@ -19,20 +19,38 @@ export interface MapUI {
   update(): void;
 }
 
-// A dark plan in the game's own colours: a warm black a step below its screens (style.css body,
-// #1a1714), cream ink, and a deepened amber (the game's jog ring, turned down). The legend swatches read these too.
-const GROUND = '#100e0b';
-const SQUARE = '#19150f';
+interface Colours {
+  ground: string; square: string;
+  today: { fill: string; line: string };                    // houses on today's plots
+  plan: { fill: string; line: string; hatch: string };      // houses redrawn from the 1842 plan
+  hall: { fill: string; line: string };                     // Town Hall and St Casimir's
+  street: string; edge: string; veil: string;
+  you: string; cone: string; ring: string;                  // the walker: dot, view cone (r, g, b), ring round the dot
+}
+// The full map: a dark plan in the game's own colours, a warm black a step below its screens (style.css
+// body, #1a1714), cream ink, and a deepened amber (the game's jog ring, turned down). The legend swatches read these.
+const FULL: Colours = {
+  ground: '#100e0b', square: '#19150f',
+  today: { fill: '#2a241d', line: '#4e4336' },
+  plan: { fill: '#1b2229', line: '#3e5060', hatch: '#536871' },
+  hall: { fill: '#7b6039', line: '#aa8d61' },
+  street: 'rgba(244, 239, 230, 0.15)', edge: 'rgba(190, 148, 90, 0.8)', veil: 'rgba(16, 14, 11, 0.66)',
+  you: '#e0562c', cone: '224, 86, 44', ring: '#f4efe6',
+};
+// The corner map sits on top of the game's picture, so it is the same plan with every accent pulled back:
+// dimmer landmarks, a duller blue, fainter edge and streets, a softer marker.
+const MINI: Colours = {
+  ground: '#15120f', square: '#1b1712',
+  today: { fill: '#282219', line: '#382f25' },
+  plan: { fill: '#1f2326', line: '#30393f', hatch: '#39444b' },
+  hall: { fill: '#54432d', line: '#6a583d' },
+  street: 'rgba(244, 239, 230, 0.1)', edge: 'rgba(150, 122, 84, 0.5)', veil: 'rgba(21, 18, 15, 0.55)',
+  you: '#bf5f3c', cone: '191, 95, 60', ring: 'rgba(244, 239, 230, 0.7)',
+};
+// Labels exist on the full map only
 const INK = '#f4efe6';
-const TODAY = { fill: '#2a241d', line: '#4e4336' };                 // houses on today's plots
-const PLAN = { fill: '#1b2229', line: '#3e5060', hatch: '#536871' }; // houses redrawn from the 1842 plan
-const HALL = { fill: '#7b6039', line: '#aa8d61' };                  // Town Hall and St Casimir's
-const STREET = 'rgba(244, 239, 230, 0.15)';
 const STREET_NAME = 'rgba(244, 239, 230, 0.72)';
-const EDGE = 'rgba(190, 148, 90, 0.8)';
 const HALO = 'rgba(16, 14, 11, 0.92)';
-const VEIL = 'rgba(16, 14, 11, 0.66)';
-const YOU = '#e0562c';
 
 const MINI_SPAN = 170;       // metres across the corner map
 const S_MAX = 9;             // closest zoom of the full map, CSS px per metre
@@ -139,12 +157,12 @@ function prepare(data: AreaData): Layers {
 }
 
 /** A fine diagonal hatch that stays one device pixel thick however far the map is zoomed. */
-function hatchPattern(g: CanvasRenderingContext2D, dpr: number): CanvasPattern | null {
+function hatchPattern(g: CanvasRenderingContext2D, dpr: number, colour: string): CanvasPattern | null {
   const n = Math.max(4, Math.round(5 * dpr));
   const c = document.createElement('canvas');
   c.width = c.height = n;
   const h = c.getContext('2d')!;
-  h.strokeStyle = PLAN.hatch;
+  h.strokeStyle = colour;
   h.globalAlpha = 0.5;
   h.lineWidth = Math.max(1, dpr * 0.9);
   h.beginPath();
@@ -155,22 +173,22 @@ function hatchPattern(g: CanvasRenderingContext2D, dpr: number): CanvasPattern |
   return g.createPattern(c, 'repeat');
 }
 
-function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number, v: View, pose: MapPose, L: Layers, hatch: CanvasPattern | null, full: boolean): void {
+function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number, v: View, pose: MapPose, L: Layers, c: Colours, hatch: CanvasPattern | null, full: boolean): void {
   const s = v.s;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.fillStyle = GROUND;
+  g.fillStyle = c.ground;
   g.fillRect(0, 0, W, H);
   g.setTransform(dpr * s, 0, 0, dpr * s, dpr * (W / 2 - v.cx * s), dpr * (H / 2 - v.cz * s));
   const x0 = v.cx - W / 2 / s, x1 = v.cx + W / 2 / s, z0 = v.cz - H / 2 / s, z1 = v.cz + H / 2 / s;
   const seen = (b: Box) => b.x1 >= x0 && b.x0 <= x1 && b.z1 >= z0 && b.z0 <= z1;
   const px = 1 / s; // one CSS pixel, in metres
 
-  g.fillStyle = SQUARE;
+  g.fillStyle = c.square;
   for (const a of L.areas) if (seen(a)) g.fill(a.path);
 
   g.lineCap = 'round';
   g.lineJoin = 'round';
-  g.strokeStyle = STREET;
+  g.strokeStyle = c.street;
   for (const cls of ['foot', 'lane', 'street', 'main'] as const) {
     g.lineWidth = px * (cls === 'main' ? 1.6 : cls === 'street' ? 1.2 : 0.9);
     g.setLineDash(cls === 'foot' ? [3 * px, 3 * px] : []);
@@ -179,12 +197,12 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   g.setLineDash([]);
 
   g.lineWidth = px;
-  g.strokeStyle = TODAY.line;
-  g.fillStyle = TODAY.fill;
+  g.strokeStyle = c.today.line;
+  g.fillStyle = c.today.fill;
   for (const b of L.today) if (seen(b)) { g.fill(b.path, 'evenodd'); g.stroke(b.path); }
 
-  g.fillStyle = PLAN.fill;
-  g.strokeStyle = PLAN.line;
+  g.fillStyle = c.plan.fill;
+  g.strokeStyle = c.plan.line;
   for (const b of L.plan) if (seen(b)) { g.fill(b.path, 'evenodd'); }
   if (hatch) {
     hatch.setTransform(new DOMMatrix().scale(1 / (dpr * s)));
@@ -193,14 +211,14 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   }
   for (const b of L.plan) if (seen(b)) g.stroke(b.path);
 
-  g.fillStyle = HALL.fill;
-  g.strokeStyle = HALL.line;
+  g.fillStyle = c.hall.fill;
+  g.strokeStyle = c.hall.line;
   for (const b of L.hall) if (seen(b)) { g.fill(b.path, 'evenodd'); g.stroke(b.path); }
 
   // Past the walk the town is only to be looked at: fade it, and mark the edge.
-  g.fillStyle = VEIL;
+  g.fillStyle = c.veil;
   g.fill(L.veil, 'evenodd');
-  g.strokeStyle = EDGE;
+  g.strokeStyle = c.edge;
   g.lineWidth = px * (full ? 1.6 : 1.3);
   g.setLineDash([6 * px, 5 * px]);
   g.stroke(L.edge);
@@ -210,7 +228,7 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const sx = (x: number) => W / 2 + (x - v.cx) * s, sy = (z: number) => H / 2 + (z - v.cz) * s;
   if (full) drawLabels(g, W, H, v, L, sx, sy);
-  drawYou(g, sx(pose.x), sy(pose.z), pose.yaw, full);
+  drawYou(g, sx(pose.x), sy(pose.z), pose.yaw, c, full);
   if (full) {
     g.font = '600 12px Georgia, serif';
     g.textAlign = 'left';
@@ -276,13 +294,13 @@ function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, 
   }
 }
 
-function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number, full: boolean): void {
+function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number, c: Colours, full: boolean): void {
   // yaw 0 looks along -Z (north); forward is (-sin, -cos) on the ground, which is the screen's (x, y)
   const a = Math.atan2(-Math.cos(yaw), -Math.sin(yaw));
   const R = full ? 34 : 30, half = 0.62;
   const grad = g.createRadialGradient(x, y, 4, x, y, R);
-  grad.addColorStop(0, 'rgba(224, 86, 44, 0.55)');
-  grad.addColorStop(1, 'rgba(224, 86, 44, 0)');
+  grad.addColorStop(0, `rgba(${c.cone}, ${full ? 0.55 : 0.42})`);
+  grad.addColorStop(1, `rgba(${c.cone}, 0)`);
   g.fillStyle = grad;
   g.beginPath();
   g.moveTo(x, y);
@@ -291,10 +309,10 @@ function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number,
   g.fill();
   g.beginPath();
   g.arc(x, y, 5.5, 0, Math.PI * 2);
-  g.fillStyle = YOU;
+  g.fillStyle = c.you;
   g.fill();
   g.lineWidth = 2;
-  g.strokeStyle = INK;
+  g.strokeStyle = c.ring;
   g.stroke();
 }
 
@@ -371,14 +389,14 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
   const scaleLine = scaleBar.querySelector('i')!, scaleText = scaleBar.querySelector('span')!;
   const aboutHead = full.querySelector<HTMLButtonElement>('.mv-about-head')!;
   const closeBtn = full.querySelector<HTMLButtonElement>('.mv-close')!;
-  const hatchFull = hatchPattern(g, dpr), hatchMini = hatchPattern(miniG, dpr);
+  const hatchFull = hatchPattern(g, dpr, FULL.plan.hatch), hatchMini = hatchPattern(miniG, dpr, MINI.plan.hatch);
   document.body.append(mini, full);
-  // One palette: the constants above also colour the two containers and the legend swatches (style.css)
-  const palette: Record<string, string> = {
-    '--map-ground': GROUND, '--sw-today': TODAY.fill, '--sw-today-line': TODAY.line, '--sw-plan': PLAN.fill,
-    '--sw-plan-line': PLAN.line, '--sw-hatch': PLAN.hatch, '--sw-hall': HALL.fill, '--sw-hall-line': HALL.line, '--sw-edge': EDGE,
-  };
-  for (const el of [mini, full]) for (const [name, value] of Object.entries(palette)) el.style.setProperty(name, value);
+  // One source of colour: the palettes above also colour the two containers and the legend swatches (style.css)
+  const vars = (c: Colours): Record<string, string> => ({
+    '--map-ground': c.ground, '--sw-today': c.today.fill, '--sw-today-line': c.today.line, '--sw-plan': c.plan.fill,
+    '--sw-plan-line': c.plan.line, '--sw-hatch': c.plan.hatch, '--sw-hall': c.hall.fill, '--sw-hall-line': c.hall.line, '--sw-edge': c.edge,
+  });
+  for (const [el, c] of [[mini, MINI], [full, FULL]] as const) for (const [name, value] of Object.entries(vars(c))) el.style.setProperty(name, value);
 
   let walking = false, isOpen = false, dirty = true;
   let miniSize = 0, last = { x: NaN, z: NaN, yaw: NaN };
@@ -418,7 +436,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
     dirty = true;
   };
   const drawFull = () => {
-    drawMap(g, W, H, dpr, view, pose(), L, hatchFull, true);
+    drawMap(g, W, H, dpr, view, pose(), L, FULL, hatchFull, true);
     // scale bar: the longest round number of metres that fits in about 120 px
     const want = 120 / view.s;
     const metres = [5, 10, 20, 25, 50, 100, 200, 250, 500].reduce((b, m) => (m <= want ? m : b), 5);
@@ -432,7 +450,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
     if (size !== miniSize) { miniSize = size; miniCanvas.width = miniCanvas.height = Math.round(size * dpr); last.x = NaN; }
     if (Math.abs(p.x - last.x) < 0.03 && Math.abs(p.z - last.z) < 0.03 && Math.abs(p.yaw - last.yaw) < 0.004) return;
     last = { x: p.x, z: p.z, yaw: p.yaw };
-    drawMap(miniG, size, size, dpr, { cx: p.x, cz: p.z, s: size / MINI_SPAN }, p, L, hatchMini, false);
+    drawMap(miniG, size, size, dpr, { cx: p.x, cz: p.z, s: size / MINI_SPAN }, p, L, MINI, hatchMini, false);
   };
 
   const setAbout = (openIt: boolean) => {
