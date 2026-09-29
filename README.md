@@ -24,6 +24,11 @@ backtick (`` ` ``) toggles the stats overlay. On a phone, tap the round map in t
 Pastel / Dark / Glow switch (pastel is the default; or `?map=dark`, `?map=glow`).
 `?weather=clear` for the dry morning.
 
+The title and pause screens (Esc) have Walk / Continue, Options and Credits. Options (Picture, Sound, Keys; Touch on a
+phone) are kept in the browser: weather, brightness, saturation, map look, quality, wet-street reflections and the
+volumes. Accept keeps them, Cancel goes back, Default resets; a change of weather reloads the walk. `?quality=low` and
+`?weather=` in the address override what was kept.
+
 ### Why not `npm run dev`?
 
 The npm registry is blocked on the network this was built on, so the project

@@ -32,6 +32,7 @@ export class Music {
   private gap = 0;
   private duck = 1;
   private current: Track | null = null;
+  private level = 1;                    // the player's Music slider, 0 to 1
 
   constructor(listener: THREE.AudioListener) {
     this.el.preload = 'auto';
@@ -60,6 +61,8 @@ export class Music {
     return { tracks: this.tracks.length, state: this.state, playing: this.current?.title ?? this.current?.file ?? null, at: Math.round(this.el.currentTime) };
   }
 
+  setLevel(v: number): void { this.level = v; }
+
   update(dt: number, bells: boolean): void {
     if (!this.started || this.state === 'idle') return;
     this.duck += ((bells ? DUCK : 1) - this.duck) * Math.min(1, dt / 1.5);
@@ -71,7 +74,7 @@ export class Music {
     const t = this.el.currentTime, d = this.el.duration;
     const rise = Math.min(1, t / (this.first ? FADE_FIRST : FADE));
     const fall = Number.isFinite(d) ? Math.min(1, Math.max(0, (d - t) / FADE)) : 1;
-    this.out.setVolume(LEVEL * Math.min(rise, fall) * this.duck);
+    this.out.setVolume(LEVEL * Math.min(rise, fall) * this.duck * this.level);
   }
 
   private rest(): void {

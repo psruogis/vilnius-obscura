@@ -28,6 +28,7 @@ import { Walker } from './player/walker';
 import { TouchControls } from './player/touch';
 import { createOverlay, createStats, showUnsupported, unsupportedReason } from './ui/overlay';
 import { createMap } from './ui/map';
+import { SettingsStore, weatherNow } from './ui/settings';
 
 // A late-September afternoon, in Vilnius local mean time (UT + 1h41m): 16:00 LMT.
 // Light presets. 'golden' (default) follows Zaleski's view: warm, low sun raking across the portico.
@@ -40,8 +41,8 @@ const LIGHTS = {
   // Summer rain: an overcast afternoon, soft diffuse light, the street filling with mist.
   rain: { time: Date.UTC(1800, 5, 24, 13, 30), sun: '#d9dee2', sunI: 1.4, exposure: 0.95, turbidity: 10, fog: '#7f8a90', env: 1.0, hemi: ['#b4bdc4', '#6d675e', 0.3] },
 } as const;
-// Weather: rain by default (?weather=clear for the sunny morning).
-const RAIN = new URLSearchParams(location.search).get('weather') !== 'clear';
+// Weather: rain by default; ?weather=clear (or the Options screen) for the sunny morning.
+const RAIN = weatherNow() === 'rain';
 const LIGHT = RAIN ? LIGHTS.rain : LIGHTS[new URLSearchParams(location.search).get('light') === 'day' ? 'day' : 'golden'];
 if (RAIN) installHeightFog(0, 6, 1.6); // must run before any material compiles
 WET.value = RAIN ? 1 : 0;
@@ -56,7 +57,11 @@ async function main(force = false): Promise<void> {
   }
   const app = document.getElementById('app')!;
   let ambience: Ambience | null = null;
-  const overlay = createOverlay(() => { input.requestLock(); ambience?.start(); touch.setActive(true); });
+  const settings = new SettingsStore();
+  const overlay = createOverlay(() => { input.requestLock(); ambience?.start(); touch.setActive(true); }, settings, {
+    get: () => ambience?.isMuted ?? false,
+    toggle: () => { const m = ambience?.toggleMute() ?? false; touch.setMuted(m); return m; },
+  });
   THREE.DefaultLoadingManager.onProgress = (_url, loaded, total) => overlay.setProgress(loaded / total);
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -245,7 +250,8 @@ async function main(force = false): Promise<void> {
       // Esc is not a user gesture in some browsers, so the lock can be refused: then the pause screen takes over
       input.requestLock().then(ok => { if (!ok && !touch.isActive) overlay.setVisible(true); });
     },
-  });
+    onLook: look => settings.keep('mapLook', look),
+  }, settings.current.mapLook);
   overlay.onVisibility(visible => map.setWalking(!visible));
   // The character model streams in; the placeholder capsule stands in until then.
   let character: Character | null = null;
@@ -273,6 +279,18 @@ async function main(force = false): Promise<void> {
   shadows.apply(scene);
   const post = new Post(renderer, scene, camera, rainScene, RAIN); // RAIN: reflections in the wet streets
   if (RAIN) post.paint.uniforms.uVarnish.value = 0.2; // keep the rain light cool and grey
+
+  // The player's options (menu > Options), put to use now and whenever they change
+  settings.bind(s => {
+    ambience?.setMix({ master: s.master / 100, street: s.street / 100, bells: s.bells / 100, steps: s.steps / 100, music: s.music / 100 });
+    post.setQuality(s.quality);
+    post.reflections = s.reflections;
+    shadows.setMapSize(s.quality === 'low' ? 1024 : 2048);
+    map.setLook(s.mapLook);
+    // brightness and saturation are a filter on the picture; 50 and 50 leave it untouched (and cost nothing)
+    renderer.domElement.style.filter = s.brightness === 50 && s.saturation === 50
+      ? '' : `brightness(${(0.6 + 0.8 * s.brightness / 100).toFixed(3)}) saturate(${(2 * s.saturation / 100).toFixed(3)})`;
+  });
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -306,7 +324,7 @@ async function main(force = false): Promise<void> {
   if (import.meta.env.DEV) {
     // Test hooks for screenshots and debugging.
     (window as unknown as Record<string, unknown>).__walk = {
-      data, walker, camera, renderer, scene, map,
+      data, walker, camera, renderer, scene, map, settings, overlay,
       get character() { return character; },
       get ambience() { return ambience; },
       get crowd() { return crowd; }, get traffic() { return traffic; },

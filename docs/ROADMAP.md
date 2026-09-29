@@ -8,6 +8,9 @@ reorder freely.
 - **The walk (M1–M4):** real footprints and heights, period façades and roofs, cobbles, the Town Hall
   and St Casimir's (in its c. 1900 Orthodox form), townsfolk, cabs, the market, rain, sound, the
   title screen, credits. See `README.md` and the git log.
+- **The menu:** title and pause screens in the "iron and oxblood" style (`src/ui/overlay.ts`, `options.ts`,
+  `settings.ts`; the approved artboards are in the Design canvas "Main menu styles", set A), with Options and Credits, for
+  desktop, phone upright and phone on its side. The 1900s "gilt and green" set B was not chosen.
 - **The map:** a round plan in the corner that follows the walker (north up, with the view cone), and
   a full-screen view (Tab, or a tap on the corner map) with pan, zoom, street names and an "About this
   map" note on what each layer is and from when. Three looks: pastel (default), dark, glow. `src/ui/map.ts`, `docs/map-sources.md`.

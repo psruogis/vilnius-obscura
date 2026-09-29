@@ -1,4 +1,5 @@
 import type { AreaData, XZ } from '../world/area';
+import { loadFonts } from './fonts';
 
 /**
  * The map: a small round plan in the corner that follows the walker, and the same plan full-screen
@@ -10,7 +11,7 @@ import type { AreaData, XZ } from '../world/area';
  * tools/build-area.mjs.
  */
 export interface MapPose { x: number; z: number; yaw: number }
-export interface MapHooks { onOpen(): void; onClose(): void }
+export interface MapHooks { onOpen(): void; onClose(): void; /** The player picked a look with the switch on the full map. */ onLook?(look: Look): void }
 export interface MapUI {
   readonly isOpen: boolean;
   /** The corner map shows while walking and hides on the title and pause screens. */
@@ -19,6 +20,9 @@ export interface MapUI {
   close(): void;
   /** Once a frame: redraws whichever map is showing, only if something changed. */
   update(): void;
+  readonly look: Look;
+  /** Shows the map in this look (does not call onLook: the caller already knows). */
+  setLook(look: Look): void;
 }
 
 // ---- the look --------------------------------------------------------------------------------
@@ -90,25 +94,6 @@ const S_MAX = 9;             // closest zoom of the full map, CSS px per metre
 const ZOOM_STEP = 1.6;       // the + and - buttons
 const WOBBLE = 0.22;         // metres an outline strays from the true line, as a hand's does
 const CELL = 48;             // metres: hatching is drawn in chunks this size, only where it is on screen
-
-// The fonts ship with the game (public/assets/fonts, SIL Open Font License, see CREDITS.md).
-const FONT_FACES: { family: string; style: string; weight: string; file: string; range: string }[] = [
-  { family: 'Almendra', style: 'italic', weight: '400', file: 'assets/fonts/almendra-italic-400-latin-ext.woff2', range: 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF' },
-  { family: 'Almendra', style: 'italic', weight: '400', file: 'assets/fonts/almendra-italic-400-latin.woff2', range: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
-  { family: 'Almendra', style: 'italic', weight: '700', file: 'assets/fonts/almendra-italic-700-latin-ext.woff2', range: 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF' },
-  { family: 'Almendra', style: 'italic', weight: '700', file: 'assets/fonts/almendra-italic-700-latin.woff2', range: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
-  { family: 'Cinzel', style: 'normal', weight: '400 900', file: 'assets/fonts/cinzel-normal-400-900-latin-ext.woff2', range: 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF' },
-  { family: 'Cinzel', style: 'normal', weight: '400 900', file: 'assets/fonts/cinzel-normal-400-900-latin.woff2', range: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
-  { family: 'UnifrakturCook', style: 'normal', weight: '700', file: 'assets/fonts/unifrakturcook-normal-700-latin.woff2', range: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
-];
-function loadFonts(): Promise<void> {
-  if (!('FontFace' in window)) return Promise.resolve();
-  return Promise.all(FONT_FACES.map(f => {
-    const face = new FontFace(f.family, `url(${f.file})`, { style: f.style, weight: f.weight, unicodeRange: f.range });
-    document.fonts.add(face);
-    return face.load().catch(() => face); // a missing font falls back to Georgia, and the map still reads
-  })).then(() => undefined);
-}
 
 // ---- geometry --------------------------------------------------------------------------------
 interface Box { x0: number; z0: number; x1: number; z1: number }
@@ -601,18 +586,7 @@ const ICON = {
 };
 
 const LOOK_NAMES: Record<Look, string> = { pastel: 'Pastel', dark: 'Dark', glow: 'Glow' };
-/** The look last chosen (or asked for with ?map=pastel|dark|glow); pastel when nothing was. */
-function savedLook(): Look {
-  try {
-    const q = new URLSearchParams(location.search).get('map');
-    if (q && (LOOKS as string[]).includes(q)) return q as Look;
-    const v = localStorage.getItem('vo.map.look');
-    if (v && (LOOKS as string[]).includes(v)) return v as Look;
-  } catch { /* storage or the address is not readable: use the default */ }
-  return 'pastel';
-}
-
-export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks): MapUI {
+export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, initialLook: Look = 'pastel'): MapUI {
   const L = prepare(data);
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -671,7 +645,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
     return patterns.get(key)!;
   };
 
-  let look = savedLook();
+  let look = initialLook;
   const applyLook = () => {
     for (const el of [mini, full]) {
       for (const k of LOOKS) el.classList.toggle(`look-${k}`, k === look);
@@ -779,7 +753,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
   aboutHead.addEventListener('click', () => setAbout(full.classList.contains('about-closed')));
   for (const b of lookBtns) b.addEventListener('click', () => {
     look = b.dataset.look as Look;
-    try { localStorage.setItem('vo.map.look', look); } catch { /* the choice lasts until the page closes */ }
+    hooks.onLook?.(look);
     applyLook();
   });
   full.querySelectorAll<HTMLElement>('[data-zoom]').forEach(b => b.addEventListener('click', () => {
@@ -848,6 +822,8 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
 
   return {
     get isOpen() { return isOpen; },
+    get look() { return look; },
+    setLook(k: Look) { look = k; applyLook(); },
     setWalking(v: boolean) {
       walking = v;
       if (!v && isOpen) { isOpen = false; full.hidden = true; } // paused from under it: the pause screen takes over

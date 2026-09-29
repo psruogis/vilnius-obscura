@@ -18,6 +18,9 @@ const FILES = {
 } as const;
 type Key = keyof typeof FILES;
 
+/** The player's mix, each 0 to 1 (1 is the level the sounds were balanced at). */
+export interface Mix { master: number; street: number; bells: number; steps: number; music: number }
+
 export interface AmbienceSites { square: THREE.Vector3; bells: THREE.Vector3 | null }
 
 export class Ambience {
@@ -30,6 +33,7 @@ export class Ambience {
   private readonly horseAnchor = new THREE.Object3D();
   private started = false;
   private muted = false;
+  private mix: Mix = { master: 1, street: 1, bells: 1, steps: 1, music: 1 };
   private nextBells = 40 + Math.random() * 60;
   private nextHorses = 25 + Math.random() * 40;
   private stepOnsets: number[] = [];
@@ -77,7 +81,7 @@ export class Ambience {
     src.buffer = buf;
     src.playbackRate.value = 0.92 + Math.random() * 0.14 + Math.min(0.12, speed * 0.02);
     const g = ctx.createGain();
-    g.gain.value = THREE.MathUtils.clamp(0.25 + speed * 0.1, 0.25, 0.7) * (this.raining ? 1.1 : 1);
+    g.gain.value = THREE.MathUtils.clamp(0.25 + speed * 0.1, 0.25, 0.7) * (this.raining ? 1.1 : 1) * this.mix.steps;
     src.connect(g).connect(this.listener.getInput());
     const t = ctx.currentTime;
     g.gain.setValueAtTime(g.gain.value, t + 0.22);
@@ -87,8 +91,16 @@ export class Ambience {
 
   toggleMute(): boolean {
     this.muted = !this.muted;
-    this.listener.setMasterVolume(this.muted ? 0 : 1);
+    this.listener.setMasterVolume(this.muted ? 0 : this.mix.master);
     return this.muted;
+  }
+
+  get isMuted(): boolean { return this.muted; }
+
+  setMix(m: Mix): void {
+    this.mix = m;
+    this.listener.setMasterVolume(this.muted ? 0 : m.master);
+    this.music.setLevel(m.music);
   }
 
   private loop(k: Key, volume: number, rate = 1): THREE.Audio {
@@ -131,9 +143,13 @@ export class Ambience {
     const d = Math.hypot(walker.x - this.sites.square.x, walker.z - this.sites.square.z);
     const k = THREE.MathUtils.clamp((d - 35) / 70, 0, 1);
     const hush = this.raining ? 0.45 : 1; // fewer people out in the rain
-    this.crowd?.setVolume(THREE.MathUtils.lerp(0.38, 0.1, k) * hush);
-    this.scene2?.setVolume(THREE.MathUtils.lerp(0.26, 0.06, k) * hush);
-    this.sparrows?.setVolume(THREE.MathUtils.lerp(0.1, 0.18, k));
+    const street = this.mix.street;
+    this.crowd?.setVolume(THREE.MathUtils.lerp(0.38, 0.1, k) * hush * street);
+    this.scene2?.setVolume(THREE.MathUtils.lerp(0.26, 0.06, k) * hush * street);
+    this.sparrows?.setVolume(THREE.MathUtils.lerp(0.1, 0.18, k) * street);
+    this.rainLoop?.setVolume(0.55 * street);
+    this.bells?.setVolume(this.mix.bells);
+    this.horses?.setVolume(street);
 
     // St Casimir's bells every few minutes, about 30 s at a time
     this.nextBells -= dt;

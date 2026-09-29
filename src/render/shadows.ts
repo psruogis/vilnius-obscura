@@ -67,6 +67,16 @@ export class SunShadows {
     this.csm.update();
   }
 
+  /** Resolution of each cascade's shadow map, in texels; the maps are made again on the next frame. */
+  setMapSize(n: number): void {
+    for (const l of this.csm.lights) {
+      if (l.shadow.mapSize.x === n) continue;
+      l.shadow.mapSize.set(n, n);
+      l.shadow.map?.dispose();
+      l.shadow.map = null;
+    }
+  }
+
   resize(): void {
     this.csm.updateFrustums();
   }
