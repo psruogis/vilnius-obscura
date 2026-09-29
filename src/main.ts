@@ -28,6 +28,7 @@ import { Walker } from './player/walker';
 import { TouchControls } from './player/touch';
 import { createOverlay, createStats, showUnsupported, unsupportedReason } from './ui/overlay';
 import { createMap } from './ui/map';
+import { PlaceTitle } from './ui/place';
 import { SettingsStore, weatherNow } from './ui/settings';
 
 // A late-September afternoon, in Vilnius local mean time (UT + 1h41m): 16:00 LMT.
@@ -252,7 +253,8 @@ async function main(force = false): Promise<void> {
     },
     onLook: look => settings.keep('mapLook', look),
   }, settings.current.mapLook);
-  overlay.onVisibility(visible => map.setWalking(!visible));
+  const streetTitle = new PlaceTitle(data); // the street you are on, as a title for a few seconds
+  overlay.onVisibility(visible => { map.setWalking(!visible); streetTitle.setActive(!visible); });
   // The character model streams in; the placeholder capsule stands in until then.
   let character: Character | null = null;
   const spec = new URLSearchParams(location.search).get('char') === 'townsman' ? TOWNSMAN : TRAVELLER;
@@ -313,6 +315,7 @@ async function main(force = false): Promise<void> {
     rain?.update(dt, camera.position);
     character?.update(dt, { speed: walker.speed, angularVelocity: walker.angularVelocity, forwardAccel: walker.forwardAccel, facing: walker.facing, lookYaw: walker.yaw, lookPitch: walker.pitch });
     ambience?.update(dt, walker.position, walker.speed);
+    streetTitle.update(dt, walker.position.x, walker.position.z);
     market?.update(dt);
     crowd?.update(dt, walker.position);
     traffic?.update(dt, walker.position);
@@ -327,7 +330,7 @@ async function main(force = false): Promise<void> {
   if (import.meta.env.DEV) {
     // Test hooks for screenshots and debugging.
     (window as unknown as Record<string, unknown>).__walk = {
-      data, walker, camera, renderer, scene, map, settings, overlay,
+      data, walker, camera, renderer, scene, map, settings, overlay, streetTitle,
       get character() { return character; },
       get ambience() { return ambience; },
       get crowd() { return crowd; }, get traffic() { return traffic; },

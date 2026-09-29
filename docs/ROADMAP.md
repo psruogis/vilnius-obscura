@@ -8,6 +8,9 @@ reorder freely.
 - **The walk (M1–M4):** real footprints and heights, period façades and roofs, cobbles, the Town Hall
   and St Casimir's (in its c. 1900 Orthodox form), townsfolk, cabs, the market, rain, sound, the
   title screen, credits. See `README.md` and the git log.
+- **Street title:** the name of the street you are walking on shows at the top for a few seconds, then fades
+  (`src/ui/place.ts`). Today's names from OpenStreetMap, like the map's: what each street was called around 1900 is
+  not researched (open question 4), so the title will need a second source when it is.
 - **The menu:** title and pause screens in the "iron and oxblood" style (`src/ui/overlay.ts`, `options.ts`,
   `settings.ts`; the approved artboards are in the Design canvas "Main menu styles", set A), with Options and Credits, for
   desktop, phone upright and phone on its side. The 1900s "gilt and green" set B was not chosen.

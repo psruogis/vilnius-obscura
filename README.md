@@ -27,6 +27,9 @@ Pastel / Dark / Glow switch (pastel is the default; or `?map=dark`, `?map=glow`)
 Music: none, except klezmer that drifts in as you walk west towards the Jewish quarter (`docs/music.md`; the Music
 slider is in Options).
 
+When you settle onto a new street its name shows at the top for a few seconds and fades (the square's name at the
+start); names are today's, as on the map.
+
 The title and pause screens (Esc) have Walk / Continue, Options and Credits. Options (Picture, Sound, Keys; Touch on a
 phone) are kept in the browser: weather, brightness, saturation, map look, quality, wet-street reflections and the
 volumes. Accept keeps them, Cancel goes back, Default resets; a change of weather reloads the walk. `?quality=low` and

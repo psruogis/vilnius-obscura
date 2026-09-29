@@ -16,6 +16,20 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 }
 .stats.hidden { display: none; }
 
+/* The street you are on, as a title at the top for a few seconds (ui/place.ts) */
+.streettitle {
+  position: fixed; top: max(1.6rem, calc(0.8rem + env(safe-area-inset-top))); left: 50%; z-index: 10; transform: translateX(-50%);
+  max-width: calc(100vw - 9rem); text-align: center; pointer-events: none; opacity: 0; transition: opacity 1.4s ease;
+  font-feature-settings: 'lnum' 1;
+}
+.streettitle.show { opacity: 1; transition: opacity 0.7s ease; }
+.streettitle::before { content: ''; position: absolute; inset: -1.1rem -3.5rem; z-index: -1; background: radial-gradient(closest-side, rgba(12, 10, 9, 0.6), rgba(12, 10, 9, 0)); }
+.st-name { font: 600 clamp(20px, 2.7vw, 34px)/1.15 Cinzel, Georgia, serif; letter-spacing: 0.16em; padding-left: 0.16em; text-transform: uppercase; color: #f0e6d4; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.9), 0 2px 12px rgba(0, 0, 0, 0.85); }
+.st-rule { display: block; margin: 0.55rem auto 0; width: clamp(110px, 12vw, 150px); height: auto; }
+.st-sub { margin-top: 0.4rem; font: italic 500 clamp(15px, 1.7vw, 20px)/1.2 'Cormorant Garamond', Georgia, serif; color: rgba(232, 220, 201, 0.9); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.9), 0 2px 10px rgba(0, 0, 0, 0.85); }
+.st-sub[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .streettitle, .streettitle.show { transition-duration: 0.01s; } }
+
 /* ---- Menu: the title, pause, options and credits screens (ui/overlay.ts, ui/options.ts) ----------------------------
    Iron and oxblood: charcoal, steel-framed buttons with pointed ends, oxblood for what is on. Everything is sized in em
    from one font-size on .overlay, so it scales with the window; phones get their own layouts at the foot. */
