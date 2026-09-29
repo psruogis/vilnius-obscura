@@ -13,6 +13,7 @@ const CREDITS_HTML = `
     <li>Textures: Poly Haven, CC0</li>
     <li>Walking figure, townsfolk and horses: Quaternius (via Poly Pizza), CC0</li>
     <li>Sounds (Freesound, CC0): bolkmar, craigsmith, straget, mikewest, Nox_Sound, rasunter255</li>
+    <li>Map lettering: Almendra, Cinzel, UnifrakturCook (SIL Open Font License)</li>
     <li>three.js (MIT), suncalc (BSD-2-Clause), straight-skeleton (MIT)</li>
   </ul>
   <p class="dim">No Google Maps, Street View, Earth or 3D Tiles imagery was used.</p>

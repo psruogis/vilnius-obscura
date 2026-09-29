@@ -4,7 +4,8 @@ import type { AreaData, XZ } from '../world/area';
  * The map: a small round plan in the corner that follows the walker, and the same plan full-screen
  * (pan, zoom, street names, and a note on where every layer of it comes from).
  *
- * It is drawn from public/data/area.json, so it shows exactly what stands in the 3D world. The note
+ * It is drawn from public/data/area.json, so it shows exactly what stands in the 3D world, in the
+ * style of a dark vellum manuscript: gold ink, hatching, hand-wobbled outlines. The legend and the note
  * in ABOUT_HTML must be kept in step with docs/map-sources.md and with tools/build-area.mjs.
  */
 export interface MapPose { x: number; z: number; yaw: number }
@@ -19,54 +20,62 @@ export interface MapUI {
   update(): void;
 }
 
-interface Colours {
-  ground: string; square: string;
-  today: { fill: string; line: string };                    // houses on today's plots
-  plan: { fill: string; line: string; hatch: string };      // houses redrawn from the 1842 plan
-  hall: { fill: string; line: string };                     // Town Hall and St Casimir's
-  street: string; edge: string; veil: string;
-  you: string; cone: string; ring: string;                  // the walker: dot, view cone (r, g, b), ring round the dot
-}
-// The full map: a dark plan in the game's own colours, a warm black a step below its screens (style.css
-// body, #1a1714), cream ink, and a deepened amber (the game's jog ring, turned down). The legend swatches read these.
-const FULL: Colours = {
-  ground: '#100e0b', square: '#19150f',
-  today: { fill: '#2a241d', line: '#4e4336' },
-  plan: { fill: '#1b2229', line: '#3e5060', hatch: '#536871' },
-  hall: { fill: '#7b6039', line: '#aa8d61' },
-  street: 'rgba(244, 239, 230, 0.15)', edge: 'rgba(190, 148, 90, 0.8)', veil: 'rgba(16, 14, 11, 0.66)',
-  you: '#e0562c', cone: '224, 86, 44', ring: '#f4efe6',
-};
-// The corner map sits on top of the game's picture, so it is the same plan with every accent pulled back:
-// dimmer landmarks, a duller blue, fainter edge and streets, a softer marker.
-const MINI: Colours = {
-  ground: '#15120f', square: '#1b1712',
-  today: { fill: '#282219', line: '#382f25' },
-  plan: { fill: '#1f2326', line: '#30393f', hatch: '#39444b' },
-  hall: { fill: '#54432d', line: '#6a583d' },
-  street: 'rgba(244, 239, 230, 0.1)', edge: 'rgba(150, 122, 84, 0.5)', veil: 'rgba(21, 18, 15, 0.55)',
-  you: '#bf5f3c', cone: '191, 95, 60', ring: 'rgba(244, 239, 230, 0.7)',
-};
-// Labels exist on the full map only
-const INK = '#f4efe6';
-const STREET_NAME = 'rgba(244, 239, 230, 0.72)';
-const HALO = 'rgba(16, 14, 11, 0.92)';
+// ---- the look --------------------------------------------------------------------------------
+const GROUND = '#1e1710';        // dark umber vellum
+const GROUND_GLOW = '#2a1e13';   // the same, warmer, as if lit from behind
+const GOLD = '#b3904f';          // gold ink: today's houses
+const GOLD_LINE = 'rgba(179, 144, 79, 0.78)';
+const SAGE = '#96aaa0';          // cool grey-green ink: the 1842 plan
+const SAGE_LINE = 'rgba(150, 170, 160, 0.62)';
+const HALL = '#7b2a1b', HALL_LINE = '#c9a45f';   // Town Hall and St Casimir's: vermilion, gold-edged
+const EDGE = 'rgba(201, 164, 95, 0.85)';         // the edge of the walk
+const YOU = '#d24a26', YOU_RGB = '210, 74, 38', RING = '#f0e2bd';
+const CREAM = '#f0e2bd';
+const NAME = 'rgba(232, 217, 182, 0.84)';
+const HALO = 'rgba(24, 18, 12, 0.92)';
+const F_STREET = 'italic 400 15px Almendra, Georgia, serif';
+const F_MAIN = 'italic 700 18px Almendra, Georgia, serif';
+const F_PLACE = '600 19px Cinzel, Georgia, serif';
+const F_NOTE = 'italic 400 14px Almendra, Georgia, serif';
 
 const MINI_SPAN = 170;       // metres across the corner map
 const S_MAX = 9;             // closest zoom of the full map, CSS px per metre
 const ZOOM_STEP = 1.6;       // the + and - buttons
+const WOBBLE = 0.22;         // metres an outline strays from the true line, as a hand's does
+const CELL = 48;             // metres: hatching is drawn in chunks this size, only where it is on screen
 
+// The fonts ship with the game (public/assets/fonts, SIL Open Font License, see CREDITS.md).
+const FONT_FACES: { family: string; style: string; weight: string; file: string; range: string }[] = [
+  { family: 'Almendra', style: 'italic', weight: '400', file: 'assets/fonts/almendra-italic-400-latin-ext.woff2', range: 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF' },
+  { family: 'Almendra', style: 'italic', weight: '400', file: 'assets/fonts/almendra-italic-400-latin.woff2', range: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
+  { family: 'Almendra', style: 'italic', weight: '700', file: 'assets/fonts/almendra-italic-700-latin-ext.woff2', range: 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF' },
+  { family: 'Almendra', style: 'italic', weight: '700', file: 'assets/fonts/almendra-italic-700-latin.woff2', range: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
+  { family: 'Cinzel', style: 'normal', weight: '400 900', file: 'assets/fonts/cinzel-normal-400-900-latin-ext.woff2', range: 'U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF' },
+  { family: 'Cinzel', style: 'normal', weight: '400 900', file: 'assets/fonts/cinzel-normal-400-900-latin.woff2', range: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
+  { family: 'UnifrakturCook', style: 'normal', weight: '700', file: 'assets/fonts/unifrakturcook-normal-700-latin.woff2', range: 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD' },
+];
+function loadFonts(): Promise<void> {
+  if (!('FontFace' in window)) return Promise.resolve();
+  return Promise.all(FONT_FACES.map(f => {
+    const face = new FontFace(f.family, `url(${f.file})`, { style: f.style, weight: f.weight, unicodeRange: f.range });
+    document.fonts.add(face);
+    return face.load().catch(() => face); // a missing font falls back to Georgia, and the map still reads
+  })).then(() => undefined);
+}
+
+// ---- geometry --------------------------------------------------------------------------------
 interface Box { x0: number; z0: number; x1: number; z1: number }
-interface Shape extends Box { path: Path2D }
-type RoadClass = 'main' | 'street' | 'lane' | 'foot';
-interface Road extends Shape { cls: RoadClass }
+interface Plot extends Box { path: Path2D }
 interface Label { text: string; x: number; z: number; ang: number; len: number; main: boolean }
+interface Hats { today: Chunks; plan: Chunks }
 interface Layers {
-  areas: Shape[];
-  roads: Record<RoadClass, Road[]>;
-  today: Shape[];
-  plan: Shape[];
-  hall: Shape[];
+  areas: Plot[];
+  foot: Plot[];
+  today: Plot[];
+  plan: Plot[];
+  hall: Plot[];
+  todayRings: XZ[][][];
+  planRings: XZ[][][];
   labels: Label[];
   square: { text: string; x: number; z: number } | null;
   landmarks: { text: string; x: number; z: number }[];
@@ -74,20 +83,41 @@ interface Layers {
   edge: Path2D;
   centre: XZ;
   radius: number;
+  hats: { fine?: Hats; coarse?: Hats };
 }
 interface View { cx: number; cz: number; s: number }
 
-const ROAD_CLASS: Record<string, RoadClass> = {
-  primary: 'main', secondary: 'main',
-  residential: 'street', living_street: 'street', unclassified: 'street', pedestrian: 'street',
-  service: 'lane', footway: 'foot', steps: 'foot',
-};
+function hash2(a: number, b: number): number {
+  let t = (Math.imul(a, 374761393) + Math.imul(b, 668265263)) | 0;
+  t = Math.imul(t ^ (t >>> 13), 1274126177);
+  return ((t ^ (t >>> 16)) >>> 0) / 4294967295;
+}
+/** Smooth value noise, 0 to 1, from world position: the same everywhere it is asked, so neighbours match. */
+function noise(x: number, y: number): number {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  return (hash2(xi, yi) * (1 - u) + hash2(xi + 1, yi) * u) * (1 - v) + (hash2(xi, yi + 1) * (1 - u) + hash2(xi + 1, yi + 1) * u) * v;
+}
 
-function shapeOf(rings: XZ[][], close: boolean): Shape {
+/** An outline that wanders a little from the true line, one point about every 1.3 m. */
+function roughen(ring: XZ[]): XZ[] {
+  const out: XZ[] = [];
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const steps = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / 1.3));
+    for (let k = 0; k < steps; k++) {
+      const t = k / steps, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;
+      out.push([x + (noise(x * 0.42 + 11.3, z * 0.42 + 4.1) - 0.5) * 2 * WOBBLE, z + (noise(x * 0.42 + 71.7, z * 0.42 + 33.9) - 0.5) * 2 * WOBBLE]);
+    }
+  }
+  return out;
+}
+
+function plotOf(rings: XZ[][], rough: boolean, close = true): Plot {
   const path = new Path2D();
   let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
   rings.forEach((ring, k) => {
-    ring.forEach(([x, z], i) => {
+    const pts = rough ? roughen(ring) : ring;
+    pts.forEach(([x, z], i) => {
       if (i) path.lineTo(x, z); else path.moveTo(x, z);
       if (k === 0) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
     });
@@ -116,32 +146,82 @@ function midpoint(line: XZ[]): { x: number; z: number; ang: number; len: number 
   return { x: line[0][0], z: line[0][1], ang: 0, len };
 }
 
+/** Hatching kept in 48 m chunks, so a frame strokes only the chunks that are on screen. */
+class Chunks {
+  private cells = new Map<string, { path: Path2D; x0: number; z0: number }>();
+  add(ax: number, az: number, bx: number, bz: number, qx: number, qz: number): void {
+    const ix = Math.floor((ax + bx) / 2 / CELL), iz = Math.floor((az + bz) / 2 / CELL), key = `${ix},${iz}`;
+    let c = this.cells.get(key);
+    if (!c) { c = { path: new Path2D(), x0: ix * CELL, z0: iz * CELL }; this.cells.set(key, c); }
+    c.path.moveTo(ax, az);
+    c.path.quadraticCurveTo(qx, qz, bx, bz);
+  }
+  draw(g: CanvasRenderingContext2D, x0: number, z0: number, x1: number, z1: number): void {
+    const m = 70; // a stroke can run this far out of its chunk
+    for (const c of this.cells.values()) if (c.x0 + CELL + m >= x0 && c.x0 - m <= x1 && c.z0 + CELL + m >= z0 && c.z0 - m <= z1) g.stroke(c.path);
+  }
+}
+
+/** Parallel lines at `deg`, `gap` metres apart, kept inside the rings (holes and all). Lines are laid on
+ *  one grid for the whole map, so hatching carries on from one house into the next, as an engraver's does. */
+function hatchRings(rings: XZ[][], deg: number, gap: number, out: Chunks): void {
+  const a = deg * Math.PI / 180, ux = Math.cos(a), uz = Math.sin(a), vx = -uz, vz = ux;
+  const R = rings.map(r => r.map(([x, z]): XZ => [x * ux + z * uz, x * vx + z * vz]));
+  let vmin = Infinity, vmax = -Infinity;
+  for (const r of R) for (const p of r) { vmin = Math.min(vmin, p[1]); vmax = Math.max(vmax, p[1]); }
+  for (let v = Math.ceil(vmin / gap) * gap; v <= vmax; v += gap) {
+    const us: number[] = [];
+    for (const r of R) for (let i = 0; i < r.length; i++) {
+      const p = r[i], q = r[(i + 1) % r.length];
+      if ((p[1] <= v) !== (q[1] <= v)) us.push(p[0] + (v - p[1]) * (q[0] - p[0]) / (q[1] - p[1]));
+    }
+    us.sort((m, n) => m - n);
+    for (let k = 0; k + 1 < us.length; k += 2) {
+      const u0 = us[k], u1 = us[k + 1];
+      if (u1 - u0 < 0.35) continue;
+      const ax = u0 * ux + v * vx, az = u0 * uz + v * vz, bx = u1 * ux + v * vx, bz = u1 * uz + v * vz;
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2, bow = (noise(mx * 0.35 + 9, mz * 0.35 + 2) - 0.5) * 0.32;
+      out.add(ax, az, bx, bz, mx + vx * bow, mz + vz * bow);
+    }
+  }
+}
+function hatchSet(all: XZ[][][], angles: number[], gap: number): Chunks {
+  const set = new Chunks();
+  for (const rings of all) for (const deg of angles) hatchRings(rings, deg, gap, set);
+  return set;
+}
+/** Fine hatching for the full map, coarse for the corner map and for zoomed-out views. Built when first wanted. */
+function hatsFor(L: Layers, kind: 'fine' | 'coarse'): Hats {
+  return L.hats[kind] ??= kind === 'fine'
+    ? { today: hatchSet(L.todayRings, [50], 1.05), plan: hatchSet(L.planRings, [50, -40], 1.15) }
+    : { today: hatchSet(L.todayRings, [50], 2.3), plan: hatchSet(L.planRings, [50, -40], 2.5) };
+}
+
 function prepare(data: AreaData): Layers {
   const [thx, thz] = data.meta.townHall;
   const radius = data.meta.walkRadius;
   const named = data.areas.find(a => a.name);
-  const roads: Layers['roads'] = { main: [], street: [], lane: [], foot: [] };
-  const labels: Label[] = [];
+  const foot: Plot[] = [], labels: Label[] = [];
   for (const r of data.roads) {
-    const cls = ROAD_CLASS[r.kind];
-    if (!cls || r.tunnel || r.line.length < 2) continue;
-    roads[cls].push({ ...shapeOf([r.line], false), cls });
-    if (r.name && cls !== 'foot' && r.name !== named?.name) { // the square is named once, across it
+    if (r.tunnel || r.line.length < 2) continue;
+    if (r.kind === 'footway' || r.kind === 'steps') { foot.push(plotOf([r.line], false, false)); continue; }
+    if (r.name && r.name !== named?.name && ['primary', 'secondary', 'residential', 'living_street', 'unclassified', 'pedestrian'].includes(r.kind)) { // the square is named once, across it
       const m = midpoint(r.line);
-      if (m.len >= 30) labels.push({ text: r.name, x: m.x, z: m.z, ang: m.ang, len: m.len, main: cls === 'main' || r.name === 'Didžioji g.' });
+      if (m.len >= 30) labels.push({ text: r.name, x: m.x, z: m.z, ang: m.ang, len: m.len, main: r.kind === 'primary' || r.kind === 'secondary' || r.name === 'Didžioji g.' });
     }
   }
   labels.sort((a, b) => b.len - a.len);
-  const today: Shape[] = [], plan: Shape[] = [], hall: Shape[] = [];
+  const today: Plot[] = [], plan: Plot[] = [], hall: Plot[] = [], todayRings: XZ[][][] = [], planRings: XZ[][][] = [];
   const landmarks: Layers['landmarks'] = [];
   for (const b of data.buildings) {
-    const s = shapeOf(b.rings, true);
-    if (b.role === 'recon') plan.push(s);
+    if (!b.rings[0] || b.rings[0].length < 3) continue;
+    const s = plotOf(b.rings, true);
+    if (b.role === 'recon') { plan.push(s); planRings.push(b.rings); }
     else if (b.role === 'townhall' || b.role === 'stcasimir') {
       hall.push(s);
       const [x, z] = centroid(b.rings[0]);
       landmarks.push({ text: b.role === 'townhall' ? 'Town Hall' : "St Casimir's", x, z });
-    } else today.push(s);
+    } else { today.push(s); todayRings.push(b.rings); }
   }
   const veil = new Path2D();
   veil.rect(-6000, -6000, 12000, 12000);
@@ -149,98 +229,188 @@ function prepare(data: AreaData): Layers {
   const edge = new Path2D();
   edge.arc(thx, thz, radius, 0, Math.PI * 2);
   return {
-    areas: data.areas.map(a => shapeOf([a.ring], true)),
-    roads, today, plan, hall, labels, landmarks, veil, edge,
+    areas: data.areas.map(a => plotOf([a.ring], false)),
+    foot, today, plan, hall, todayRings, planRings, labels, landmarks, veil, edge,
     square: named ? { text: named.name!, x: centroid(named.ring)[0], z: centroid(named.ring)[1] } : null,
-    centre: [thx, thz], radius,
+    centre: [thx, thz], radius, hats: {},
   };
 }
 
-/** A fine diagonal hatch that stays one device pixel thick however far the map is zoomed. */
-function hatchPattern(g: CanvasRenderingContext2D, dpr: number, colour: string): CanvasPattern | null {
-  const n = Math.max(4, Math.round(5 * dpr));
+/** A tile of vellum: dark ground, grain, a few fibres. One tile pixel is one device pixel. */
+function paperTile(dpr: number, glow: boolean): HTMLCanvasElement {
+  const n = Math.round(256 * dpr);
   const c = document.createElement('canvas');
   c.width = c.height = n;
-  const h = c.getContext('2d')!;
-  h.strokeStyle = colour;
-  h.globalAlpha = 0.5;
-  h.lineWidth = Math.max(1, dpr * 0.9);
-  h.beginPath();
-  h.moveTo(-1, n + 1); h.lineTo(n + 1, -1);
-  h.moveTo(-1, 1); h.lineTo(1, -1);
-  h.moveTo(n - 1, n + 1); h.lineTo(n + 1, n - 1);
-  h.stroke();
-  return g.createPattern(c, 'repeat');
+  const t = c.getContext('2d')!;
+  t.fillStyle = glow ? GROUND_GLOW : GROUND;
+  t.fillRect(0, 0, n, n);
+  const img = t.getImageData(0, 0, n, n), d = img.data;
+  let seed = glow ? 4242 : 1234;
+  const rnd = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  for (let i = 0; i < d.length; i += 4) { const k = (rnd() - 0.5) * 10; d[i] += k; d[i + 1] += k; d[i + 2] += k; }
+  t.putImageData(img, 0, 0);
+  t.lineWidth = Math.max(1, dpr * 0.6);
+  for (let i = 0; i < 90; i++) {
+    const x = rnd() * n, y = rnd() * n, a = rnd() * Math.PI, l = (6 + rnd() * 14) * dpr;
+    t.strokeStyle = `rgba(255, 240, 210, ${0.02 + rnd() * 0.03})`;
+    t.beginPath(); t.moveTo(x, y); t.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + rnd() * 3, y + Math.sin(a) * l * 0.5 + rnd() * 3, x + Math.cos(a) * l, y + Math.sin(a) * l); t.stroke();
+  }
+  return c;
 }
 
-function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number, v: View, pose: MapPose, L: Layers, c: Colours, hatch: CanvasPattern | null, full: boolean): void {
-  const s = v.s;
+// ---- drawing ---------------------------------------------------------------------------------
+interface Paint { glow: boolean; paper: CanvasPattern | null; full: boolean; hats: Hats | null; compass?: { x: number; y: number } }
+
+function outlines(g: CanvasRenderingContext2D, list: Plot[], seen: (b: Box) => boolean): void { for (const b of list) if (seen(b)) g.stroke(b.path); }
+function fills(g: CanvasRenderingContext2D, list: Plot[], seen: (b: Box) => boolean): void { for (const b of list) if (seen(b)) g.fill(b.path, 'evenodd'); }
+
+function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number, v: View, pose: MapPose, L: Layers, p: Paint): void {
+  const s = v.s, full = p.full, glow = p.glow;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.fillStyle = c.ground;
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+  g.fillStyle = p.paper ?? (glow ? GROUND_GLOW : GROUND);
   g.fillRect(0, 0, W, H);
   g.setTransform(dpr * s, 0, 0, dpr * s, dpr * (W / 2 - v.cx * s), dpr * (H / 2 - v.cz * s));
   const x0 = v.cx - W / 2 / s, x1 = v.cx + W / 2 / s, z0 = v.cz - H / 2 / s, z1 = v.cz + H / 2 / s;
   const seen = (b: Box) => b.x1 >= x0 && b.x0 <= x1 && b.z1 >= z0 && b.z0 <= z1;
   const px = 1 / s; // one CSS pixel, in metres
-
-  g.fillStyle = c.square;
-  for (const a of L.areas) if (seen(a)) g.fill(a.path);
-
   g.lineCap = 'round';
   g.lineJoin = 'round';
-  g.strokeStyle = c.street;
-  for (const cls of ['foot', 'lane', 'street', 'main'] as const) {
-    g.lineWidth = px * (cls === 'main' ? 1.6 : cls === 'street' ? 1.2 : 0.9);
-    g.setLineDash(cls === 'foot' ? [3 * px, 3 * px] : []);
-    for (const r of L.roads[cls]) if (seen(r)) g.stroke(r.path);
-  }
-  g.setLineDash([]);
 
+  // squares, and footways as dots of ink
+  g.fillStyle = 'rgba(194, 160, 102, 0.07)';
+  fills(g, L.areas, seen);
+  g.strokeStyle = 'rgba(232, 217, 182, 0.17)';
   g.lineWidth = px;
-  g.strokeStyle = c.today.line;
-  g.fillStyle = c.today.fill;
-  for (const b of L.today) if (seen(b)) { g.fill(b.path, 'evenodd'); g.stroke(b.path); }
-
-  g.fillStyle = c.plan.fill;
-  g.strokeStyle = c.plan.line;
-  for (const b of L.plan) if (seen(b)) { g.fill(b.path, 'evenodd'); }
-  if (hatch) {
-    hatch.setTransform(new DOMMatrix().scale(1 / (dpr * s)));
-    g.fillStyle = hatch;
-    for (const b of L.plan) if (seen(b)) g.fill(b.path, 'evenodd');
-  }
-  for (const b of L.plan) if (seen(b)) g.stroke(b.path);
-
-  g.fillStyle = c.hall.fill;
-  g.strokeStyle = c.hall.line;
-  for (const b of L.hall) if (seen(b)) { g.fill(b.path, 'evenodd'); g.stroke(b.path); }
-
-  // Past the walk the town is only to be looked at: fade it, and mark the edge.
-  g.fillStyle = c.veil;
-  g.fill(L.veil, 'evenodd');
-  g.strokeStyle = c.edge;
-  g.lineWidth = px * (full ? 1.6 : 1.3);
-  g.setLineDash([6 * px, 5 * px]);
-  g.stroke(L.edge);
+  g.setLineDash([px * 1.5, px * 5]);
+  outlines(g, L.foot, seen);
   g.setLineDash([]);
 
-  // Screen space from here: labels and the walker.
+  // today's houses: gold hatching and outline
+  g.fillStyle = 'rgba(179, 144, 79, 0.09)';
+  fills(g, L.today, seen);
+  if (p.hats) { g.strokeStyle = glow ? 'rgba(179, 144, 79, 0.34)' : 'rgba(179, 144, 79, 0.26)'; g.lineWidth = px * 0.8; p.hats.today.draw(g, x0, z0, x1, z1); }
+  g.strokeStyle = GOLD_LINE;
+  g.lineWidth = px * (full ? 1.2 : 1);
+  outlines(g, L.today, seen);
+
+  // the 1842 plan: cross-hatched in grey-green
+  g.fillStyle = 'rgba(70, 88, 82, 0.34)';
+  fills(g, L.plan, seen);
+  if (p.hats) { g.strokeStyle = glow ? 'rgba(150, 170, 160, 0.38)' : 'rgba(150, 170, 160, 0.3)'; g.lineWidth = px * 0.8; p.hats.plan.draw(g, x0, z0, x1, z1); }
+  g.strokeStyle = SAGE_LINE;
+  g.lineWidth = px * (full ? 1.05 : 0.9);
+  outlines(g, L.plan, seen);
+
+  // Town Hall and St Casimir's, with a warm halo behind them when the map glows
+  if (glow) {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (const m of L.landmarks) {
+      const rw = Math.min(220, Math.max(45, 26 * s)) * px;
+      if (!seen({ x0: m.x - rw, x1: m.x + rw, z0: m.z - rw, z1: m.z + rw })) continue;
+      const h = g.createRadialGradient(m.x, m.z, rw * 0.05, m.x, m.z, rw);
+      h.addColorStop(0, 'rgba(226, 120, 62, 0.36)');
+      h.addColorStop(1, 'rgba(226, 120, 62, 0)');
+      g.fillStyle = h;
+      g.fillRect(m.x - rw, m.z - rw, rw * 2, rw * 2);
+    }
+    g.restore();
+  }
+  g.save();
+  g.globalAlpha = full ? 0.95 : 0.8;
+  g.fillStyle = HALL;
+  fills(g, L.hall, seen);
+  g.restore();
+  g.strokeStyle = HALL_LINE;
+  g.lineWidth = px * (full ? 1.8 : 1.4);
+  outlines(g, L.hall, seen);
+
+  // glow: the ink gives off light, as wide faint strokes added on top
+  if (glow) {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    const halo = (list: Plot[], colour: string, w: number, passes: [number, number][]) => {
+      g.strokeStyle = colour;
+      for (const [k, a] of passes) { g.globalAlpha = a; g.lineWidth = px * w * k; outlines(g, list, seen); }
+    };
+    halo(L.today, GOLD, full ? 1.2 : 1, [[5.5, 0.05], [2.8, 0.1]]);
+    halo(L.plan, SAGE, full ? 1.05 : 0.9, [[5.5, 0.03], [2.8, 0.055]]);
+    halo(L.hall, HALL_LINE, full ? 1.8 : 1.4, [[6, 0.09], [3, 0.16]]);
+    g.restore();
+  }
+
+  // Past the walk the town is only to be looked at: it fades into the vellum, and the edge is marked.
+  if (full) {
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cx = W / 2 + (L.centre[0] - v.cx) * s, cz = H / 2 + (L.centre[1] - v.cz) * s, R = L.radius * s;
+    const fade = g.createRadialGradient(cx, cz, R * 1.05, cx, cz, R * 2.7);
+    fade.addColorStop(0, 'rgba(30, 23, 16, 0)');
+    fade.addColorStop(0.35, 'rgba(30, 23, 16, 0.62)');
+    fade.addColorStop(1, 'rgba(30, 23, 16, 0.88)');
+    g.fillStyle = fade;
+    g.fillRect(0, 0, W, H);
+    g.setTransform(dpr * s, 0, 0, dpr * s, dpr * (W / 2 - v.cx * s), dpr * (H / 2 - v.cz * s));
+  } else {
+    g.fillStyle = 'rgba(30, 23, 16, 0.55)';
+    g.fill(L.veil, 'evenodd');
+  }
+  g.strokeStyle = EDGE;
+  g.globalAlpha = full ? 1 : 0.7;
+  g.lineWidth = px * (full ? 2.4 : 1.8);
+  g.setLineDash([px * 2, px * 7]);
+  g.stroke(L.edge);
+  if (glow) {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = 0.16;
+    g.lineWidth = px * (full ? 9 : 6);
+    g.stroke(L.edge);
+    g.restore();
+  }
+  g.setLineDash([]);
+  g.globalAlpha = 1;
+
+  // Screen space from here: light, names, the walker.
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const sx = (x: number) => W / 2 + (x - v.cx) * s, sy = (z: number) => H / 2 + (z - v.cz) * s;
-  if (full) drawLabels(g, W, H, v, L, sx, sy);
-  drawYou(g, sx(pose.x), sy(pose.z), pose.yaw, c, full);
+  if (glow) {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    const cx = sx(L.centre[0]), cz = sy(L.centre[1]), R = L.radius * s * 1.2;
+    const lit = g.createRadialGradient(cx, cz, R * 0.12, cx, cz, R);
+    lit.addColorStop(0, 'rgba(255, 196, 110, 0.16)');
+    lit.addColorStop(0.7, 'rgba(255, 170, 80, 0.07)');
+    lit.addColorStop(1, 'rgba(255, 170, 80, 0)');
+    g.fillStyle = lit;
+    g.fillRect(0, 0, W, H);
+    g.restore();
+  }
   if (full) {
-    g.font = '600 12px Georgia, serif';
+    // an aged edge, darker towards the corners
+    const vig = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.hypot(W, H) * 0.62);
+    vig.addColorStop(0, 'rgba(13, 10, 7, 0)');
+    vig.addColorStop(1, 'rgba(13, 10, 7, 0.55)');
+    g.fillStyle = vig;
+    g.fillRect(0, 0, W, H);
+    drawLabels(g, W, H, v, L, sx, sy);
+    if (p.compass) drawCompass(g, p.compass.x, p.compass.y, 34);
+  }
+  drawYou(g, sx(pose.x), sy(pose.z), pose.yaw, full);
+  if (full) {
+    g.font = 'italic 700 16px Almendra, Georgia, serif';
     g.textAlign = 'left';
-    g.fillStyle = INK;
-    halo(g, 'You', sx(pose.x) + 12, sy(pose.z) + 4);
+    g.textBaseline = 'alphabetic';
+    g.fillStyle = CREAM;
+    halo(g, 'you', sx(pose.x) + 14, sy(pose.z) + 5);
   }
 }
 
-function halo(g: CanvasRenderingContext2D, text: string, x: number, y: number): void {
-  g.lineWidth = 3.5;
+function halo(g: CanvasRenderingContext2D, text: string, x: number, y: number, colour = HALO): void {
+  g.lineWidth = 4;
   g.lineJoin = 'round';
-  g.strokeStyle = HALO;
+  g.strokeStyle = colour;
   g.strokeText(text, x, y);
   g.fillText(text, x, y);
 }
@@ -249,38 +419,39 @@ function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, 
   const s = v.s;
   g.textAlign = 'center';
   g.textBaseline = 'alphabetic';
-  g.fillStyle = INK;
   const placed: { x: number; y: number; r: number; name: string }[] = [];
-  const room = (x: number, y: number, r: number, name: string) => placed.every(p => Math.hypot(p.x - x, p.y - y) > (p.name === name ? 150 : p.r + r));
+  const room = (x: number, y: number, r: number, name: string) => placed.every(p => Math.hypot(p.x - x, p.y - y) > (p.name === name ? 170 : p.r + r));
 
   // Places first: the square, the two landmarks, the edge of the walk.
   if (L.square && s > 0.9) {
-    g.font = 'italic 600 13px Georgia, serif';
-    const text = L.square.text.toUpperCase().split('').join('\u200A'), x = sx(L.square.x), y = sy(L.square.z);
+    g.font = F_PLACE;
+    g.fillStyle = CREAM;
+    const text = L.square.text.toUpperCase().split('').join(' '), x = sx(L.square.x), y = sy(L.square.z);
     halo(g, text, x, y);
     placed.push({ x, y, r: g.measureText(text).width / 2 + 4, name: text });
   }
-  g.font = '600 12.5px Georgia, serif';
+  g.font = F_PLACE;
   for (const m of L.landmarks) {
     const x = sx(m.x), y = sy(m.z);
     if (x < -60 || y < -20 || x > W + 60 || y > H + 20) continue;
-    halo(g, m.text, x, y + 4);
+    g.fillStyle = CREAM;
+    halo(g, m.text, x, y + 5, 'rgba(30, 10, 5, 0.8)');
     placed.push({ x, y, r: g.measureText(m.text).width / 2 + 6, name: m.text });
   }
   if (s > 0.7) {
-    g.font = 'italic 11px Georgia, serif';
-    g.fillStyle = '#b98f58';
-    const x = sx(L.centre[0]), y = sy(L.centre[1] - L.radius) + 15;
+    g.font = F_NOTE;
+    g.fillStyle = '#c9a45f';
+    const a = Math.PI * 0.72, x = sx(L.centre[0] + Math.cos(a) * (L.radius - 9)), y = sy(L.centre[1] + Math.sin(a) * (L.radius - 9));
     halo(g, 'edge of the walk', x, y);
     placed.push({ x, y, r: g.measureText('edge of the walk').width / 2 + 4, name: 'edge' });
   }
 
   // Streets, longest first, each only where its name fits along it.
-  g.fillStyle = STREET_NAME;
+  g.fillStyle = NAME;
   for (const l of L.labels) {
     const x = sx(l.x), y = sy(l.z);
     if (x < -40 || y < -40 || x > W + 40 || y > H + 40) continue;
-    g.font = `italic ${l.main ? 13 : 11.5}px Georgia, serif`;
+    g.font = l.main ? F_MAIN : F_STREET;
     const w = g.measureText(l.text).width;
     if (w + 14 > l.len * s) continue;
     const r = w / 2 * 0.9 + 4;
@@ -289,65 +460,106 @@ function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, 
     g.save();
     g.translate(x, y);
     g.rotate(l.ang);
-    halo(g, l.text, 0, 4);
+    halo(g, l.text, 0, 5);
     g.restore();
   }
 }
 
-function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number, c: Colours, full: boolean): void {
+function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number, full: boolean): void {
   // yaw 0 looks along -Z (north); forward is (-sin, -cos) on the ground, which is the screen's (x, y)
   const a = Math.atan2(-Math.cos(yaw), -Math.sin(yaw));
-  const R = full ? 34 : 30, half = 0.62;
+  const R = full ? 44 : 32, half = 0.6;
   const grad = g.createRadialGradient(x, y, 4, x, y, R);
-  grad.addColorStop(0, `rgba(${c.cone}, ${full ? 0.55 : 0.42})`);
-  grad.addColorStop(1, `rgba(${c.cone}, 0)`);
+  grad.addColorStop(0, `rgba(${YOU_RGB}, ${full ? 0.6 : 0.5})`);
+  grad.addColorStop(1, `rgba(${YOU_RGB}, 0)`);
   g.fillStyle = grad;
   g.beginPath();
   g.moveTo(x, y);
   g.arc(x, y, R, a - half, a + half);
   g.closePath();
   g.fill();
+  // seven fine lines fan out, as if drawn with a pen
+  g.strokeStyle = `rgba(${YOU_RGB}, 0.6)`;
+  g.lineWidth = 1;
   g.beginPath();
-  g.arc(x, y, 5.5, 0, Math.PI * 2);
-  g.fillStyle = c.you;
+  for (let k = -3; k <= 3; k++) {
+    const b = a + k * half / 3.4;
+    g.moveTo(x + Math.cos(b) * 8, y + Math.sin(b) * 8);
+    g.lineTo(x + Math.cos(b) * R * 0.94, y + Math.sin(b) * R * 0.94);
+  }
+  g.stroke();
+  g.beginPath();
+  g.arc(x, y, full ? 6 : 5.5, 0, Math.PI * 2);
+  g.fillStyle = full ? YOU : 'rgba(210, 74, 38, 0.92)';
   g.fill();
   g.lineWidth = 2;
-  g.strokeStyle = c.ring;
+  g.strokeStyle = RING;
   g.stroke();
 }
 
+/** A compass rose: a fleur for north, points in two-tone gold. */
+function drawCompass(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  g.save();
+  g.translate(x, y);
+  g.fillStyle = 'rgba(20, 15, 10, 0.7)';
+  g.beginPath(); g.arc(0, 0, r * 1.5, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = GOLD;
+  g.lineWidth = 1.2;
+  g.beginPath(); g.arc(0, 0, r * 0.62, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.arc(0, 0, r * 0.7, 0, Math.PI * 2); g.stroke();
+  const point = (ang: number, len: number, wid: number) => {
+    g.save();
+    g.rotate(ang);
+    g.beginPath(); g.moveTo(0, -len); g.lineTo(wid, 0); g.lineTo(0, 0); g.closePath(); g.fillStyle = GOLD; g.fill(); g.lineWidth = 1; g.stroke();
+    g.beginPath(); g.moveTo(0, -len); g.lineTo(-wid, 0); g.lineTo(0, 0); g.closePath(); g.fillStyle = GROUND; g.fill(); g.stroke();
+    g.restore();
+  };
+  for (let k = 0; k < 4; k++) point(Math.PI / 4 + k * Math.PI / 2, r * 0.55, r * 0.11);
+  for (let k = 0; k < 4; k++) point(k * Math.PI / 2, r, r * 0.16);
+  g.fillStyle = GOLD;
+  g.beginPath(); g.moveTo(0, -r * 1.34); g.quadraticCurveTo(r * 0.16, -r * 1.16, 0, -r * 1.02); g.quadraticCurveTo(-r * 0.16, -r * 1.16, 0, -r * 1.34); g.fill();
+  g.font = '700 12px Cinzel, Georgia, serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = CREAM;
+  g.fillText('S', 0, r * 1.22);
+  g.fillText('E', r * 1.22, 1);
+  g.fillText('W', -r * 1.22, 1);
+  g.restore();
+}
+
 const ABOUT_HTML = (walk: number) => `
-  <p>This is a plan of the town you are walking through, set around 1900. It is not a copy of one old
-  map. No survey of the square from 1900 has been used yet: the plan is put together from newer data,
-  and redrawn from an older plan where the two disagree.</p>
-  <dl>
-    <dt><i class="sw today"></i>Houses on today's plots</dt>
-    <dd><b>Source:</b> the national cadastre (GRPK), Nacionalinė žemės tarnyba, downloaded September 2026.
-    <b>Time:</b> today. Each plot is taken to hold a house of about 1900, and a few post-war buildings are left out.</dd>
-    <dt><i class="sw plan"></i>Houses from the 1842 plan</dt>
-    <dd><b>Source:</b> the 1842 plan of Vilnius, National Library of Poland (Polona). <b>Time:</b> 1842.
-    West of the square, around Vokiečių and Rūdninkų, today's buildings are mostly post-war, so the blocks
-    are traced from the plan and fitted to today's map to within a few metres. The lines between plots and
-    the number of storeys are guesses.</dd>
-    <dt><i class="sw hall"></i>Town Hall and St Casimir's</dt>
-    <dd>Modelled by hand: the Town Hall as it was finished in 1799, the church in its Orthodox form after the
-    rebuilding of 1864–68, from the heritage register and period pictures.</dd>
-    <dt><i class="sw street"></i>Streets and names</dt>
-    <dd><b>Source:</b> OpenStreetMap, September 2026. <b>Time:</b> today. These are today's street lines and
-    today's names. Around 1900 many streets had other, Russian names.</dd>
-    <dt><i class="sw walk"></i>Edge of the walk</dt>
-    <dd>You can walk ${walk} m from the Town Hall. Past the dashed line the town is there to be seen, not walked.</dd>
-  </dl>
-  <p class="dim">The 1866 plan of Vilnius is in the project files to check against, but it is not drawn here.
-  No plan made around 1900 is used yet.</p>
-  <p class="dim">GRPK © Nacionalinė žemės tarnyba prie Aplinkos ministerijos, CC BY 4.0 · © OpenStreetMap
-  contributors, ODbL · 1842 plan: public domain.</p>`;
+  <ul class="mv-legend">
+    <li><i class="sw today"></i>Today's houses</li>
+    <li><i class="sw plan"></i>1842 plan houses</li>
+    <li><i class="sw hall"></i>Town Hall, St Casimir's</li>
+    <li><i class="sw you"></i>You</li>
+    <li><i class="sw walk"></i>Edge of the walk</li>
+  </ul>
+  <h3>Where it comes from</h3>
+  <ul class="mv-src">
+    <li><b>Today's houses:</b> the national cadastre (GRPK), 2026. Each plot is taken to hold a house of about 1900.</li>
+    <li><b>1842 plan houses:</b> the 1842 plan of Vilnius (National Library of Poland), fitted to today's map to within a few metres, west of the square. Plot lines and storeys are guesses.</li>
+    <li><b>Town Hall, St Casimir's:</b> modelled by hand: the Town Hall as finished in 1799, the church in its Orthodox form after 1864–68.</li>
+    <li><b>Streets and names:</b> OpenStreetMap, 2026: today's names. Around 1900 many streets had other, Russian names.</li>
+    <li><b>Edge of the walk:</b> ${walk} m from the Town Hall. Beyond it the town is only to be seen.</li>
+  </ul>
+  <p class="dim">This is not a copy of one old map: no plan from about 1900 is used yet, and the 1866 plan is not drawn.</p>
+  <p class="dim">GRPK © Nacionalinė žemės tarnyba prie Aplinkos ministerijos, CC BY 4.0 · © OpenStreetMap contributors, ODbL · 1842 plan: public domain.</p>`;
 
 const ICON = {
   plus: '<svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 3V15M3 9H15"/></svg>',
   minus: '<svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 9H15"/></svg>',
   here: '<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.2"/><path d="M10 2V5.5M10 14.5V18M2 10H5.5M14.5 10H18"/></svg>',
 };
+
+function savedGlow(): boolean {
+  try {
+    const q = new URLSearchParams(location.search).get('map');
+    if (q) return q === 'glow';
+    return localStorage.getItem('vo.map.glow') === '1';
+  } catch { return false; }
+}
 
 export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks): MapUI {
   const L = prepare(data);
@@ -372,12 +584,13 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
   full.setAttribute('aria-label', 'Map of the walk');
   full.innerHTML = `
     <canvas></canvas>
-    <div class="mv-title"><h2>Town Hall Square · c. 1900</h2><p>A plan of the walk, and what it is made from</p><div class="mv-scale"><i></i><span></span></div></div>
+    <div class="mv-title"><h2>Town Hall Square</h2><p>c. 1900, on a plan of today</p><div class="mv-scale"><i></i><span></span></div></div>
     <button type="button" class="mv-btn mv-close"><span class="long">Back to the walk</span><span class="short">Back</span> <kbd>Tab</kbd></button>
     <div class="mv-zoom">
       <button type="button" class="mv-btn mv-icon" data-zoom="in" aria-label="Zoom in">${ICON.plus}</button>
       <button type="button" class="mv-btn mv-icon" data-zoom="out" aria-label="Zoom out">${ICON.minus}</button>
       <button type="button" class="mv-btn mv-icon" data-here aria-label="Show where I am">${ICON.here}</button>
+      <button type="button" class="mv-btn mv-pill" data-glow aria-pressed="false">Glow</button>
     </div>
     <aside class="mv-about">
       <button type="button" class="mv-about-head" aria-expanded="true"><span>About this map</span><i aria-hidden="true"></i></button>
@@ -385,23 +598,40 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
     </aside>`;
   const canvas = full.querySelector('canvas')!;
   const g = canvas.getContext('2d')!;
+  const titleEl = full.querySelector<HTMLElement>('.mv-title')!;
   const scaleBar = full.querySelector<HTMLElement>('.mv-scale')!;
   const scaleLine = scaleBar.querySelector('i')!, scaleText = scaleBar.querySelector('span')!;
   const aboutHead = full.querySelector<HTMLButtonElement>('.mv-about-head')!;
   const closeBtn = full.querySelector<HTMLButtonElement>('.mv-close')!;
-  const hatchFull = hatchPattern(g, dpr, FULL.plan.hatch), hatchMini = hatchPattern(miniG, dpr, MINI.plan.hatch);
+  const glowBtn = full.querySelector<HTMLButtonElement>('[data-glow]')!;
   document.body.append(mini, full);
-  // One source of colour: the palettes above also colour the two containers and the legend swatches (style.css)
-  const vars = (c: Colours): Record<string, string> => ({
-    '--map-ground': c.ground, '--sw-today': c.today.fill, '--sw-today-line': c.today.line, '--sw-plan': c.plan.fill,
-    '--sw-plan-line': c.plan.line, '--sw-hatch': c.plan.hatch, '--sw-hall': c.hall.fill, '--sw-hall-line': c.hall.line, '--sw-edge': c.edge,
-  });
-  for (const [el, c] of [[mini, MINI], [full, FULL]] as const) for (const [name, value] of Object.entries(vars(c))) el.style.setProperty(name, value);
+
+  // Vellum, plain and glowing, as a pattern for each canvas
+  const tiles = { plain: paperTile(dpr, false), glow: paperTile(dpr, true) };
+  const papers = (ctx: CanvasRenderingContext2D) => {
+    const make = (t: HTMLCanvasElement) => { const pat = ctx.createPattern(t, 'repeat'); pat?.setTransform(new DOMMatrix().scale(1 / dpr)); return pat; };
+    return { plain: make(tiles.plain), glow: make(tiles.glow) };
+  };
+  const paperFull = papers(g), paperMini = papers(miniG);
+
+  let glow = savedGlow();
+  const applyGlow = () => {
+    full.classList.toggle('glow', glow);
+    mini.classList.toggle('glow', glow);
+    glowBtn.setAttribute('aria-pressed', String(glow));
+    for (const el of [mini, full]) el.style.setProperty('--map-ground', glow ? GROUND_GLOW : GROUND);
+    dirty = true;
+    last.x = NaN;
+  };
 
   let walking = false, isOpen = false, dirty = true;
   let miniSize = 0, last = { x: NaN, z: NaN, yaw: NaN };
   let W = 0, H = 0;
   const view: View = { cx: L.centre[0], cz: L.centre[1], s: 1 };
+
+  // Names need their fonts; redraw once they have arrived. The coarse hatching for the corner map is made while the game is idle.
+  loadFonts().then(() => { dirty = true; last.x = NaN; });
+  setTimeout(() => hatsFor(L, 'coarse'), 400);
 
   const sMin = () => Math.min(W, H) / 1000;
   const narrow = () => window.matchMedia('(max-width: 760px)').matches;
@@ -435,8 +665,14 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
     }
     dirty = true;
   };
+  /** Hatching that suits the zoom: fine when close, coarse in between, none when far out. */
+  const hatsAt = (s: number): Hats | null => (s >= 2.4 ? hatsFor(L, 'fine') : s >= 0.9 ? hatsFor(L, 'coarse') : null);
   const drawFull = () => {
-    drawMap(g, W, H, dpr, view, pose(), L, FULL, hatchFull, true);
+    const tb = titleEl.getBoundingClientRect();
+    drawMap(g, W, H, dpr, view, pose(), L, {
+      glow, full: true, paper: glow ? paperFull.glow : paperFull.plain, hats: hatsAt(view.s),
+      compass: { x: tb.left + 48, y: tb.bottom + 68 },
+    });
     // scale bar: the longest round number of metres that fits in about 120 px
     const want = 120 / view.s;
     const metres = [5, 10, 20, 25, 50, 100, 200, 250, 500].reduce((b, m) => (m <= want ? m : b), 5);
@@ -450,7 +686,8 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
     if (size !== miniSize) { miniSize = size; miniCanvas.width = miniCanvas.height = Math.round(size * dpr); last.x = NaN; }
     if (Math.abs(p.x - last.x) < 0.03 && Math.abs(p.z - last.z) < 0.03 && Math.abs(p.yaw - last.yaw) < 0.004) return;
     last = { x: p.x, z: p.z, yaw: p.yaw };
-    drawMap(miniG, size, size, dpr, { cx: p.x, cz: p.z, s: size / MINI_SPAN }, p, L, MINI, hatchMini, false);
+    const s = size / MINI_SPAN;
+    drawMap(miniG, size, size, dpr, { cx: p.x, cz: p.z, s }, p, L, { glow, full: false, paper: glow ? paperMini.glow : paperMini.plain, hats: hatsAt(s) });
   };
 
   const setAbout = (openIt: boolean) => {
@@ -478,9 +715,15 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
     hooks.onClose();
   };
 
+  applyGlow();
   mini.addEventListener('click', open);
   closeBtn.addEventListener('click', close);
   aboutHead.addEventListener('click', () => setAbout(full.classList.contains('about-closed')));
+  glowBtn.addEventListener('click', () => {
+    glow = !glow;
+    try { localStorage.setItem('vo.map.glow', glow ? '1' : '0'); } catch { /* the choice lasts until the page closes */ }
+    applyGlow();
+  });
   full.querySelectorAll<HTMLElement>('[data-zoom]').forEach(b => b.addEventListener('click', () => {
     zoomAt(W / 2, H / 2, b.dataset.zoom === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP);
   }));
