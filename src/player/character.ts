@@ -53,6 +53,13 @@ export const TOWNSMAN: CharacterSpec = {
 /** What the animation needs from the walker each frame. */
 export interface Motion { speed: number; angularVelocity: number; forwardAccel: number; facing: number; lookYaw: number; lookPitch: number }
 
+/**
+ * How much faster the running legs cycle than a stride matched to the ground would. 1 keeps the feet planted;
+ * more makes the legs turn over quicker than the ground passes, which reads as effort and speed, at the cost
+ * of a little foot slide. Walking is unaffected.
+ */
+const RUN_LEG_BOOST = 1.4;
+
 interface Gait { action: THREE.AnimationAction; duration: number; cycleDist: number; offset: number }
 
 export class Character {
@@ -129,7 +136,7 @@ export class Character {
     // one stride phase for both gaits; it advances by distance covered, so the feet stay planted
     const rw = this.w.run / Math.max(1e-3, this.w.run + this.w.walk);
     const cycle = THREE.MathUtils.lerp(this.walk.cycleDist, this.run.cycleDist, rw);
-    this.phase = (this.phase + (s * dt) / cycle) % 1;
+    this.phase = (this.phase + (s * dt) / cycle * THREE.MathUtils.lerp(1, RUN_LEG_BOOST, rw)) % 1;
     this.walk.action.time = ((this.phase + this.walk.offset) % 1) * this.walk.duration;
     this.run.action.time = ((this.phase + this.run.offset) % 1) * this.run.duration;
     this.mixer.update(dt);

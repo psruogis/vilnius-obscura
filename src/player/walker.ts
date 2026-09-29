@@ -5,15 +5,15 @@ import type { WallGrid } from '../world/collision';
 // Movement tuned like Unreal's CharacterMovement: constant acceleration towards the wanted velocity,
 // stronger braking when you let go, the body turning to face its motion at a capped rate.
 const WALK_SPEED = 1.45;  // m/s (with the measured strides: a natural ~105 steps/min)
-const JOG_SPEED = 3.2;    // m/s (~170 steps/min, a real jogging cadence)
+const JOG_SPEED = 4.2;    // m/s: a brisk run (was 3.2); the legs turn over faster still, see RUN_LEG_BOOST in character.ts
 const ACCEL_WALK = 5.5;   // m/s^2
-const ACCEL_JOG = 8.0;
+const ACCEL_JOG = 10.0;
 const BRAKE = 7.5;        // m/s^2 when there is no input
 const TURN_MAX = 9.0;     // rad/s, body rotation rate
 const RADIUS = 0.32;      // collision radius, m
 
 const CAM_DISTANCE = 4.0;   // default arm length; the mouse wheel sets it between CAM_MIN and CAM_MAX
-const CAM_DISTANCE_JOG = 4.5;
+const CAM_DISTANCE_JOG = 4.8;
 const CAM_MIN = 1.8, CAM_MAX = 9;
 const CAM_SHOULDER = 0.45; // right-shoulder offset
 const CAM_HEIGHT = 1.62;   // look-at height above the feet
@@ -191,7 +191,7 @@ export class Walker {
     camera.position.copy(this.camPos);
     camera.lookAt(this.pivot);
     // a touch wider when jogging
-    const fovWant = this.jogging ? 60 : 55;
+    const fovWant = this.jogging ? 62 : 55;
     this.fov += (fovWant - this.fov) * (1 - Math.exp(-3 * dt));
     if (Math.abs(camera.fov - this.fov) > 0.01) { camera.fov = this.fov; camera.updateProjectionMatrix(); }
   }
