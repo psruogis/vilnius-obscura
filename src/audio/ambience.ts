@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import { Music } from './music';
 
 /**
  * Ambient sound for the square (all CC0 recordings from Freesound, see CREDITS.md):
  * a market murmur that fades away from the square, sparrows, St Casimir's bells now and then,
- * a horse and cart passing by, and footsteps paced to the walker.
+ * a horse and cart passing by, and footsteps paced to the walker. Music, if any is listed, is audio/music.ts.
  */
 
 const FILES = {
@@ -21,6 +22,7 @@ export interface AmbienceSites { square: THREE.Vector3; bells: THREE.Vector3 | n
 
 export class Ambience {
   private readonly listener = new THREE.AudioListener();
+  private readonly music = new Music(this.listener);
   private readonly buffers = new Map<Key, AudioBuffer>();
   private crowd?: THREE.Audio; private scene2?: THREE.Audio; private sparrows?: THREE.Audio; private steps?: THREE.Audio; private rainLoop?: THREE.Audio;
   private bells?: THREE.PositionalAudio; private horses?: THREE.PositionalAudio;
@@ -48,6 +50,7 @@ export class Ambience {
   /** Call from a user gesture (browsers keep audio suspended until then). */
   start(): void {
     void this.listener.context.resume();
+    this.music.start();
     if (this.started) return;
     this.started = true;
     for (const k of this.buffers.keys()) this.wire(k);
@@ -58,7 +61,7 @@ export class Ambience {
     return {
       context: this.listener.context.state, loaded: [...this.buffers.keys()],
       playing: { crowd: !!this.crowd?.isPlaying, scene: !!this.scene2?.isPlaying, sparrows: !!this.sparrows?.isPlaying },
-      steps: this.stepOnsets.length, nextBells: Math.round(this.nextBells), nextHorses: Math.round(this.nextHorses),
+      music: this.music.status(), steps: this.stepOnsets.length, nextBells: Math.round(this.nextBells), nextHorses: Math.round(this.nextHorses),
     };
   }
 
@@ -123,6 +126,7 @@ export class Ambience {
 
   update(dt: number, walker: THREE.Vector3, speed: number): void {
     if (!this.started) return;
+    this.music.update(dt, !!this.bells?.isPlaying);
     // Market bed: full on the square, fading into the side streets
     const d = Math.hypot(walker.x - this.sites.square.x, walker.z - this.sites.square.z);
     const k = THREE.MathUtils.clamp((d - 35) / 70, 0, 1);
