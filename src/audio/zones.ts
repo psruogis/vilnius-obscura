@@ -2,16 +2,16 @@ import * as THREE from 'three';
 import { MUSIC_BASE, type Manifest, type ZoneSpec } from './manifest';
 
 /**
- * Music that belongs to a place. Walk west along Vokiečių g. towards the Jewish quarter and klezmer comes
- * faintly from that side, louder and clearer as you near it, and is gone behind you. Each zone is one stream
+ * Music that belongs to a place, and all the music there is: nowhere else is any heard. Walk west along Vokiečių g.
+ * towards the Jewish quarter and klezmer comes faintly from that side, louder and clearer as you near it, and is gone behind you. Each zone is one stream
  * (an <audio> element, so nothing is fetched until the walker comes near) heard from the nearest of its sites,
  * panned towards it, muffled with distance as if from a courtyard or an upper window. The pieces in a zone
  * follow one another while the walker is in earshot.
  */
-const LEVEL = 0.5;        // gain at the nearest point, before the player's Music slider
-const HEARD = 40;         // m beyond `far` at which the stream is started (and kept, so it does not stall at the edge)
+const LEVEL = 0.5;        // gain at the nearest point when a zone does not say (`level`), before the player's Music slider
+const HEARD = 10;         // m beyond `far` at which the stream is started (and kept, so it does not stall at the edge)
 const IDLE = 12;          // s out of earshot before a stream is paused
-const ANCHOR_HEIGHT = 3;  // m above the ground: a window, a musician on a step
+const ANCHOR_HEIGHT = 3;  // m above the ground when a zone does not say (`height`)
 const SILENCE = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
 
 interface Live {
@@ -88,10 +88,9 @@ export class Zones {
     z.el.play().catch(() => { z.playing = false; });
   }
 
-  /** Once a frame. Returns how loud the loudest zone is, 0 to 1, so that the background piano can step aside. */
-  update(dt: number, x: number, z: number): number {
-    if (!this.started) return 0;
-    let loudest = 0;
+  /** Once a frame. */
+  update(dt: number, x: number, z: number): void {
+    if (!this.started) return;
     for (const zn of this.live) {
       const { near, far, sites } = zn.spec;
       let d = Infinity, at = 0;
@@ -99,7 +98,7 @@ export class Zones {
       if (at !== zn.site) {
         zn.site = at;
         const sx = this.origin.x + sites[at][0], sz = this.origin.z + sites[at][1];
-        zn.anchor.position.set(sx, this.groundAt(sx, sz) + ANCHOR_HEIGHT, sz);
+        zn.anchor.position.set(sx, this.groundAt(sx, sz) + (zn.spec.height ?? ANCHOR_HEIGHT), sz);
       }
       const k = THREE.MathUtils.clamp((far - d) / (far - near), 0, 1);
       const level = k * k * (3 - 2 * k);
@@ -112,10 +111,8 @@ export class Zones {
       }
       // ease towards the target so that a step across an edge is a swell, not a click
       zn.gain += (level - zn.gain) * Math.min(1, dt * 2.5);
-      zn.out.setVolume(zn.gain * LEVEL * this.level);
+      zn.out.setVolume(zn.gain * (zn.spec.level ?? LEVEL) * this.level);
       zn.filter.frequency.value = 1500 + 7500 * zn.gain;
-      loudest = Math.max(loudest, zn.gain);
     }
-    return loudest;
   }
 }

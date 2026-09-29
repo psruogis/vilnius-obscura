@@ -1,12 +1,11 @@
 import * as THREE from 'three';
-import { Music } from './music';
 import { Zones } from './zones';
 import { loadManifest } from './manifest';
 
 /**
  * Ambient sound for the square (all CC0 recordings from Freesound, see CREDITS.md):
  * a market murmur that fades away from the square, sparrows, St Casimir's bells now and then,
- * a horse and cart passing by, and footsteps paced to the walker. Music, if any is listed, is audio/music.ts.
+ * a horse and cart passing by, and footsteps paced to the walker. Music belongs to places only: audio/zones.ts.
  */
 
 const FILES = {
@@ -32,7 +31,6 @@ export interface AmbienceSites {
 export class Ambience {
   private readonly listener = new THREE.AudioListener();
   private readonly manifest = loadManifest();
-  private readonly music = new Music(this.listener, this.manifest);
   private readonly zones: Zones;
   private readonly buffers = new Map<Key, AudioBuffer>();
   private crowd?: THREE.Audio; private scene2?: THREE.Audio; private sparrows?: THREE.Audio; private steps?: THREE.Audio; private rainLoop?: THREE.Audio;
@@ -63,7 +61,6 @@ export class Ambience {
   /** Call from a user gesture (browsers keep audio suspended until then). */
   start(): void {
     void this.listener.context.resume();
-    this.music.start();
     this.zones.start();
     if (this.started) return;
     this.started = true;
@@ -75,7 +72,7 @@ export class Ambience {
     return {
       context: this.listener.context.state, loaded: [...this.buffers.keys()],
       playing: { crowd: !!this.crowd?.isPlaying, scene: !!this.scene2?.isPlaying, sparrows: !!this.sparrows?.isPlaying },
-      music: this.music.status(), zones: this.zones.status(), steps: this.stepOnsets.length, nextBells: Math.round(this.nextBells), nextHorses: Math.round(this.nextHorses),
+      zones: this.zones.status(), steps: this.stepOnsets.length, nextBells: Math.round(this.nextBells), nextHorses: Math.round(this.nextHorses),
     };
   }
 
@@ -110,7 +107,6 @@ export class Ambience {
   setMix(m: Mix): void {
     this.mix = m;
     this.listener.setMasterVolume(this.muted ? 0 : m.master);
-    this.music.setLevel(m.music);
     this.zones.setLevel(m.music);
   }
 
@@ -149,9 +145,7 @@ export class Ambience {
 
   update(dt: number, walker: THREE.Vector3, speed: number): void {
     if (!this.started) return;
-    // the piece under the walk gives way to the bells, and to a place's own music as it is neared
-    const zone = this.zones.update(dt, walker.x, walker.z);
-    this.music.update(dt, Math.min(this.bells?.isPlaying ? 0.45 : 1, 1 - 0.8 * zone));
+    this.zones.update(dt, walker.x, walker.z); // the only music: what comes from a place, near it
     // Market bed: full on the square, fading into the side streets
     const d = Math.hypot(walker.x - this.sites.square.x, walker.z - this.sites.square.z);
     const k = THREE.MathUtils.clamp((d - 35) / 70, 0, 1);

@@ -16,7 +16,7 @@ const CREDITS_HTML = `
     <li>Textures: Poly Haven, CC0</li>
     <li>Walking figure, townsfolk and horses: Quaternius (via Poly Pizza), CC0</li>
     <li>Sounds (Freesound, CC0): bolkmar, craigsmith, straget, mikewest, Nox_Sound, rasunter255</li>
-    <li>Music: Chopin, played by Frank Levy and Luke Faulkner (Musopen, public domain); klezmer by Harry Kandel's Orchestra, Victor, 1921 (Library of Congress National Jukebox, public domain)</li>
+    <li>Music: klezmer by Harry Kandel's Orchestra, Victor, 1921 (Library of Congress National Jukebox, public domain)</li>
     <li>Map and menu lettering: Almendra, Cinzel, Cormorant Garamond, UnifrakturCook (SIL Open Font License)</li>
     <li>three.js (MIT), suncalc (BSD-2-Clause), straight-skeleton (MIT)</li>
   </ul>

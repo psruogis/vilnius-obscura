@@ -39,9 +39,10 @@ reorder freely.
 
 ## Small jobs
 
-- **Music:** done in a first form, see `docs/music.md`: three Chopin pieces under the walk, and klezmer (Harry Kandel's
-  Orchestra, 1921) that drifts in near the west edge, where the German Street meets the Jewish quarter. Everything
-  is free in Europe, not only in the US. Open: a piece by Čiurlionis or Moniuszko; a zone for the German Street.
+- **Music:** klezmer (Harry Kandel's Orchestra, 1921) that drifts in near the west and north edges of the walk, where
+  the German Street meets the Jewish quarter, and nowhere else: there is no music everywhere. See `docs/music.md`. Free
+  in Europe, not only in the US. Open: more places with their own music (a German Street zone), a piece by Čiurlionis or
+  Moniuszko.
 - **Map:** the 1842 tracing cannot be re-run from the repo (its georeference and helper module live in
   a scratch folder; see `docs/map-sources.md`, Known gaps). Trace the 1866 plan into a second layer, or
   find a plan from about 1900, and let the map show which era each block comes from.

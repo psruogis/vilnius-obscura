@@ -24,8 +24,8 @@ backtick (`` ` ``) toggles the stats overlay. On a phone, tap the round map in t
 Pastel / Dark / Glow switch (pastel is the default; or `?map=dark`, `?map=glow`).
 `?weather=clear` for the dry morning.
 
-Music: quiet Chopin under the walk, and klezmer that drifts in as you walk west towards the Jewish quarter
-(`docs/music.md`; the Music slider is in Options).
+Music: none, except klezmer that drifts in as you walk west towards the Jewish quarter (`docs/music.md`; the Music
+slider is in Options).
 
 The title and pause screens (Esc) have Walk / Continue, Options and Credits. Options (Picture, Sound, Keys; Touch on a
 phone) are kept in the browser: weather, brightness, saturation, map look, quality, wet-street reflections and the
