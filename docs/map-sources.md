@@ -8,10 +8,13 @@ Tags follow `docs/REFERENCES.md`: **[V]** verified, **[U]** unverified or a desi
 
 ## The look
 
-Dark vellum, gold ink: outlines wobble a little as a hand's do, houses are hatched, names are set in Almendra
+Vellum and ink: outlines wobble a little as a hand's do, houses are hatched, names are set in Almendra
 (streets), Cinzel (places) and UnifrakturCook (the title). It is a design choice, not a claim about how any
-1900 plan looked. [U] A "Glow" switch on the full map adds a soft light behind the ink and the landmarks. The
-legend in the panel is one colour and a few words per row; the sources are listed under it.
+1900 plan looked. [U] The map has three looks, chosen with a switch on the full map (and remembered):
+**Light** (the default: pale vellum, walnut ink, verdigris for the 1842 plan, vermilion landmarks), **Dark**
+(dark vellum, gold ink) and **Glow** (Dark with a soft light behind the ink and the landmarks). Every colour
+of a look is one table, `THEMES` in `src/ui/map.ts`; the legend swatches and the full-screen panels follow it
+(`src/style.css`). The legend in the panel is one colour and a few words per row; the sources are listed under it.
 
 ## What the map is
 

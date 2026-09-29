@@ -72,26 +72,42 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 .minimap {
   position: fixed; right: calc(16px + env(safe-area-inset-right)); bottom: calc(24px + env(safe-area-inset-bottom));
   width: clamp(112px, 26vmin, 176px); aspect-ratio: 1; box-sizing: border-box; padding: 0; overflow: hidden;
-  border-radius: 50%; border: 1px solid #000; background: var(--map-ground, #1e1710); cursor: pointer;
+  border-radius: 50%; border: 1px solid #000; background: var(--map-ground); cursor: pointer;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 .minimap canvas { display: block; width: 100%; height: 100%; }
-.minimap .n { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font: 600 11px/1 Georgia, serif; color: rgba(244, 239, 230, 0.7); text-shadow: 0 0 3px #1e1710, 0 0 3px #1e1710; pointer-events: none; }
+.minimap .n { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font: 600 11px/1 Georgia, serif; color: var(--map-n, rgba(244, 239, 230, 0.7)); text-shadow: 0 0 3px var(--map-ground, #1e1710), 0 0 3px var(--map-ground, #1e1710); pointer-events: none; }
 .minimap:focus-visible, .mapview button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
-.mapview { position: fixed; inset: 0; z-index: 40; background: var(--map-ground, #1e1710); color: var(--ink); }
+/* Looks of the map. Dark is the base; light overrides what differs (glow differs only in the canvas, and in the ground
+   colour that ui/map.ts sets as --map-ground and --sw-ground). --sw-* colour the legend swatches. */
+.minimap { --map-n: rgba(244, 239, 230, 0.7); }
+.minimap.look-light { --map-n: rgba(58, 40, 20, 0.85); }
+.mapview {
+  --sw-today: #b3904f; --sw-plan: #96aaa0; --sw-hall: #7b2a1b; --sw-hall-line: #c9a45f; --sw-you: #d24a26; --sw-ring: #f0e2bd; --sw-edge: #c9a45f;
+  --mv-panel: rgba(12, 10, 8, 0.86); --mv-panel-solid: rgba(12, 10, 8, 0.95); --mv-btn: rgba(20, 18, 16, 0.78); --mv-btn-hi: rgba(20, 18, 16, 0.92);
+  --mv-edge: rgba(244, 239, 230, 0.12); --mv-line: rgba(244, 239, 230, 0.5); --mv-title: #d9bb7c; --mv-accent: #c9a45f; --mv-accent-ink: #1e1710;
+}
+.mapview.look-light {
+  --sw-today: #7a5420; --sw-plan: #3a6f68; --sw-hall: #b53a1e; --sw-hall-line: #6b4514; --sw-you: #c8371a; --sw-ring: #2b1a0e; --sw-edge: #7a5418;
+  --ink: #2c1a0c; --ink-dim: rgba(44, 26, 12, 0.74);
+  --mv-panel: rgba(240, 230, 202, 0.92); --mv-panel-solid: rgba(240, 230, 202, 0.97); --mv-btn: rgba(240, 230, 202, 0.9); --mv-btn-hi: rgba(250, 243, 222, 0.98);
+  --mv-edge: rgba(70, 46, 18, 0.28); --mv-line: rgba(70, 46, 18, 0.55); --mv-title: #6b4514; --mv-accent: #6b4514; --mv-accent-ink: #f5ecd2;
+}
+
+.mapview { position: fixed; inset: 0; z-index: 40; background: var(--map-ground); color: var(--ink); }
 .mapview canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .mapview canvas.grab { cursor: grabbing; }
 .mv-btn {
   font: 15px Georgia, 'Times New Roman', serif; color: var(--ink); cursor: pointer;
-  background: rgba(20, 18, 16, 0.78); border: 1px solid rgba(244, 239, 230, 0.5); border-radius: 22px;
+  background: var(--mv-btn); border: 1px solid var(--mv-line); border-radius: 22px;
 }
-.mv-btn:hover { background: rgba(20, 18, 16, 0.92); border-color: var(--ink); }
+.mv-btn:hover { background: var(--mv-btn-hi); border-color: var(--ink); }
 .mv-title {
   position: absolute; top: calc(14px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left));
-  padding: 8px 14px 10px; border-radius: 10px; background: rgba(12, 10, 8, 0.86); border: 1px solid rgba(244, 239, 230, 0.12); pointer-events: none; max-width: min(340px, 60vw);
+  padding: 8px 14px 10px; border-radius: 10px; background: var(--mv-panel); border: 1px solid var(--mv-edge); pointer-events: none; max-width: min(340px, 60vw);
 }
-.mv-title h2 { margin: 0; font: 700 26px/1.1 UnifrakturCook, Georgia, serif; letter-spacing: 0.01em; color: #d9bb7c; }
+.mv-title h2 { margin: 0; font: 700 26px/1.1 UnifrakturCook, Georgia, serif; letter-spacing: 0.01em; color: var(--mv-title); }
 .mv-title p { margin: 2px 0 0; font-size: 13px; color: var(--ink-dim); }
 .mv-scale { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--ink-dim); }
 .mv-scale i { display: block; height: 6px; border: 1px solid var(--ink-dim); border-top: 0; }
@@ -100,17 +116,17 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
   height: 44px; padding: 0 20px;
 }
 .mv-close .short { display: none; }
-.mv-close kbd { margin-left: 8px; padding: 1px 6px; font: 12px ui-monospace, Menlo, monospace; color: var(--ink-dim); border: 1px solid rgba(244, 239, 230, 0.4); border-radius: 4px; }
+.mv-close kbd { margin-left: 8px; padding: 1px 6px; font: 12px ui-monospace, Menlo, monospace; color: var(--ink-dim); border: 1px solid var(--mv-line); border-radius: 4px; }
 @media (pointer: coarse) { .mv-close .short { display: none; }
 .mv-close kbd { display: none; } }
-.mv-zoom { position: absolute; left: calc(16px + env(safe-area-inset-left)); bottom: calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
+.mv-zoom { position: absolute; left: calc(16px + env(safe-area-inset-left)); bottom: calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .mv-icon { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
 .mv-icon svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 
 .mv-about {
   position: absolute; top: calc(72px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); width: 340px;
   max-height: calc(100% - 92px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); display: flex; flex-direction: column;
-  border-radius: 12px; background: rgba(12, 10, 8, 0.95); border: 1px solid rgba(244, 239, 230, 0.12); overflow: hidden;
+  border-radius: 12px; background: var(--mv-panel-solid); border: 1px solid var(--mv-edge); overflow: hidden;
 }
 .mv-about-head {
   display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 12px 16px; box-sizing: border-box;
@@ -129,21 +145,23 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 .mv-legend li { display: flex; align-items: center; gap: 12px; }
 .mv-src + p { margin-top: 12px; }
 .mv-src { display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
-.mv-legend .sw { flex: none; width: 22px; height: 22px; border-radius: 50%; box-sizing: border-box; border: 1px solid rgba(255, 255, 255, 0.22); }
-.sw.today { background: repeating-linear-gradient(50deg, #b3904f 0 1px, #1e1710 1px 4px); }
-.sw.plan { background: repeating-linear-gradient(50deg, #96aaa0 0 1px, transparent 1px 4px), repeating-linear-gradient(-40deg, #96aaa0 0 1px, #1e1710 1px 4px); }
-.sw.hall { background: #7b2a1b; border-color: #c9a45f; }
-.sw.you { background: #d24a26; border: 2px solid #f0e2bd; }
-.sw.walk { background: none; border: 2px dotted #c9a45f; }
-.mapview.glow .sw.hall { box-shadow: 0 0 10px rgba(226, 120, 62, 0.7); }
-.mapview.glow .sw.walk { box-shadow: 0 0 8px rgba(201, 164, 95, 0.5); }
-.mapview.glow .sw.today, .mapview.glow .sw.plan { background-color: #2a1e13; }
-.mv-pill { height: 34px; padding: 0 14px; border-radius: 17px; font: 600 12px Cinzel, Georgia, serif; letter-spacing: 0.1em; text-transform: uppercase; }
-.mv-pill[aria-pressed="true"] { color: #1e1710; background: #c9a45f; border-color: #c9a45f; }
+.mv-legend .sw { flex: none; width: 22px; height: 22px; border-radius: 50%; box-sizing: border-box; border: 1px solid var(--mv-line); }
+.sw.today { background: repeating-linear-gradient(50deg, var(--sw-today) 0 1px, var(--sw-ground) 1px 4px); }
+.sw.plan { background: repeating-linear-gradient(50deg, var(--sw-plan) 0 1px, transparent 1px 4px), repeating-linear-gradient(-40deg, var(--sw-plan) 0 1px, var(--sw-ground) 1px 4px); }
+.sw.hall { background: var(--sw-hall); border-color: var(--sw-hall-line); }
+.sw.you { background: var(--sw-you); border: 2px solid var(--sw-ring); }
+.sw.walk { background: none; border: 2px dotted var(--sw-edge); }
+.mapview.look-glow .sw.hall { box-shadow: 0 0 10px rgba(226, 120, 62, 0.7); }
+.mapview.look-glow .sw.walk { box-shadow: 0 0 8px rgba(201, 164, 95, 0.5); }
+.mv-looks { display: flex; border-radius: 17px; overflow: hidden; border: 1px solid var(--mv-line); background: var(--mv-btn); }
+.mv-looks button { height: 32px; padding: 0 13px; border: 0; background: none; color: var(--ink); cursor: pointer; font: 600 12px Cinzel, Georgia, serif; letter-spacing: 0.1em; text-transform: uppercase; }
+.mv-looks button + button { border-left: 1px solid var(--mv-edge); }
+.mv-looks button:hover { background: var(--mv-btn-hi); }
+.mv-looks button[aria-pressed="true"] { color: var(--mv-accent-ink); background: var(--mv-accent); }
 
 @media (max-width: 760px) {
   .mv-about { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 56%; border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom); }
-  .mv-zoom { top: calc(72px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); bottom: auto; left: auto; }
+  .mv-zoom { top: calc(72px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); bottom: auto; left: auto; align-items: flex-end; }
   .mv-close { padding: 0 18px; }
   .mv-close .long { display: none; }
   .mv-close .short { display: inline; }

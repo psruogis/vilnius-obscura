@@ -5,8 +5,9 @@ import type { AreaData, XZ } from '../world/area';
  * (pan, zoom, street names, and a note on where every layer of it comes from).
  *
  * It is drawn from public/data/area.json, so it shows exactly what stands in the 3D world, in the
- * style of a dark vellum manuscript: gold ink, hatching, hand-wobbled outlines. The legend and the note
- * in ABOUT_HTML must be kept in step with docs/map-sources.md and with tools/build-area.mjs.
+ * style of a vellum manuscript: ink, hatching, hand-wobbled outlines, in one of three looks (light, dark,
+ * glow). The legend and the note in ABOUT_HTML must be kept in step with docs/map-sources.md and with
+ * tools/build-area.mjs.
  */
 export interface MapPose { x: number; z: number; yaw: number }
 export interface MapHooks { onOpen(): void; onClose(): void }
@@ -21,18 +22,64 @@ export interface MapUI {
 }
 
 // ---- the look --------------------------------------------------------------------------------
-const GROUND = '#1e1710';        // dark umber vellum
-const GROUND_GLOW = '#2a1e13';   // the same, warmer, as if lit from behind
-const GOLD = '#b3904f';          // gold ink: today's houses
-const GOLD_LINE = 'rgba(179, 144, 79, 0.78)';
-const SAGE = '#96aaa0';          // cool grey-green ink: the 1842 plan
-const SAGE_LINE = 'rgba(150, 170, 160, 0.62)';
-const HALL = '#7b2a1b', HALL_LINE = '#c9a45f';   // Town Hall and St Casimir's: vermilion, gold-edged
-const EDGE = 'rgba(201, 164, 95, 0.85)';         // the edge of the walk
-const YOU = '#d24a26', YOU_RGB = '210, 74, 38', RING = '#f0e2bd';
-const CREAM = '#f0e2bd';
-const NAME = 'rgba(232, 217, 182, 0.84)';
-const HALO = 'rgba(24, 18, 12, 0.92)';
+/** The map comes in three looks: light vellum in dark ink (the default), dark vellum in gold ink, and the dark
+ *  one lit from behind. A look is one table of colours; nothing below it names a colour. */
+export type Look = 'light' | 'dark' | 'glow';
+const LOOKS: Look[] = ['light', 'dark', 'glow'];
+interface Theme {
+  glow: boolean;
+  ground: string;
+  grain: number; seed: number;                       // vellum: brightness noise, and the noise's seed
+  fibre: string; fibreBase: number; fibreRange: number; // vellum: the few fibres (rgb, alpha = base + range * chance)
+  square: string; foot: string;                      // open squares, footway dots
+  todayFill: string; todayHat: string; todayLine: string; todayInk: string; // today's houses
+  planFill: string; planHat: string; planLine: string; planInk: string;     // the 1842 plan
+  hall: string; hallLine: string;                    // Town Hall and St Casimir's
+  edge: string;                                      // the edge of the walk
+  veil: string;                                      // rgb of the vellum, for what lies beyond the walk
+  vignette: string; vignetteAlpha: number;           // the aged edge of the full map (rgb)
+  you: string; youRgb: string; ring: string;
+  text: string; name: string; halo: string; note: string; // place names, street names, their halo, the edge note
+  compassDisc: string;
+}
+const DARK: Theme = {
+  glow: false,
+  ground: '#1e1710',                                 // dark umber vellum
+  grain: 10, seed: 1234,
+  fibre: '255, 240, 210', fibreBase: 0.02, fibreRange: 0.03,
+  square: 'rgba(194, 160, 102, 0.07)', foot: 'rgba(232, 217, 182, 0.17)',
+  todayFill: 'rgba(179, 144, 79, 0.09)', todayHat: 'rgba(179, 144, 79, 0.26)', todayLine: 'rgba(179, 144, 79, 0.78)', todayInk: '#b3904f', // gold ink
+  planFill: 'rgba(70, 88, 82, 0.34)', planHat: 'rgba(150, 170, 160, 0.3)', planLine: 'rgba(150, 170, 160, 0.62)', planInk: '#96aaa0',       // cool grey-green
+  hall: '#7b2a1b', hallLine: '#c9a45f',              // vermilion, gold-edged
+  edge: 'rgba(201, 164, 95, 0.85)',
+  veil: '30, 23, 16',
+  vignette: '13, 10, 7', vignetteAlpha: 0.55,
+  you: '#d24a26', youRgb: '210, 74, 38', ring: '#f0e2bd',
+  text: '#f0e2bd', name: 'rgba(232, 217, 182, 0.84)', halo: 'rgba(24, 18, 12, 0.92)', note: '#c9a45f',
+  compassDisc: 'rgba(20, 15, 10, 0.7)',
+};
+const THEMES: Record<Look, Theme> = {
+  dark: DARK,
+  // the same ink on warmer ground, with light given off by the ink and the landmarks
+  glow: { ...DARK, glow: true, ground: '#2a1e13', seed: 4242, todayHat: 'rgba(179, 144, 79, 0.34)', planHat: 'rgba(150, 170, 160, 0.38)' },
+  // aged vellum, walnut ink, verdigris for the 1842 plan, vermilion for the landmarks
+  light: {
+    glow: false,
+    ground: '#e6d9b7',
+    grain: 9, seed: 777,
+    fibre: '112, 80, 38', fibreBase: 0.035, fibreRange: 0.04,
+    square: 'rgba(255, 249, 230, 0.36)', foot: 'rgba(96, 66, 30, 0.4)',
+    todayFill: 'rgba(150, 104, 44, 0.16)', todayHat: 'rgba(120, 82, 32, 0.34)', todayLine: 'rgba(104, 70, 26, 0.82)', todayInk: '#8a6220',
+    planFill: 'rgba(58, 108, 100, 0.17)', planHat: 'rgba(46, 96, 90, 0.36)', planLine: 'rgba(40, 88, 82, 0.78)', planInk: '#3a6f68',
+    hall: '#b53a1e', hallLine: '#6b4514',
+    edge: 'rgba(122, 84, 24, 0.88)',
+    veil: '230, 217, 183',
+    vignette: '120, 84, 36', vignetteAlpha: 0.34,
+    you: '#c8371a', youRgb: '200, 55, 26', ring: '#2b1a0e',
+    text: '#2c1a0c', name: 'rgba(52, 36, 18, 0.9)', halo: 'rgba(233, 222, 190, 0.92)', note: '#7a5418',
+    compassDisc: 'rgba(236, 225, 196, 0.85)',
+  },
+};
 const F_STREET = 'italic 400 15px Almendra, Georgia, serif';
 const F_MAIN = 'italic 700 18px Almendra, Georgia, serif';
 const F_PLACE = '600 19px Cinzel, Georgia, serif';
@@ -236,40 +283,40 @@ function prepare(data: AreaData): Layers {
   };
 }
 
-/** A tile of vellum: dark ground, grain, a few fibres. One tile pixel is one device pixel. */
-function paperTile(dpr: number, glow: boolean): HTMLCanvasElement {
+/** A tile of vellum: the look's ground, grain, a few fibres. One tile pixel is one device pixel. */
+function paperTile(dpr: number, T: Theme): HTMLCanvasElement {
   const n = Math.round(256 * dpr);
   const c = document.createElement('canvas');
   c.width = c.height = n;
   const t = c.getContext('2d')!;
-  t.fillStyle = glow ? GROUND_GLOW : GROUND;
+  t.fillStyle = T.ground;
   t.fillRect(0, 0, n, n);
   const img = t.getImageData(0, 0, n, n), d = img.data;
-  let seed = glow ? 4242 : 1234;
+  let seed = T.seed;
   const rnd = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
-  for (let i = 0; i < d.length; i += 4) { const k = (rnd() - 0.5) * 10; d[i] += k; d[i + 1] += k; d[i + 2] += k; }
+  for (let i = 0; i < d.length; i += 4) { const k = (rnd() - 0.5) * T.grain; d[i] += k; d[i + 1] += k; d[i + 2] += k; }
   t.putImageData(img, 0, 0);
   t.lineWidth = Math.max(1, dpr * 0.6);
   for (let i = 0; i < 90; i++) {
     const x = rnd() * n, y = rnd() * n, a = rnd() * Math.PI, l = (6 + rnd() * 14) * dpr;
-    t.strokeStyle = `rgba(255, 240, 210, ${0.02 + rnd() * 0.03})`;
+    t.strokeStyle = `rgba(${T.fibre}, ${T.fibreBase + rnd() * T.fibreRange})`;
     t.beginPath(); t.moveTo(x, y); t.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + rnd() * 3, y + Math.sin(a) * l * 0.5 + rnd() * 3, x + Math.cos(a) * l, y + Math.sin(a) * l); t.stroke();
   }
   return c;
 }
 
 // ---- drawing ---------------------------------------------------------------------------------
-interface Paint { glow: boolean; paper: CanvasPattern | null; full: boolean; hats: Hats | null; compass?: { x: number; y: number } }
+interface Paint { theme: Theme; paper: CanvasPattern | null; full: boolean; hats: Hats | null; compass?: { x: number; y: number } }
 
 function outlines(g: CanvasRenderingContext2D, list: Plot[], seen: (b: Box) => boolean): void { for (const b of list) if (seen(b)) g.stroke(b.path); }
 function fills(g: CanvasRenderingContext2D, list: Plot[], seen: (b: Box) => boolean): void { for (const b of list) if (seen(b)) g.fill(b.path, 'evenodd'); }
 
 function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number, v: View, pose: MapPose, L: Layers, p: Paint): void {
-  const s = v.s, full = p.full, glow = p.glow;
+  const s = v.s, full = p.full, T = p.theme, glow = T.glow;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.globalAlpha = 1;
   g.globalCompositeOperation = 'source-over';
-  g.fillStyle = p.paper ?? (glow ? GROUND_GLOW : GROUND);
+  g.fillStyle = p.paper ?? T.ground;
   g.fillRect(0, 0, W, H);
   g.setTransform(dpr * s, 0, 0, dpr * s, dpr * (W / 2 - v.cx * s), dpr * (H / 2 - v.cz * s));
   const x0 = v.cx - W / 2 / s, x1 = v.cx + W / 2 / s, z0 = v.cz - H / 2 / s, z1 = v.cz + H / 2 / s;
@@ -279,27 +326,27 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   g.lineJoin = 'round';
 
   // squares, and footways as dots of ink
-  g.fillStyle = 'rgba(194, 160, 102, 0.07)';
+  g.fillStyle = T.square;
   fills(g, L.areas, seen);
-  g.strokeStyle = 'rgba(232, 217, 182, 0.17)';
+  g.strokeStyle = T.foot;
   g.lineWidth = px;
   g.setLineDash([px * 1.5, px * 5]);
   outlines(g, L.foot, seen);
   g.setLineDash([]);
 
   // today's houses: gold hatching and outline
-  g.fillStyle = 'rgba(179, 144, 79, 0.09)';
+  g.fillStyle = T.todayFill;
   fills(g, L.today, seen);
-  if (p.hats) { g.strokeStyle = glow ? 'rgba(179, 144, 79, 0.34)' : 'rgba(179, 144, 79, 0.26)'; g.lineWidth = px * 0.8; p.hats.today.draw(g, x0, z0, x1, z1); }
-  g.strokeStyle = GOLD_LINE;
+  if (p.hats) { g.strokeStyle = T.todayHat; g.lineWidth = px * 0.8; p.hats.today.draw(g, x0, z0, x1, z1); }
+  g.strokeStyle = T.todayLine;
   g.lineWidth = px * (full ? 1.2 : 1);
   outlines(g, L.today, seen);
 
   // the 1842 plan: cross-hatched in grey-green
-  g.fillStyle = 'rgba(70, 88, 82, 0.34)';
+  g.fillStyle = T.planFill;
   fills(g, L.plan, seen);
-  if (p.hats) { g.strokeStyle = glow ? 'rgba(150, 170, 160, 0.38)' : 'rgba(150, 170, 160, 0.3)'; g.lineWidth = px * 0.8; p.hats.plan.draw(g, x0, z0, x1, z1); }
-  g.strokeStyle = SAGE_LINE;
+  if (p.hats) { g.strokeStyle = T.planHat; g.lineWidth = px * 0.8; p.hats.plan.draw(g, x0, z0, x1, z1); }
+  g.strokeStyle = T.planLine;
   g.lineWidth = px * (full ? 1.05 : 0.9);
   outlines(g, L.plan, seen);
 
@@ -320,10 +367,10 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   }
   g.save();
   g.globalAlpha = full ? 0.95 : 0.8;
-  g.fillStyle = HALL;
+  g.fillStyle = T.hall;
   fills(g, L.hall, seen);
   g.restore();
-  g.strokeStyle = HALL_LINE;
+  g.strokeStyle = T.hallLine;
   g.lineWidth = px * (full ? 1.8 : 1.4);
   outlines(g, L.hall, seen);
 
@@ -335,9 +382,9 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
       g.strokeStyle = colour;
       for (const [k, a] of passes) { g.globalAlpha = a; g.lineWidth = px * w * k; outlines(g, list, seen); }
     };
-    halo(L.today, GOLD, full ? 1.2 : 1, [[5.5, 0.05], [2.8, 0.1]]);
-    halo(L.plan, SAGE, full ? 1.05 : 0.9, [[5.5, 0.03], [2.8, 0.055]]);
-    halo(L.hall, HALL_LINE, full ? 1.8 : 1.4, [[6, 0.09], [3, 0.16]]);
+    halo(L.today, T.todayInk, full ? 1.2 : 1, [[5.5, 0.05], [2.8, 0.1]]);
+    halo(L.plan, T.planInk, full ? 1.05 : 0.9, [[5.5, 0.03], [2.8, 0.055]]);
+    halo(L.hall, T.hallLine, full ? 1.8 : 1.4, [[6, 0.09], [3, 0.16]]);
     g.restore();
   }
 
@@ -346,17 +393,17 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const cx = W / 2 + (L.centre[0] - v.cx) * s, cz = H / 2 + (L.centre[1] - v.cz) * s, R = L.radius * s;
     const fade = g.createRadialGradient(cx, cz, R * 1.05, cx, cz, R * 2.7);
-    fade.addColorStop(0, 'rgba(30, 23, 16, 0)');
-    fade.addColorStop(0.35, 'rgba(30, 23, 16, 0.62)');
-    fade.addColorStop(1, 'rgba(30, 23, 16, 0.88)');
+    fade.addColorStop(0, `rgba(${T.veil}, 0)`);
+    fade.addColorStop(0.35, `rgba(${T.veil}, 0.62)`);
+    fade.addColorStop(1, `rgba(${T.veil}, 0.88)`);
     g.fillStyle = fade;
     g.fillRect(0, 0, W, H);
     g.setTransform(dpr * s, 0, 0, dpr * s, dpr * (W / 2 - v.cx * s), dpr * (H / 2 - v.cz * s));
   } else {
-    g.fillStyle = 'rgba(30, 23, 16, 0.55)';
+    g.fillStyle = `rgba(${T.veil}, 0.55)`;
     g.fill(L.veil, 'evenodd');
   }
-  g.strokeStyle = EDGE;
+  g.strokeStyle = T.edge;
   g.globalAlpha = full ? 1 : 0.7;
   g.lineWidth = px * (full ? 2.4 : 1.8);
   g.setLineDash([px * 2, px * 7]);
@@ -390,24 +437,24 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   if (full) {
     // an aged edge, darker towards the corners
     const vig = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.hypot(W, H) * 0.62);
-    vig.addColorStop(0, 'rgba(13, 10, 7, 0)');
-    vig.addColorStop(1, 'rgba(13, 10, 7, 0.55)');
+    vig.addColorStop(0, `rgba(${T.vignette}, 0)`);
+    vig.addColorStop(1, `rgba(${T.vignette}, ${T.vignetteAlpha})`);
     g.fillStyle = vig;
     g.fillRect(0, 0, W, H);
-    drawLabels(g, W, H, v, L, sx, sy);
-    if (p.compass) drawCompass(g, p.compass.x, p.compass.y, 34);
+    drawLabels(g, W, H, v, L, T, sx, sy);
+    if (p.compass) drawCompass(g, p.compass.x, p.compass.y, 34, T);
   }
-  drawYou(g, sx(pose.x), sy(pose.z), pose.yaw, full);
+  drawYou(g, sx(pose.x), sy(pose.z), pose.yaw, full, T);
   if (full) {
     g.font = 'italic 700 16px Almendra, Georgia, serif';
     g.textAlign = 'left';
     g.textBaseline = 'alphabetic';
-    g.fillStyle = CREAM;
-    halo(g, 'you', sx(pose.x) + 14, sy(pose.z) + 5);
+    g.fillStyle = T.text;
+    halo(g, 'you', sx(pose.x) + 14, sy(pose.z) + 5, T.halo);
   }
 }
 
-function halo(g: CanvasRenderingContext2D, text: string, x: number, y: number, colour = HALO): void {
+function halo(g: CanvasRenderingContext2D, text: string, x: number, y: number, colour: string): void {
   g.lineWidth = 4;
   g.lineJoin = 'round';
   g.strokeStyle = colour;
@@ -415,7 +462,7 @@ function halo(g: CanvasRenderingContext2D, text: string, x: number, y: number, c
   g.fillText(text, x, y);
 }
 
-function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, L: Layers, sx: (x: number) => number, sy: (z: number) => number): void {
+function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, L: Layers, T: Theme, sx: (x: number) => number, sy: (z: number) => number): void {
   const s = v.s;
   g.textAlign = 'center';
   g.textBaseline = 'alphabetic';
@@ -425,29 +472,29 @@ function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, 
   // Places first: the square, the two landmarks, the edge of the walk.
   if (L.square && s > 0.9) {
     g.font = F_PLACE;
-    g.fillStyle = CREAM;
+    g.fillStyle = T.text;
     const text = L.square.text.toUpperCase().split('').join(' '), x = sx(L.square.x), y = sy(L.square.z);
-    halo(g, text, x, y);
+    halo(g, text, x, y, T.halo);
     placed.push({ x, y, r: g.measureText(text).width / 2 + 4, name: text });
   }
   g.font = F_PLACE;
   for (const m of L.landmarks) {
     const x = sx(m.x), y = sy(m.z);
     if (x < -60 || y < -20 || x > W + 60 || y > H + 20) continue;
-    g.fillStyle = CREAM;
-    halo(g, m.text, x, y + 5, 'rgba(30, 10, 5, 0.8)');
+    g.fillStyle = T.text;
+    halo(g, m.text, x, y + 5, T.halo);
     placed.push({ x, y, r: g.measureText(m.text).width / 2 + 6, name: m.text });
   }
   if (s > 0.7) {
     g.font = F_NOTE;
-    g.fillStyle = '#c9a45f';
+    g.fillStyle = T.note;
     const a = Math.PI * 0.72, x = sx(L.centre[0] + Math.cos(a) * (L.radius - 9)), y = sy(L.centre[1] + Math.sin(a) * (L.radius - 9));
-    halo(g, 'edge of the walk', x, y);
+    halo(g, 'edge of the walk', x, y, T.halo);
     placed.push({ x, y, r: g.measureText('edge of the walk').width / 2 + 4, name: 'edge' });
   }
 
   // Streets, longest first, each only where its name fits along it.
-  g.fillStyle = NAME;
+  g.fillStyle = T.name;
   for (const l of L.labels) {
     const x = sx(l.x), y = sy(l.z);
     if (x < -40 || y < -40 || x > W + 40 || y > H + 40) continue;
@@ -460,18 +507,18 @@ function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, 
     g.save();
     g.translate(x, y);
     g.rotate(l.ang);
-    halo(g, l.text, 0, 5);
+    halo(g, l.text, 0, 5, T.halo);
     g.restore();
   }
 }
 
-function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number, full: boolean): void {
+function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number, full: boolean, T: Theme): void {
   // yaw 0 looks along -Z (north); forward is (-sin, -cos) on the ground, which is the screen's (x, y)
   const a = Math.atan2(-Math.cos(yaw), -Math.sin(yaw));
   const R = full ? 44 : 32, half = 0.6;
   const grad = g.createRadialGradient(x, y, 4, x, y, R);
-  grad.addColorStop(0, `rgba(${YOU_RGB}, ${full ? 0.6 : 0.5})`);
-  grad.addColorStop(1, `rgba(${YOU_RGB}, 0)`);
+  grad.addColorStop(0, `rgba(${T.youRgb}, ${full ? 0.6 : 0.5})`);
+  grad.addColorStop(1, `rgba(${T.youRgb}, 0)`);
   g.fillStyle = grad;
   g.beginPath();
   g.moveTo(x, y);
@@ -479,7 +526,7 @@ function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number,
   g.closePath();
   g.fill();
   // seven fine lines fan out, as if drawn with a pen
-  g.strokeStyle = `rgba(${YOU_RGB}, 0.6)`;
+  g.strokeStyle = `rgba(${T.youRgb}, 0.6)`;
   g.lineWidth = 1;
   g.beginPath();
   for (let k = -3; k <= 3; k++) {
@@ -490,38 +537,38 @@ function drawYou(g: CanvasRenderingContext2D, x: number, y: number, yaw: number,
   g.stroke();
   g.beginPath();
   g.arc(x, y, full ? 6 : 5.5, 0, Math.PI * 2);
-  g.fillStyle = full ? YOU : 'rgba(210, 74, 38, 0.92)';
+  g.fillStyle = full ? T.you : `rgba(${T.youRgb}, 0.92)`;
   g.fill();
   g.lineWidth = 2;
-  g.strokeStyle = RING;
+  g.strokeStyle = T.ring;
   g.stroke();
 }
 
 /** A compass rose: a fleur for north, points in two-tone gold. */
-function drawCompass(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+function drawCompass(g: CanvasRenderingContext2D, x: number, y: number, r: number, T: Theme): void {
   g.save();
   g.translate(x, y);
-  g.fillStyle = 'rgba(20, 15, 10, 0.7)';
+  g.fillStyle = T.compassDisc;
   g.beginPath(); g.arc(0, 0, r * 1.5, 0, Math.PI * 2); g.fill();
-  g.strokeStyle = GOLD;
+  g.strokeStyle = T.todayInk;
   g.lineWidth = 1.2;
   g.beginPath(); g.arc(0, 0, r * 0.62, 0, Math.PI * 2); g.stroke();
   g.beginPath(); g.arc(0, 0, r * 0.7, 0, Math.PI * 2); g.stroke();
   const point = (ang: number, len: number, wid: number) => {
     g.save();
     g.rotate(ang);
-    g.beginPath(); g.moveTo(0, -len); g.lineTo(wid, 0); g.lineTo(0, 0); g.closePath(); g.fillStyle = GOLD; g.fill(); g.lineWidth = 1; g.stroke();
-    g.beginPath(); g.moveTo(0, -len); g.lineTo(-wid, 0); g.lineTo(0, 0); g.closePath(); g.fillStyle = GROUND; g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(0, -len); g.lineTo(wid, 0); g.lineTo(0, 0); g.closePath(); g.fillStyle = T.todayInk; g.fill(); g.lineWidth = 1; g.stroke();
+    g.beginPath(); g.moveTo(0, -len); g.lineTo(-wid, 0); g.lineTo(0, 0); g.closePath(); g.fillStyle = T.ground; g.fill(); g.stroke();
     g.restore();
   };
   for (let k = 0; k < 4; k++) point(Math.PI / 4 + k * Math.PI / 2, r * 0.55, r * 0.11);
   for (let k = 0; k < 4; k++) point(k * Math.PI / 2, r, r * 0.16);
-  g.fillStyle = GOLD;
+  g.fillStyle = T.todayInk;
   g.beginPath(); g.moveTo(0, -r * 1.34); g.quadraticCurveTo(r * 0.16, -r * 1.16, 0, -r * 1.02); g.quadraticCurveTo(-r * 0.16, -r * 1.16, 0, -r * 1.34); g.fill();
   g.font = '700 12px Cinzel, Georgia, serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillStyle = CREAM;
+  g.fillStyle = T.text;
   g.fillText('S', 0, r * 1.22);
   g.fillText('E', r * 1.22, 1);
   g.fillText('W', -r * 1.22, 1);
@@ -553,12 +600,16 @@ const ICON = {
   here: '<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.2"/><path d="M10 2V5.5M10 14.5V18M2 10H5.5M14.5 10H18"/></svg>',
 };
 
-function savedGlow(): boolean {
+const LOOK_NAMES: Record<Look, string> = { light: 'Light', dark: 'Dark', glow: 'Glow' };
+/** The look last chosen (or asked for with ?map=light|dark|glow); light when nothing was. */
+function savedLook(): Look {
   try {
     const q = new URLSearchParams(location.search).get('map');
-    if (q) return q === 'glow';
-    return localStorage.getItem('vo.map.glow') === '1';
-  } catch { return false; }
+    if (q && (LOOKS as string[]).includes(q)) return q as Look;
+    const v = localStorage.getItem('vo.map.look');
+    if (v && (LOOKS as string[]).includes(v)) return v as Look;
+  } catch { /* storage or the address is not readable: use the default */ }
+  return 'light';
 }
 
 export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks): MapUI {
@@ -590,7 +641,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
       <button type="button" class="mv-btn mv-icon" data-zoom="in" aria-label="Zoom in">${ICON.plus}</button>
       <button type="button" class="mv-btn mv-icon" data-zoom="out" aria-label="Zoom out">${ICON.minus}</button>
       <button type="button" class="mv-btn mv-icon" data-here aria-label="Show where I am">${ICON.here}</button>
-      <button type="button" class="mv-btn mv-pill" data-glow aria-pressed="false">Glow</button>
+      <div class="mv-looks" role="group" aria-label="Look of the map">${LOOKS.map(k => `<button type="button" data-look="${k}" aria-pressed="false">${LOOK_NAMES[k]}</button>`).join('')}</div>
     </div>
     <aside class="mv-about">
       <button type="button" class="mv-about-head" aria-expanded="true"><span>About this map</span><i aria-hidden="true"></i></button>
@@ -603,23 +654,30 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
   const scaleLine = scaleBar.querySelector('i')!, scaleText = scaleBar.querySelector('span')!;
   const aboutHead = full.querySelector<HTMLButtonElement>('.mv-about-head')!;
   const closeBtn = full.querySelector<HTMLButtonElement>('.mv-close')!;
-  const glowBtn = full.querySelector<HTMLButtonElement>('[data-glow]')!;
+  const lookBtns = [...full.querySelectorAll<HTMLButtonElement>('[data-look]')];
   document.body.append(mini, full);
 
-  // Vellum, plain and glowing, as a pattern for each canvas
-  const tiles = { plain: paperTile(dpr, false), glow: paperTile(dpr, true) };
-  const papers = (ctx: CanvasRenderingContext2D) => {
-    const make = (t: HTMLCanvasElement) => { const pat = ctx.createPattern(t, 'repeat'); pat?.setTransform(new DOMMatrix().scale(1 / dpr)); return pat; };
-    return { plain: make(tiles.plain), glow: make(tiles.glow) };
+  // Vellum in each look, as a pattern for each canvas; made when a look is first shown
+  const tiles = new Map<Look, HTMLCanvasElement>();
+  const patterns = new Map<string, CanvasPattern | null>();
+  const paperFor = (which: 'full' | 'mini', k: Look) => {
+    const key = `${which}/${k}`;
+    if (!patterns.has(key)) {
+      if (!tiles.has(k)) tiles.set(k, paperTile(dpr, THEMES[k]));
+      const pat = (which === 'full' ? g : miniG).createPattern(tiles.get(k)!, 'repeat');
+      pat?.setTransform(new DOMMatrix().scale(1 / dpr));
+      patterns.set(key, pat);
+    }
+    return patterns.get(key)!;
   };
-  const paperFull = papers(g), paperMini = papers(miniG);
 
-  let glow = savedGlow();
-  const applyGlow = () => {
-    full.classList.toggle('glow', glow);
-    mini.classList.toggle('glow', glow);
-    glowBtn.setAttribute('aria-pressed', String(glow));
-    for (const el of [mini, full]) el.style.setProperty('--map-ground', glow ? GROUND_GLOW : GROUND);
+  let look = savedLook();
+  const applyLook = () => {
+    for (const el of [mini, full]) {
+      for (const k of LOOKS) el.classList.toggle(`look-${k}`, k === look);
+      for (const v of ['--map-ground', '--sw-ground']) el.style.setProperty(v, THEMES[look].ground);
+    }
+    for (const b of lookBtns) b.setAttribute('aria-pressed', String(b.dataset.look === look));
     dirty = true;
     last.x = NaN;
   };
@@ -670,7 +728,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
   const drawFull = () => {
     const tb = titleEl.getBoundingClientRect();
     drawMap(g, W, H, dpr, view, pose(), L, {
-      glow, full: true, paper: glow ? paperFull.glow : paperFull.plain, hats: hatsAt(view.s),
+      theme: THEMES[look], full: true, paper: paperFor('full', look), hats: hatsAt(view.s),
       compass: { x: tb.left + 48, y: tb.bottom + 68 },
     });
     // scale bar: the longest round number of metres that fits in about 120 px
@@ -687,7 +745,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
     if (Math.abs(p.x - last.x) < 0.03 && Math.abs(p.z - last.z) < 0.03 && Math.abs(p.yaw - last.yaw) < 0.004) return;
     last = { x: p.x, z: p.z, yaw: p.yaw };
     const s = size / MINI_SPAN;
-    drawMap(miniG, size, size, dpr, { cx: p.x, cz: p.z, s }, p, L, { glow, full: false, paper: glow ? paperMini.glow : paperMini.plain, hats: hatsAt(s) });
+    drawMap(miniG, size, size, dpr, { cx: p.x, cz: p.z, s }, p, L, { theme: THEMES[look], full: false, paper: paperFor('mini', look), hats: hatsAt(s) });
   };
 
   const setAbout = (openIt: boolean) => {
@@ -715,14 +773,14 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks):
     hooks.onClose();
   };
 
-  applyGlow();
+  applyLook();
   mini.addEventListener('click', open);
   closeBtn.addEventListener('click', close);
   aboutHead.addEventListener('click', () => setAbout(full.classList.contains('about-closed')));
-  glowBtn.addEventListener('click', () => {
-    glow = !glow;
-    try { localStorage.setItem('vo.map.glow', glow ? '1' : '0'); } catch { /* the choice lasts until the page closes */ }
-    applyGlow();
+  for (const b of lookBtns) b.addEventListener('click', () => {
+    look = b.dataset.look as Look;
+    try { localStorage.setItem('vo.map.look', look); } catch { /* the choice lasts until the page closes */ }
+    applyLook();
   });
   full.querySelectorAll<HTMLElement>('[data-zoom]').forEach(b => b.addEventListener('click', () => {
     zoomAt(W / 2, H / 2, b.dataset.zoom === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP);

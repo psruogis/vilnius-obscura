@@ -21,7 +21,7 @@ Windows and Linux. A static copy for any web server: `node tools/build-static.mj
 Controls: W A S D to walk, Shift to jog, mouse (or click-drag) to look, mouse wheel to
 zoom the camera in and out, Tab opens the full-screen map (Tab or Esc closes it), M to mute,
 backtick (`` ` ``) toggles the stats overlay. On a phone, tap the round map in the corner. The full map has a
-Glow switch (or `?map=glow`).
+Light / Dark / Glow switch (light is the default; or `?map=dark`, `?map=glow`).
 `?weather=clear` for the dry morning.
 
 ### Why not `npm run dev`?
