@@ -11,7 +11,7 @@ Tags follow `docs/REFERENCES.md`: **[V]** verified, **[U]** unverified or a desi
 Vellum and ink: outlines wobble a little as a hand's do, houses are hatched, names are set in Almendra
 (streets), Cinzel (places) and UnifrakturCook (the title). It is a design choice, not a claim about how any
 1900 plan looked. [U] The map has three looks, chosen with a switch on the full map (and remembered):
-**Pastel** (the default: a dusky, lifted ground with faded sand, powder blue and dusty rose), **Dark**
+**Pastel** (the default: a dark dusky ground with faded, see-through sand, powder blue and dusty rose; the corner map lets the scene show through a little), **Dark**
 (dark vellum, gold ink) and **Glow** (Dark with a soft light behind the ink and the landmarks). Every colour
 of a look is one table, `THEMES` in `src/ui/map.ts`; the legend swatches and the full-screen panels follow it
 (`src/style.css`). The legend in the panel is one colour and a few words per row; the sources are listed under it.

@@ -36,6 +36,11 @@ reorder freely.
 
 ## Small jobs
 
+- **Music:** the player is built (`src/audio/music.ts`, list in `public/assets/music/tracks.json`, currently empty) but no
+  pieces are in it. The plan: public-domain composers of the setting (Moniuszko, Čiurlionis, Chopin) in CC0 or
+  public-domain recordings, each checked for licence and listed in `CREDITS.md`. Blocked on fetching recordings:
+  this environment's network policy denies commons.wikimedia.org, archive.org and musopen.org. Not Gothic 2's
+  soundtrack: it is under copyright.
 - **Map:** the 1842 tracing cannot be re-run from the repo (its georeference and helper module live in
   a scratch folder; see `docs/map-sources.md`, Known gaps). Trace the 1866 plan into a second layer, or
   find a plan from about 1900, and let the map show which era each block comes from.

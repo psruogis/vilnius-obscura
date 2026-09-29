@@ -62,22 +62,22 @@ const THEMES: Record<Look, Theme> = {
   dark: DARK,
   // the same ink on warmer ground, with light given off by the ink and the landmarks
   glow: { ...DARK, glow: true, ground: '#2a1e13', seed: 4242, todayHat: 'rgba(179, 144, 79, 0.34)', planHat: 'rgba(150, 170, 160, 0.38)' },
-  // faded: a dusky, lifted ground with chalky pastel ink, low in contrast, as if left in the sun
+  // faded and dark: a dusky ground with chalky pastel ink, low in contrast and see-through, so that layers blend
   pastel: {
     glow: false,
-    ground: '#3b3633',
-    grain: 8, seed: 909,
-    fibre: '255, 244, 224', fibreBase: 0.025, fibreRange: 0.03,
-    square: 'rgba(236, 224, 196, 0.07)', foot: 'rgba(236, 224, 196, 0.24)',
-    todayFill: 'rgba(226, 208, 170, 0.15)', todayHat: 'rgba(226, 208, 170, 0.2)', todayLine: 'rgba(226, 208, 170, 0.5)', todayInk: '#e2d0aa', // sand
-    planFill: 'rgba(146, 176, 176, 0.3)', planHat: 'rgba(190, 212, 210, 0.22)', planLine: 'rgba(190, 212, 210, 0.5)', planInk: '#bed4d2',       // powder blue-green
-    hall: '#b8867a', hallLine: '#f0e2c6',              // dusty rose, cream-edged
-    edge: 'rgba(226, 208, 170, 0.62)',
-    veil: '59, 54, 51',
-    vignette: '26, 22, 20', vignetteAlpha: 0.36,
-    you: '#ee9a80', youRgb: '238, 154, 128', ring: '#f8efdc',
-    text: '#f2e8d2', name: 'rgba(232, 221, 198, 0.74)', halo: 'rgba(52, 46, 43, 0.9)', note: '#e2d0aa',
-    compassDisc: 'rgba(42, 37, 34, 0.55)',
+    ground: '#26221f',
+    grain: 7, seed: 909,
+    fibre: '255, 244, 224', fibreBase: 0.018, fibreRange: 0.025,
+    square: 'rgba(230, 216, 188, 0.05)', foot: 'rgba(230, 216, 188, 0.16)',
+    todayFill: 'rgba(214, 196, 158, 0.09)', todayHat: 'rgba(214, 196, 158, 0.15)', todayLine: 'rgba(214, 196, 158, 0.38)', todayInk: '#cdbb94', // sand
+    planFill: 'rgba(120, 148, 148, 0.2)', planHat: 'rgba(170, 192, 190, 0.16)', planLine: 'rgba(170, 192, 190, 0.38)', planInk: '#a9bfbc',       // powder blue-green
+    hall: 'rgba(176, 118, 106, 0.72)', hallLine: 'rgba(232, 214, 180, 0.7)', // dusty rose, cream-edged
+    edge: 'rgba(214, 196, 158, 0.5)',
+    veil: '38, 34, 31',
+    vignette: '14, 12, 11', vignetteAlpha: 0.45,
+    you: '#e2937a', youRgb: '226, 147, 122', ring: 'rgba(248, 239, 220, 0.92)',
+    text: '#e6dcc6', name: 'rgba(222, 211, 190, 0.66)', halo: 'rgba(34, 30, 28, 0.85)', note: '#cdbb94',
+    compassDisc: 'rgba(28, 24, 22, 0.5)',
   },
 };
 const F_STREET = 'italic 400 15px Almendra, Georgia, serif';

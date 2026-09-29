@@ -82,15 +82,16 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 /* Looks of the map. Dark is the base; pastel overrides what differs (glow differs only in the canvas, and in the ground
    colour that ui/map.ts sets as --map-ground and --sw-ground). --sw-* colour the legend swatches. */
 .minimap { --map-n: rgba(244, 239, 230, 0.7); }
+.minimap.look-pastel { opacity: 0.9; } /* the corner map lets the scene show through, so it blends in */
 .mapview {
   --sw-today: #b3904f; --sw-plan: #96aaa0; --sw-hall: #7b2a1b; --sw-hall-line: #c9a45f; --sw-you: #d24a26; --sw-ring: #f0e2bd; --sw-edge: #c9a45f;
   --mv-panel: rgba(12, 10, 8, 0.86); --mv-panel-solid: rgba(12, 10, 8, 0.95); --mv-btn: rgba(20, 18, 16, 0.78); --mv-btn-hi: rgba(20, 18, 16, 0.92);
   --mv-edge: rgba(244, 239, 230, 0.12); --mv-line: rgba(244, 239, 230, 0.5); --mv-title: #d9bb7c; --mv-accent: #c9a45f; --mv-accent-ink: #1e1710;
 }
 .mapview.look-pastel {
-  --sw-today: #e2d0aa; --sw-plan: #bed4d2; --sw-hall: #b8867a; --sw-hall-line: #f0e2c6; --sw-you: #ee9a80; --sw-ring: #f8efdc; --sw-edge: #e2d0aa;
-  --mv-panel: rgba(46, 41, 38, 0.88); --mv-panel-solid: rgba(46, 41, 38, 0.95); --mv-btn: rgba(54, 49, 46, 0.82); --mv-btn-hi: rgba(66, 60, 56, 0.92);
-  --mv-title: #eadcb8; --mv-accent: #e2d0aa; --mv-accent-ink: #2e2926;
+  --sw-today: #cdbb94; --sw-plan: #a9bfbc; --sw-hall: #8f5f55; --sw-hall-line: #e8d6b4; --sw-you: #e2937a; --sw-ring: #f8efdc; --sw-edge: #cdbb94;
+  --mv-panel: rgba(34, 30, 28, 0.88); --mv-panel-solid: rgba(34, 30, 28, 0.95); --mv-btn: rgba(42, 37, 34, 0.82); --mv-btn-hi: rgba(54, 48, 44, 0.92);
+  --mv-title: #d9c9a4; --mv-accent: #cdbb94; --mv-accent-ink: #26221f;
 }
 
 .mapview { position: fixed; inset: 0; z-index: 40; background: var(--map-ground); color: var(--ink); }
