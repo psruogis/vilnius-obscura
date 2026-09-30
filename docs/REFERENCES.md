@@ -383,6 +383,39 @@ Category: https://commons.wikimedia.org/wiki/Category:Church_of_St._Casimir_in_V
 | **1836 elevation before the Russian rebuild** | [Vilnia, Vialikaja, Jezuicki. Вільня, Вялікая, Езуіцкі (M. Januševič, 1836).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Vialikaja,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%92%D1%8F%D0%BB%D1%96%D0%BA%D0%B0%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%28M._Janu%C5%A1evi%C4%8D,_1836%29.jpg) | Public domain | Marceli Januszewicz | 621×587 |
 | 1837 survey | [Vilnia, Jezuicki. Вільня, Езуіцкі (1837).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%281837%29.jpg) | Public domain | unknown | 1000×661 |
 | **1840 façade survey** (crown, clock towers) | [Vilnia, Vialikaja, Jezuicki. Вільня, Вялікая, Езуіцкі (1840).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Vialikaja,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%92%D1%8F%D0%BB%D1%96%D0%BA%D0%B0%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%281840%29.jpg) | Public domain | unknown | 720×1161 |
+| **1870s, the west front after the 1864–68 rebuild** | [Vilnia, Vialikaja, Jezuicki. Вільня, Вялікая, Езуіцкі (1870-79).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Vialikaja,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%92%D1%8F%D0%BB%D1%96%D0%BA%D0%B0%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%281870-79%29.jpg) (State Museum of the History of St Petersburg, 190793) | Public Domain Mark | unknown | 800×596 |
+| **20 June 1889, the porch close up** (looking west from the church steps) | [Vilnia, Vialikaja, Jezuicki. Вільня, Вялікая, Езуіцкі (20.06.1889).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Vialikaja,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%92%D1%8F%D0%BB%D1%96%D0%BA%D0%B0%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%2820.06.1889%29.jpg) (*Widoki Wilna i okolic*, Vilnius University Library F46-1537) | PD-old-100 | unknown | 4757×3721 |
+
+Not yet looked at (Commons rate-limited the download): *(S. Fleury, 1896)* and *(M. Butkoŭski, 1896-1914)*, same title pattern.
+
+### 5.3 The c.1900 west front as modelled (rebuilt 30 Sep 2026)
+
+From four owner-supplied images (sources not recorded): **(a)** a c.1900 frontal view from the square; **(b)** a c.1900 view
+of the square from the south-west, the church at an angle; **(c)** a German postcard of 1915–18, *Die griechisch-katholische
+Kirche in Wilna*, hand-tinted; **(d)** a 3D model of today's church; **(e)** a sharp view from the square,
+[pastvu.com/915912](https://pastvu.com/915912) (uploaded by Goharskiy; date and licence not checked, used as reference only);
+**(f)** a winter view from the south-west (source not recorded). Checked against the 1870s and 1889 photos above.
+`src/world/stcasimir.ts`, variant `photos` (the default).
+
+| Feature | Evidence | Status |
+|---|---|---|
+| An attic storey across the whole front on the upper cornice (about 3 m): over each tower a block with pedestals on the pilaster lines, a framed panel and a cartouche with an oval window; between the towers and the turret a lower block with a balustrade; a cornice round it | (e), (f): the layer between the towers and the main storeys | [V] |
+| Tower tops, on the attic: a narrower stage (about 2 m) with scroll brackets at the corners, garlands and urns; a bell dome about 6 m across; a small open lantern, a ribbed bulb, the cross at about 43 m | 1870s photo, (a), (b), (c), (e); heights scaled from (e) | [V] forms / [U] sizes |
+| The towers' upper-storey openings are belfries with bells hanging in them, a balustrade across each | 1870s photo: bells visible in both; (c): the balustrades | [V] |
+| The north tower looks taller in the 1870s photo and (a) | (b) shows why: from the square the crossing dome's lantern stands just behind the north tower. The towers are modelled alike | [V] |
+| The three middle niches hold painted icons (saints on gold), not statues | (c) shows them in colour; the Orthodox conversion would have removed the Catholic statues. The saints themselves are drawn generically | [V] icons / [U] subjects |
+| Central turret (1864–68): square stage about 8 m wide standing forward through the attic, cornice at about 39 m, a tall glazed arched window under a segmental hood between corner pilasters, S-scrolls from the attic up its sides; a dome straight on the cornice with round dormers, a **clock** in the one facing the square, corner urns; lantern, bulb, cross at about 52 m, the highest point of the front | 1870s photo, (a), (e) (heights scaled from the 30 m façade) | [V] forms / [U] sizes |
+| Upper-storey arches crowned with small cartouches; composite volutes on the pilaster capitals; garland drops under the lower capitals | (e) | [V] |
+| Porch: paired Tuscan columns against a front wall with an arched door and a radiating fanlight, a cartouche over the door | 1889 photo | [V] |
+| Porch entablature Doric, with triglyphs | 1889 photo | [V] |
+| Porch pediment: broken segmental, a round clock in a scrolled frame rising through the break | 1889 photo (the face is blank there; hands added, set to ten past ten) | [V] form / [U] hands |
+| Porch dome: ribbed, a festoon of swags round its base, an open lantern, bulb and cross reaching the first cornice | 1889 and 1870s photos | [V] |
+| Ground storey: tower bays blind, with a tall moulded panel and at its head a large cartouche framing an oval window; the bays either side of the porch have tall glazed windows under a smaller such cartouche | 1870s and 1889 photos, (b), (c) | [V] |
+| A base of banded rustication up to the porch cornice (about 8 m): across the whole front, pilasters included, and round the tower sides, capped by a continuous band; in (c) a paler, greyer pink than the walls (`#b8a7a4`), not grey (the grey read of it came from the black-and-white photos) | (b), (c) | [V] form / [U] colour |
+| Porch: an arched window in each side wall; on the dome a short lantern under a ribbed, crown-like bulb | (b), (c) | [V] |
+| Crossing dome: an open octagonal lantern with tall arched openings under a ribbed bulb and cross (was a plain drum) | (b) | [V] form / [U] sizes |
+| Colour, from (c), the only colour reference, averaged over lit areas: rose walls and pilaster shafts (`#cd9d96`); capitals, cornices, frames, cartouches, lanterns and the porch pinkish cream (`#ecdcd3`); the porch dome near white with dark red-brown ribs; helms light grey (`#c4c8ca`). (c) is hand-tinted, and the black-and-white photos show walls and dressings in one tone, so these are the postcard's colours, not proven ones | (c) | [U] |
+| (d), the 3D model of today's church | Used only to check the 18th-century attic stage above the upper cornice; nothing from it is in the game. It shows the post-1942 crown and the lowered towers, so it is not a guide to 1900 | [U] |
 
 ---
 

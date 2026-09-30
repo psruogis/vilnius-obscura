@@ -38,6 +38,27 @@ const WALL = /* glsl */ `
   }
 `;
 
+// Faded limewash (opt-in): the pigment washed out towards off-white in large soft blotches and
+// long runs down the walls, deeper and dirtier where it survives, uneven brushwork throughout.
+// After the tinted 1915-18 postcard of St Casimir's, whose pink is anything but even.
+const FADE = /* glsl */ `
+  {
+    vec3 p = vAgeWorld, n = normalize(vAgeNormal);
+    float vert = 1.0 - smoothstep(0.55, 0.8, abs(n.y));
+    vec2 q2 = vert > 0.5 ? vec2(dot(p.xz, normalize(vec2(-n.z, n.x) + 1e-5)), p.y) : p.xz;
+    vec3 c = diffuseColor.rgb;
+    vec3 wash = mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), vec3(0.93, 0.9, 0.86), 0.6);
+    float bleach = smoothstep(0.38, 0.74, ag_fbm(q2 * 0.12 + uAgeSeed * 7.0));
+    float run = ag_fbm(vec2(q2.x * 1.1, p.y * 0.05) + uAgeSeed * 2.0);
+    bleach = max(bleach, vert * smoothstep(0.52, 0.78, run) * 0.85);
+    c = mix(c, wash, uAgeFade * bleach * 0.55);
+    float deep = smoothstep(0.55, 0.85, ag_fbm(q2 * 0.3 + 17.0 + uAgeSeed));
+    c = mix(c, c * vec3(0.8, 0.72, 0.7), uAgeFade * deep * 0.6);
+    c *= 1.0 + uAgeFade * 0.14 * (ag_noise(q2 * 3.1 + uAgeSeed) - 0.5);
+    diffuseColor.rgb = c;
+  }
+`;
+
 const ROOF = /* glsl */ `
   {
     vec3 p = vAgeWorld, n = normalize(vAgeNormal);
@@ -63,7 +84,7 @@ const ROOF = /* glsl */ `
   }
 `;
 
-export interface AgeOptions { ground?: number; strength?: number; seed?: number; roof?: boolean }
+export interface AgeOptions { ground?: number; strength?: number; seed?: number; roof?: boolean; /** faded limewash, 0..1 */ fade?: number }
 
 export function age(m: THREE.Material, opts: AgeOptions = {}): THREE.Material {
   const own = m.onBeforeCompile;
@@ -72,6 +93,7 @@ export function age(m: THREE.Material, opts: AgeOptions = {}): THREE.Material {
     uAgeGround: { value: opts.ground ?? -1000 },
     uAgeStrength: { value: opts.strength ?? 1 },
     uAgeSeed: { value: opts.seed ?? 0 },
+    uAgeFade: { value: opts.fade ?? 0 },
   };
   m.onBeforeCompile = (shader, renderer) => {
     own.call(m, shader, renderer);
@@ -85,10 +107,10 @@ export function age(m: THREE.Material, opts: AgeOptions = {}): THREE.Material {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
         varying vec3 vAgeWorld; varying vec3 vAgeNormal;
-        uniform float uAgeGround; uniform float uAgeStrength; uniform float uAgeSeed;
+        uniform float uAgeGround; uniform float uAgeStrength; uniform float uAgeSeed; uniform float uAgeFade;
         ${NOISE}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        ${opts.roof ? ROOF : WALL}`);
+        ${opts.roof ? ROOF : WALL}${opts.fade ? FADE : ''}`);
   };
   if (!opts.roof) {
     const prev = m.onBeforeCompile;
@@ -108,7 +130,7 @@ export function age(m: THREE.Material, opts: AgeOptions = {}): THREE.Material {
         }`);
     };
   }
-  m.customProgramCacheKey = () => `${ownKey}|age-${opts.roof ? 'roof' : 'wall'}`;
+  m.customProgramCacheKey = () => `${ownKey}|age-${opts.roof ? 'roof' : 'wall'}${opts.fade ? '-fade' : ''}`;
   m.needsUpdate = true;
   return m;
 }

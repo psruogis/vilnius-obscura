@@ -158,16 +158,20 @@ async function main(force = false): Promise<void> {
   const stCasimirData = data.buildings.find(b => b.role === 'stcasimir');
   if (stCasimirData) {
     const m = createChurchMaterials(aniso);
-    for (const k of ['wall', 'stone'] as const) age(m[k], { ground: stCasimirData.groundY, strength: 1, seed: 2 });
+    // faded, uneven limewash as in the tinted postcard: fully on the walls, less on the base and dressings
+    const fade = { wall: 1, base: 0.8, stone: 0.45 } as const;
+    const churchFade = new URLSearchParams(location.search).get('church') === '1800' ? 0 : 1;
+    for (const k of ['wall', 'stone', 'base'] as const) age(m[k], { ground: stCasimirData.groundY, strength: 1, seed: 2, fade: fade[k] * churchFade });
     age(m.roof, { roof: true, strength: 0.7 });
-    if (RAIN) { for (const k of ['wall', 'stone'] as const) wet(m[k], 'wall', stCasimirData.groundY); }
-    // ?church=1800 shows the pre-1864 form; default follows the owner's c.1900 photographs:
-    // a pale limewashed front and dark painted-metal helms
+    if (RAIN) { for (const k of ['wall', 'stone', 'base'] as const) wet(m[k], 'wall', stCasimirData.groundY); }
+    // ?church=1800 shows the pre-1864 form; default follows the owner's c.1900 photographs and the
+    // coloured 1915-18 postcard, the only colour reference: rose walls and pilasters, pinkish-cream
+    // dressings, a paler, greyer pink for the banded base, light grey helms (docs/REFERENCES.md §5.3)
     const churchForm = new URLSearchParams(location.search).get('church') === '1800' ? '1800' : 'photos';
     if (churchForm === 'photos') {
-      (m.wall as THREE.MeshStandardMaterial).color.set('#e2d9c6');
-      (m.stone as THREE.MeshStandardMaterial).color.set('#ece5d6');
-      (m.dome as THREE.MeshStandardMaterial).color.set('#46534c');
+      (m.wall as THREE.MeshStandardMaterial).color.set('#cd9d96');
+      (m.stone as THREE.MeshStandardMaterial).color.set('#ecdcd3');
+      (m.dome as THREE.MeshStandardMaterial).color.set('#c4c8ca');
       (m.roof as THREE.MeshStandardMaterial).color.set('#565d5c');
     }
     scene.add(buildStCasimir(stCasimirData, m, churchForm));

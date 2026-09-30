@@ -18,6 +18,10 @@ reorder freely.
   street furniture, water, townsfolk and the map follow it, so growing the walk street by street is a data change.
   The LiDAR was extended east to cover the gate site (`tools/lidar/README.md`). Cost: about 7% more draw calls and
   14% more triangles when the road is in view (the houses along Subačiaus are big blocks, windowed on every side).
+- **St Casimir's west front, c.1900:** rebuilt from the owner's photos and postcard and the 1870s and 1889 photos: tower
+  attics with cartouches and urns under bell domes and open lanterns, bells in the belfries, painted icons in the niches,
+  the 1864–68 turret with its scrolls and dormered dome, the porch with its broken pediment and clock, rustication below
+  (`src/world/stcasimir.ts`, `docs/REFERENCES.md` §5.3).
 - **Street title:** the name of the street you are walking on shows at the top for a few seconds, then fades
   (`src/ui/place.ts`). Today's names from OpenStreetMap, like the map's: what each street was called around 1900 is
   not researched (open question 4), so the title will need a second source when it is.
@@ -54,6 +58,10 @@ reorder freely.
 
 ## Small jobs
 
+- **Faded plaster on the other houses** (about half an hour). St Casimir's has a faded, uneven limewash (`fade` in
+  `age()`, `src/world/ageing.ts`, after the tinted 1915-18 postcard). Turn it on for the plain house walls
+  (`main.ts`, `wallMat`), the hero houses' plaster (`houseMaterials.ts`) and the Town Hall, tuned per material: the
+  houses are cream, ochre and grey, and the Town Hall should stay the cleanest. Check in rain and dry weather.
 - **Music:** klezmer (Harry Kandel's Orchestra, 1921) that drifts in near the west and north edges of the walk, where
   the German Street meets the Jewish quarter, and nowhere else: there is no music everywhere. See `docs/music.md`. Free
   in Europe, not only in the US. Open: more places with their own music (a German Street zone), a piece by Čiurlionis or

@@ -234,6 +234,42 @@ export function createTownHallMaterials(anisotropy: number) {
 }
 
 /** Materials for St Casimir's (simplified): plaster, lead-grey sheet roofs, copper cupolas, gilt crown. */
+/**
+ * Three painted icons for the niches of St Casimir's in its Orthodox years (the 1915-18 postcard shows
+ * saints in colour where the Catholic church had statues): standing figures with haloes on gold,
+ * side by side on one canvas, a third each. Drawn here, so there is no image to license.
+ */
+function iconTexture(anisotropy: number): THREE.Texture {
+  const W = 384, H = 384, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d')!;
+  const panel = (i: number, robe: string, mantle: string, book: boolean) => {
+    const x = i * 128;
+    g.fillStyle = '#3e2416'; g.fillRect(x, 0, 128, H);                       // the frame
+    const gold = g.createLinearGradient(0, 0, 0, H);
+    gold.addColorStop(0, '#a88a48'); gold.addColorStop(1, '#6e5328');
+    g.fillStyle = gold; g.fillRect(x + 7, 7, 114, H - 14);
+    g.fillStyle = '#7a6a3a'; g.fillRect(x + 7, H - 40, 114, 33);             // the ground they stand on
+    g.fillStyle = '#c9aa5e'; g.beginPath(); g.arc(x + 64, 92, 25, 0, Math.PI * 2); g.fill();   // halo
+    g.strokeStyle = '#8a5a2a'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = robe; g.beginPath();                                         // robe
+    g.moveTo(x + 48, 116); g.lineTo(x + 80, 116); g.lineTo(x + 90, 346); g.lineTo(x + 38, 346); g.closePath(); g.fill();
+    g.fillStyle = mantle; g.beginPath();                                       // mantle over the left shoulder
+    g.moveTo(x + 44, 118); g.lineTo(x + 74, 122); g.quadraticCurveTo(x + 66, 230, x + 84, 300); g.lineTo(x + 40, 346); g.lineTo(x + 36, 200); g.closePath(); g.fill();
+    g.fillStyle = '#b88a60'; g.beginPath(); g.ellipse(x + 64, 94, 11, 15, 0, 0, Math.PI * 2); g.fill();   // face
+    g.fillStyle = '#4a3222'; g.beginPath(); g.ellipse(x + 64, 106, 10, 8, 0, 0, Math.PI); g.fill();        // beard
+    g.fillStyle = '#b88a60'; g.beginPath(); g.ellipse(x + 76, 168, 6, 8, 0, 0, Math.PI * 2); g.fill();     // raised hand
+    if (book) { g.fillStyle = '#8a2a1e'; g.fillRect(x + 50, 176, 22, 28); g.fillStyle = '#d8b35c'; g.fillRect(x + 58, 184, 6, 12); }
+  };
+  panel(0, '#7d2b22', '#2c3f5a', true);
+  panel(1, '#2c3f5a', '#8a2a1e', true);
+  panel(2, '#3f5a3a', '#7d2b22', false);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = anisotropy;
+  return t;
+}
+
 export function createChurchMaterials(anisotropy: number) {
   return {
     wall: plasterMaterial('#d8b47e', anisotropy),
@@ -242,6 +278,9 @@ export function createChurchMaterials(anisotropy: number) {
     dome: new THREE.MeshStandardMaterial({ color: '#8a4a36', metalness: 0.25, roughness: 0.6, side: THREE.DoubleSide }),
     gilt: new THREE.MeshStandardMaterial({ color: '#c9a44e', metalness: 1, roughness: 0.35 }),
     dark: new THREE.MeshStandardMaterial({ color: '#1d1b19', roughness: 0.9, side: THREE.DoubleSide }),
+    bronze: new THREE.MeshStandardMaterial({ color: '#6b5636', metalness: 0.85, roughness: 0.5, side: THREE.DoubleSide }),
+    icon: new THREE.MeshStandardMaterial({ map: iconTexture(anisotropy), color: '#d6cec2', roughness: 0.6, metalness: 0.15 }),
+    base: plasterMaterial('#b8a7a4', anisotropy),
   };
 }
 
