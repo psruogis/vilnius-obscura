@@ -46,6 +46,10 @@ reorder freely.
 
 ## Small jobs
 
+- **Faded plaster on the other houses** (about half an hour). St Casimir's has a faded, uneven limewash (`fade` in
+  `age()`, `src/world/ageing.ts`, after the tinted 1915-18 postcard). Turn it on for the plain house walls
+  (`main.ts`, `wallMat`), the hero houses' plaster (`houseMaterials.ts`) and the Town Hall, tuned per material: the
+  houses are cream, ochre and grey, and the Town Hall should stay the cleanest. Check in rain and dry weather.
 - **Music:** klezmer (Harry Kandel's Orchestra, 1921) that drifts in near the west and north edges of the walk, where
   the German Street meets the Jewish quarter, and nowhere else: there is no music everywhere. See `docs/music.md`. Free
   in Europe, not only in the US. Open: more places with their own music (a German Street zone), a piece by Čiurlionis or
