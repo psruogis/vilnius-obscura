@@ -390,22 +390,28 @@ Not yet looked at (Commons rate-limited the download): *(S. Fleury, 1896)* and *
 
 ### 5.3 The c.1900 west front as modelled (rebuilt 30 Sep 2026)
 
-From the owner's c.1900 photo (a frontal view from the square, source not recorded), checked against the 1870s and 1889
-photos above. `src/world/stcasimir.ts`, variant `photos` (the default).
+From four owner-supplied images (sources not recorded): **(a)** a c.1900 frontal view from the square; **(b)** a c.1900 view
+of the square from the south-west, the church at an angle; **(c)** a German postcard of 1915–18, *Die griechisch-katholische
+Kirche in Wilna*, hand-tinted; **(d)** a 3D model of today's church. Checked against the 1870s and 1889 photos above.
+`src/world/stcasimir.ts`, variant `photos` (the default).
 
 | Feature | Evidence | Status |
 |---|---|---|
-| Tower tops: on the upper cornice an attic with corner strips, a round cartouche between two garlands, a cornice with an urn on each corner; then a bell dome, an open octagonal lantern with arched openings, a bulb and the cross | 1870s photo (zoomed), owner's photo | [V] forms / [U] sizes |
-| The towers' upper-storey openings are belfries with bells hanging in them | 1870s photo: bells visible in both | [V] |
-| The two tower tops look unequal in both photos (the north one taller) | The right-hand side of the front is about 8% smaller in the 1870s photo too, so the camera was turned: read as perspective and modelled symmetric | [U] |
+| Tower tops: on the upper cornice an attic with corner strips, a cartouche with an oval window between two garlands, a cornice with an urn on each corner; then a bell dome, a slim open octagonal lantern, a ribbed bulb and the cross | 1870s photo (zoomed), (a), (b), (c) | [V] forms / [U] sizes |
+| The towers' upper-storey openings are belfries with bells hanging in them, a balustrade across each | 1870s photo: bells visible in both; (c): the balustrades | [V] |
+| The north tower looks taller in the 1870s photo and (a) | (b) shows why: from the square the crossing dome's lantern stands just behind the north tower. The towers are modelled alike | [V] |
+| The three middle niches hold painted icons (saints on gold), not statues | (c) shows them in colour; the Orthodox conversion would have removed the Catholic statues. The saints themselves are drawn generically | [V] icons / [U] subjects |
 | Central turret (1864–68): square stage about 8 m wide, cornice at about 40 m, a tall glazed arched window between corner pilasters, great S-scrolls down to the towers; a dome with round dormers and corner urns, lantern, bulb, cross; the highest point of the front | 1870s photo, owner's photo (heights scaled from the 30 m façade) | [V] forms / [U] sizes |
 | A 1.6 m drum under the turret dome | Not in the photos. They were taken from further back than the square allows; without it the cornice hides the dome from the street | [U] design choice |
 | Porch: paired Tuscan columns against a front wall with an arched door and a radiating fanlight, a cartouche over the door | 1889 photo | [V] |
 | Porch entablature Doric, with triglyphs | 1889 photo | [V] |
 | Porch pediment: broken segmental, a round clock in a scrolled frame rising through the break | 1889 photo (the face is blank there; hands added, set to ten past ten) | [V] form / [U] hands |
 | Porch dome: ribbed, a festoon of swags round its base, an open lantern, bulb and cross reaching the first cornice | 1889 and 1870s photos | [V] |
-| Ground storey: tower bays blind, with a large cartouche high up; the bays either side of the porch have tall glazed windows with a cartouche framing an oval window above | 1870s and 1889 photos | [V] |
-| An owner-supplied 3D model of today's church (source not stated) | Used only to check the 18th-century attic stage above the upper cornice; nothing from it is in the game. It shows the post-1942 crown and the lowered towers, so it is not a guide to 1900 | [U] |
+| Ground storey: tower bays blind, with a tall moulded panel and at its head a large cartouche framing an oval window; the bays either side of the porch have tall glazed windows under a smaller such cartouche; banded rustication over the lower part (to about 8 m) | 1870s and 1889 photos, (b), (c) | [V] |
+| Porch: an arched window in each side wall; on the dome a short lantern under a ribbed, crown-like bulb | (b), (c) | [V] |
+| Crossing dome: an open octagonal lantern with tall arched openings under a ribbed bulb and cross (was a plain drum) | (b) | [V] form / [U] sizes |
+| Colour: (c) is tinted salmon-pink walls with pale dressings and silver-grey domes. The black-and-white photos show the front lighter than its neighbours and walls and dressings in one tone, and orthochromatic film of the time darkens reds, so the front stays pale: walls a shade warmer than the dressings (`#cdbfa3` on `#efe9dc`, a difference too slight to show on those plates) so the relief reads in the rain; domes dark painted metal as in (a) | (a), (b), (c) | [U] design choice |
+| (d), the 3D model of today's church | Used only to check the 18th-century attic stage above the upper cornice; nothing from it is in the game. It shows the post-1942 crown and the lowered towers, so it is not a guide to 1900 | [U] |
 
 ---
 

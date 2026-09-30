@@ -8,9 +8,10 @@ reorder freely.
 - **The walk (M1–M4):** real footprints and heights, period façades and roofs, cobbles, the Town Hall
   and St Casimir's (in its c. 1900 Orthodox form), townsfolk, cabs, the market, rain, sound, the
   title screen, credits. See `README.md` and the git log.
-- **St Casimir's west front, c.1900:** rebuilt from the owner's photo and the 1870s and 1889 photos: tower attics with
-  cartouches and urns under bell domes and open lanterns, bells in the belfries, the 1864–68 turret with its scrolls and
-  dormered dome, the porch with its broken pediment and clock (`src/world/stcasimir.ts`, `docs/REFERENCES.md` §5.3).
+- **St Casimir's west front, c.1900:** rebuilt from the owner's photos and postcard and the 1870s and 1889 photos: tower
+  attics with cartouches and urns under bell domes and open lanterns, bells in the belfries, painted icons in the niches,
+  the 1864–68 turret with its scrolls and dormered dome, the porch with its broken pediment and clock, rustication below
+  (`src/world/stcasimir.ts`, `docs/REFERENCES.md` §5.3).
 - **Street title:** the name of the street you are walking on shows at the top for a few seconds, then fades
   (`src/ui/place.ts`). Today's names from OpenStreetMap, like the map's: what each street was called around 1900 is
   not researched (open question 4), so the title will need a second source when it is.
