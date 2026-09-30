@@ -233,7 +233,7 @@ export interface ChurchMaterials {
   gilt: THREE.Material;  // crown and crosses
   dark: THREE.Material;  // window and door openings
   bronze: THREE.Material; // the bells
-  base: THREE.Material;   // the banded stone base of the front (c.1900)
+  base: THREE.Material;   // the banded base of the front (c.1900), a paler, greyer pink than the walls
   icon: THREE.Material;   // the painted icons in the niches (1864-1915)
 }
 
@@ -371,7 +371,8 @@ export function buildStCasimir(b: Building, mats: ChurchMaterials, variant: 'pho
   wall.push(bevelBox(9, T2 + 1, inner * 2, 4.5, T2 / 2 - 0.5, 0, 0.06));
   // plinth, and the storey entablatures (frieze band and cornice) round the front and the towers.
   // In the photos (the 1915-18 postcard, the c.1900 view of the square) the lower storey stands on a
-  // base of banded rustication in grey stone up to the porch cornice, pilasters and all.
+  // base of banded rustication up to the porch cornice, pilasters and all, in the postcard a paler,
+  // greyer pink than the walls.
   const plinthL = old ? stone : base, BASE_TOP = 7.9;
   fb(plinthL, 0, -1, 1.3, W + 0.6, 0.35);
   plinthL.push(sweep(frontRun(1.3, W / 2 + 0.3, towerW), Y, [[0.35, 0], [0.35, 0.04], [0.31, 0.08], [0.27, 0.1], [0.25, 0.16], [0, 0.18]]));        // plinth moulding
@@ -680,7 +681,7 @@ export function buildStCasimir(b: Building, mats: ChurchMaterials, variant: 'pho
     stone.push(new THREE.SphereGeometry(3.2, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2).translate(dcx, at + 0.6, 0));   // near white in the postcard
     for (let k = 0; k < 12; k++) {
       const a = (k / 12) * Math.PI * 2;
-      dome.push(new THREE.TorusGeometry(3.23, 0.07, 4, 12, Math.PI / 2).rotateY(-a).translate(dcx, at + 0.6, 0));   // its ribs darker
+      bronze.push(new THREE.TorusGeometry(3.23, 0.08, 4, 12, Math.PI / 2).rotateY(-a).translate(dcx, at + 0.6, 0)); // its ribs dark red-brown
     }
     lantern(stone, stone, dark, dcx, at + 3.7, 0, 0.62, 1.4);
     dome.push(bellDome(0.8, 0.35, 0.3).translate(dcx, at + 5.1, 0));
