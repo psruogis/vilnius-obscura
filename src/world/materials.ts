@@ -180,6 +180,7 @@ export function createChurchMaterials(anisotropy: number) {
     dome: new THREE.MeshStandardMaterial({ color: '#8a4a36', metalness: 0.25, roughness: 0.6, side: THREE.DoubleSide }),
     gilt: new THREE.MeshStandardMaterial({ color: '#c9a44e', metalness: 1, roughness: 0.35 }),
     dark: new THREE.MeshStandardMaterial({ color: '#1d1b19', roughness: 0.9, side: THREE.DoubleSide }),
+    bronze: new THREE.MeshStandardMaterial({ color: '#6b5636', metalness: 0.85, roughness: 0.5, side: THREE.DoubleSide }),
   };
 }
 

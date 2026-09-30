@@ -4,12 +4,13 @@ import { mbox, merged, trianglesToGeometry } from './geom';
 import { bevelBox, sweep, lathe, steadyAge, type P2 } from './classical';
 
 /*
- * St Casimir's Church. West front after the c.1900 photographs (the owner's reference), or with
- * variant '1800' the pre-1864 form; the body is simplified ("landmark-lite").
- * Sources (docs/REFERENCES.md §5): KVR 27304; OSM outline (way 29503660); national LiDAR
- * (eaves ~18 m, top ~56 m); the 1836 Januszewicz view and 1840 survey drawing for the
- * pre-1864 form: taller square west towers with clock stages and domed caps, a crown on
- * the dome lantern. Proportions of towers, drum and crown are conjecture (grade C).
+ * St Casimir's Church. West front after the c.1900 photographs (the owner's reference, checked
+ * against the 1870s and 1889 photos on Commons), or with variant '1800' the pre-1864 form; the
+ * body is simplified ("landmark-lite").
+ * Sources (docs/REFERENCES.md §5, the c.1900 front feature by feature in §5.3): KVR 27304; OSM
+ * outline (way 29503660); national LiDAR (eaves ~18 m, top ~56 m); the 1836 Januszewicz view and
+ * 1840 survey drawing for the pre-1864 form: taller square west towers with clock stages and domed
+ * caps, a crown on the dome lantern. Proportions of towers, drum and crown are conjecture (grade C).
  *
  * Mouldings are drawn, not boxed (classical.ts): the storey entablatures are swept cornice profiles
  * that wrap round the towers, the openings have arched architraves with keystones and sills, the
@@ -85,6 +86,113 @@ function tuscan(r: number, h: number): THREE.BufferGeometry {
 /** A swept moulding (frieze band or cornice) along the west front and back along the tower sides. */
 const frontRun = (y: number, half: number, ret: number) => [v3(ret, y, half), v3(0, y, half), v3(0, y, -half), v3(ret, y, -half)];
 
+/** Turns a surface inside out (faces and normals), for reveals seen from within, like an arch soffit. */
+function inward(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const s = g.index ? g.toNonIndexed() : g;
+  for (const name of ['position', 'normal', 'uv']) {
+    const a = s.getAttribute(name) as THREE.BufferAttribute | undefined;
+    if (!a) continue;
+    for (let i = 0; i < a.count; i += 3) for (let c = 0; c < a.itemSize; c++) {
+      const t = a.getComponent(i + 1, c); a.setComponent(i + 1, c, a.getComponent(i + 2, c)); a.setComponent(i + 2, c, t);
+    }
+  }
+  const n = s.getAttribute('normal') as THREE.BufferAttribute;
+  for (let i = 0; i < n.array.length; i++) (n.array as Float32Array)[i] *= -1;
+  return s;
+}
+
+/** Wall-plane ornament is drawn facing west (-X) at the origin, then turned to face `a` radians about Y and placed. */
+const placeOn = (g: THREE.BufferGeometry, a: number, x: number, y: number, z: number) => g.rotateY(a).translate(x, y, z);
+
+/**
+ * A Baroque cartouche, s high-ish: an oval shield (or, given `oculus`, an oval window) in a moulded
+ * ring, scrolls curling out at the sides, a crest above and a drop below. Faces west.
+ */
+function cartouche(out: THREE.BufferGeometry[], s: number, a: number, x: number, y: number, z: number, oculus?: THREE.BufferGeometry[]): void {
+  const parts: THREE.BufferGeometry[] = [];
+  if (oculus) oculus.push(placeOn(new THREE.CircleGeometry(0.4 * s, 14).scale(1, 1.3, 1).rotateY(-Math.PI / 2).translate(-0.03 * s, 0, 0), a, x, y, z)); // an oval window
+  else parts.push(new THREE.SphereGeometry(1, 12, 8).scale(0.14 * s, 0.62 * s, 0.46 * s).translate(-0.02 * s, 0, 0));  // shield
+  parts.push(new THREE.TorusGeometry(0.52 * s, 0.07 * s, 5, 20).scale(1, 1.3, 1).rotateY(Math.PI / 2));               // ring
+  for (const sz of [-1, 1]) {
+    // side scrolls (a curl each side at the waist) and ear scrolls at the top
+    parts.push(new THREE.TorusGeometry(0.17 * s, 0.055 * s, 4, 8, Math.PI * 1.5).rotateZ(sz > 0 ? Math.PI * 0.75 : -Math.PI * 0.25).rotateY(Math.PI / 2).translate(-0.02 * s, -0.2 * s, sz * 0.66 * s));
+    parts.push(new THREE.TorusGeometry(0.12 * s, 0.045 * s, 4, 7, Math.PI * 1.5).rotateZ(sz > 0 ? -Math.PI * 0.25 : Math.PI * 0.75).rotateY(Math.PI / 2).translate(-0.02 * s, 0.62 * s, sz * 0.36 * s));
+  }
+  parts.push(new THREE.SphereGeometry(0.15 * s, 8, 5).scale(0.6, 1.3, 1).translate(-0.04 * s, 0.86 * s, 0));          // crest
+  parts.push(new THREE.ConeGeometry(0.1 * s, 0.34 * s, 8).rotateX(Math.PI).translate(-0.03 * s, -0.86 * s, 0));         // drop
+  for (const p of parts) out.push(placeOn(p, a, x, y, z));
+}
+
+/** A garland swag hanging between two points `span` apart on a west-facing wall, centred at (x, y, z). */
+function swag(out: THREE.BufferGeometry[], span: number, a: number, x: number, y: number, z: number): void {
+  const arc = 1.9, R = span / 2 / Math.sin(arc / 2);
+  const g = new THREE.TorusGeometry(R, 0.075 + span * 0.02, 5, 10, arc).rotateZ(-Math.PI / 2 - arc / 2);
+  g.translate(0, R * Math.cos(arc / 2), 0).rotateY(Math.PI / 2).translate(-0.06, 0, 0);
+  out.push(placeOn(g, a, x, y, z));
+  for (const sz of [-1, 1]) out.push(placeOn(new THREE.SphereGeometry(0.1, 6, 4).translate(-0.08, 0.02, sz * span / 2), a, x, y, z)); // the knots it hangs from
+}
+
+/** A festoon of n swags hung round a drum of radius R centred at (x, y, z). */
+function festoon(out: THREE.BufferGeometry[], n: number, R: number, x: number, y: number, z: number): void {
+  const span = 2 * R * Math.sin(Math.PI / n);
+  for (let k = 0; k < n; k++) {
+    const g: THREE.BufferGeometry[] = [];
+    swag(g, span, 0, -R * Math.cos(Math.PI / n), 0, 0);
+    for (const p of g) out.push(p.rotateY(((k + 0.5) / n) * Math.PI * 2).translate(x, y, z));
+  }
+}
+
+/** Glazing bars over a dark window of width w, height h (arched: the lights stop at the springing), sill at y0. */
+function glazing(out: THREE.BufferGeometry[], x: number, z: number, y0: number, w: number, h: number, round: boolean): void {
+  const top = round ? h - w / 2 : h, t = 0.055, mh = round ? h - 0.06 : h;
+  const n = w > 2 ? 3 : 2;
+  for (let i = 1; i < n; i++) out.push(mbox(t, mh, t, x - 0.03, y0 + mh / 2, z - w / 2 + (i * w) / n));
+  for (let y = 0.8; y < top - 0.1; y += 0.8) out.push(mbox(t, t, w, x - 0.03, y0 + y, z));
+  if (round) out.push(mbox(t, t, w, x - 0.03, y0 + top, z));
+}
+
+/** A bell of lip radius r with its lip at (x, y, z), hung from an iron stem `stem` long. */
+function bell(bronze: THREE.BufferGeometry[], dark: THREE.BufferGeometry[], r: number, stem: number, x: number, y: number, z: number): void {
+  const h = r * 1.8;
+  bronze.push(lathe([[r * 1.0, 0], [r * 1.02, h * 0.04], [r * 0.9, h * 0.1], [r * 0.78, h * 0.28], [r * 0.64, h * 0.55],
+    [r * 0.6, h * 0.78], [r * 0.55, h * 0.9], [r * 0.36, h * 0.98], [0, h]], 20).translate(x, y, z));
+  dark.push(new THREE.CircleGeometry(r * 0.9, 20).rotateX(Math.PI / 2).translate(x, y + 0.03, z));   // the mouth, seen from the street
+  bronze.push(mbox(0.08, stem, 0.08, x, y + h + stem / 2, z));
+}
+
+/** An onion bulb r wide at the belly and h tall, with a narrow neck at the foot (radius 0.35 r). */
+function bulb(r: number, h: number): THREE.BufferGeometry {
+  return lathe([[0, 0], [r * 0.35, 0], [r * 0.5, h * 0.06], [r * 0.84, h * 0.18], [r, h * 0.32], [r * 0.95, h * 0.45], [r * 0.72, h * 0.6],
+    [r * 0.42, h * 0.75], [r * 0.2, h * 0.88], [r * 0.09, h * 0.97], [0, h]], 24);
+}
+
+/**
+ * An octagonal lantern, r to the corners, h tall: arched openings on the eight faces, a plinth ring
+ * and a moulded cornice. Walls go to `wall`, the openings to `dark`, mouldings to `stone`.
+ */
+function lantern(wall: THREE.BufferGeometry[], stone: THREE.BufferGeometry[], dark: THREE.BufferGeometry[],
+  x: number, y: number, z: number, r: number, h: number): void {
+  wall.push(new THREE.CylinderGeometry(r, r, h, 8).translate(x, y + h / 2, z));
+  stone.push(new THREE.CylinderGeometry(r + 0.12, r + 0.18, 0.3, 8).translate(x, y + 0.15, z));
+  stone.push(lathe(corniceP(r * 0.96, r * 0.96 + 0.3, 0.35), 8).translate(x, y + h - 0.35, z));
+  const ap = r * Math.cos(Math.PI / 8), fw = 2 * r * Math.sin(Math.PI / 8);
+  for (let k = 0; k < 8; k++) {
+    const th = ((k + 0.5) / 8) * Math.PI * 2;
+    const g = arched(0, 0, 0, fw * 0.55, h * 0.62, 'x');
+    g.rotateY(th + Math.PI / 2).translate(x + Math.sin(th) * (ap + 0.012), y + h * 0.17, z + Math.cos(th) * (ap + 0.012));
+    dark.push(g);
+    // a pilaster strip on each angle
+    const ta = (k / 8) * Math.PI * 2;
+    stone.push(new THREE.BoxGeometry(0.16, h - 0.5, 0.16).rotateY(ta).translate(x + Math.sin(ta) * r, y + h / 2 - 0.05, z + Math.cos(ta) * r));
+  }
+}
+
+/** A bell-shaped Baroque dome, r at the eaves, h tall, closing onto a neck of radius `neck`. */
+function bellDome(r: number, h: number, neck: number): THREE.BufferGeometry {
+  return lathe([[r * 1.02, 0], [r * 1.05, h * 0.03], [r, h * 0.08], [r * 0.97, h * 0.16], [r * 0.92, h * 0.34], [r * 0.8, h * 0.54],
+    [r * 0.62, h * 0.72], [r * 0.44, h * 0.86], [Math.max(neck, r * 0.3), h * 0.96], [neck, h], [0, h]], 32);
+}
+
 export interface ChurchMaterials {
   wall: THREE.Material;
   stone: THREE.Material;
@@ -92,6 +200,7 @@ export interface ChurchMaterials {
   dome: THREE.Material;  // copper
   gilt: THREE.Material;  // crown and crosses
   dark: THREE.Material;  // window and door openings
+  bronze: THREE.Material; // the bells
 }
 
 /** Oriented bounding box of a ring: tries each edge direction, keeps the smallest area. */
@@ -199,9 +308,29 @@ export function buildStCasimir(b: Building, mats: ChurchMaterials, variant: 'pho
   const fb = (list: THREE.BufferGeometry[], z: number, y0: number, y1: number, w: number, d: number, x = 0) =>
     list.push(bevelBox(d, y1 - y0, w, x - d / 2, (y0 + y1) / 2, z, Math.min(0.04, d * 0.2, (y1 - y0) * 0.2)));
   const west = v3(-1, 0, 0);
-  // bodies: towers and the central section (tall enough to meet the nave roof)
-  for (const sgn of [-1, 1]) wall.push(bevelBox(towerW, T3 + 1, towerW, towerW / 2, T3 / 2 - 0.5, sgn * towerZ, 0.06));
-  wall.push(bevelBox(8, T2 + 1, inner * 2, 4, T2 / 2 - 0.5, 0, 0.06));
+  // bodies: towers and the central section (tall enough to meet the nave roof). The towers stop at
+  // the upper cornice and their top stages stand on it. In the photos the tower openings of the upper
+  // storey are belfries with bells hanging in them, so there the opening is cut 1 m into the tower.
+  const bronze: THREE.BufferGeometry[] = [];
+  const bel = { w: 2.1, y0: T1 + 1.6, h: 6.2, d: 1.0 };
+  for (const sgn of [-1, 1]) {
+    const z = sgn * towerZ, top = T2 + 0.5;
+    if (old) { wall.push(bevelBox(towerW, top + 1, towerW, towerW / 2, (top - 1) / 2, z, 0.06)); continue; }
+    const { w, y0, h, d } = bel, y1 = y0 + h, ow = w / 2, side = (towerW - w) / 2, spring = y1 - ow;
+    wall.push(bevelBox(towerW, y0 + 1, towerW, towerW / 2, (y0 - 1) / 2, z, 0.03));                          // below the opening
+    wall.push(bevelBox(towerW, top - y1, towerW, towerW / 2, (y1 + top) / 2, z, 0.03));                       // above it
+    for (const s of [-1, 1]) wall.push(bevelBox(towerW, h, side, towerW / 2, y0 + h / 2, z + s * (ow + side / 2), 0.01)); // piers
+    wall.push(bevelBox(towerW - d, h, w, d + (towerW - d) / 2, y0 + h / 2, z, 0.01));                        // back
+    for (const s of [-1, 1]) {                                                                                  // spandrels
+      const sh = new THREE.Shape();
+      sh.moveTo(s * ow, 0); sh.lineTo(s * ow, ow); sh.lineTo(0, ow); sh.absarc(0, 0, ow, Math.PI / 2, s > 0 ? 0 : Math.PI, s > 0);
+      wall.push(new THREE.ShapeGeometry(sh, 10).rotateY(-Math.PI / 2).translate(0, spring, z));
+    }
+    wall.push(inward(new THREE.CylinderGeometry(ow, ow, d, 14, 1, true, Math.PI, Math.PI).rotateZ(-Math.PI / 2).translate(d / 2, spring, z))); // soffit
+    dark.push(arched(d - 0.012, z, y0, w, h, 'x'));
+    bell(bronze, dark, 0.55, spring - (y0 + 3.3) - 0.99, d * 0.52, y0 + 3.3, z);
+  }
+  wall.push(bevelBox(9, T2 + 1, inner * 2, 4.5, T2 / 2 - 0.5, 0, 0.06));
   // plinth, and the storey entablatures (frieze band and cornice) round the front and the towers
   fb(stone, 0, -1, 1.3, W + 0.6, 0.35);
   stone.push(sweep(frontRun(1.3, W / 2 + 0.3, towerW), Y, [[0.35, 0], [0.35, 0.04], [0.31, 0.08], [0.27, 0.1], [0.25, 0.16], [0, 0.18]]));        // plinth moulding
@@ -221,20 +350,29 @@ export function buildStCasimir(b: Building, mats: ChurchMaterials, variant: 'pho
       stone.push(sweep(u(y0 + 0.22), Y, PIL_BASE));
     }
   }
-  // lower storey: a round-headed window on each tower with a cartouche above; windows by the portal
+  // lower storey. In the photos the tower bays are blind, with a cartouche high up, and the windows by
+  // the portal are tall and glazed with a cartouche over each; 1800: a round-headed window on each tower.
   for (const sgn of [-1, 1]) {
     const z = sgn * towerZ;
-    dark.push(arched(-0.012, z, 6.2, 2.0, 4.2, 'x'));
-    framed(stone, v3(0, 6.2, z), west, 2.0, 4.2);
-    stone.push(new THREE.SphereGeometry(0.75, 20, 12).scale(0.35, 1.25, 1).translate(-0.3, 13.8, z));   // cartouche
-    stone.push(lathe([[0.95, 0], [0.95, 0.06], [0.88, 0.1], [0.8, 0.1], [0.8, 0.16], [0, 0.18]], 32).rotateZ(Math.PI / 2).scale(1, 1.3, 1).translate(-0.02, 13.8, z)); // its frame
-    fb(stone, z, 11.4, 11.7, 3.0, 0.25);                     // sill band
-    dark.push(new THREE.PlaneGeometry(1.8, 3.2).rotateY(-Math.PI / 2).translate(-0.012, 12.2, sgn * 4.6));
-    framed(stone, v3(0, 10.6, sgn * 4.6), west, 1.8, 3.2, false, 0.8);
+    if (old) {
+      dark.push(arched(-0.012, z, 6.2, 2.0, 4.2, 'x'));
+      framed(stone, v3(0, 6.2, z), west, 2.0, 4.2);
+      stone.push(new THREE.SphereGeometry(0.75, 20, 12).scale(0.35, 1.25, 1).translate(-0.3, 13.8, z));   // cartouche
+      stone.push(lathe([[0.95, 0], [0.95, 0.06], [0.88, 0.1], [0.8, 0.1], [0.8, 0.16], [0, 0.18]], 32).rotateZ(Math.PI / 2).scale(1, 1.3, 1).translate(-0.02, 13.8, z)); // its frame
+      fb(stone, z, 11.4, 11.7, 3.0, 0.25);                     // sill band
+      dark.push(new THREE.PlaneGeometry(1.8, 3.2).rotateY(-Math.PI / 2).translate(-0.012, 12.2, sgn * 4.6));
+      framed(stone, v3(0, 10.6, sgn * 4.6), west, 1.8, 3.2, false, 0.8);
+    } else {
+      cartouche(stone, 1.9, 0, -0.05, 14.9, z);
+      dark.push(new THREE.PlaneGeometry(1.8, 4.0).rotateY(-Math.PI / 2).translate(-0.012, 12.6, sgn * 4.6));
+      framed(stone, v3(0, 10.6, sgn * 4.6), west, 1.8, 4.0, false, 0.8);
+      glazing(stone, 0, sgn * 4.6, 10.6, 1.8, 4.0, false);
+      cartouche(stone, 1.15, 0, -0.05, 16.1, sgn * 4.6, dark);            // with an oval window (1889 photo)
+    }
   }
   dark.push(arched(-0.012, 0, 0, 3.2, 7.0, 'x'));            // main portal
   framed(stone, v3(0, 0, 0), west, 3.2, 7.0, true, 1.3);
-  // upper storey: tower windows and three niches with statues
+  // upper storey: tower openings (belfries in the photos, cut above) and three niches with statues
   for (const [z, w, isNiche] of [[-towerZ, 2.1, false], [-5.4, 2.0, true], [0, 2.5, true], [5.4, 2.0, true], [towerZ, 2.1, false]] as [number, number, boolean][]) {
     const h = z === 0 ? 7.0 : 6.2, y0 = T1 + 1.6;
     if (isNiche) {
@@ -245,13 +383,14 @@ export function buildStCasimir(b: Building, mats: ChurchMaterials, variant: 'pho
       stone.push(bevelBox(0.8, 0.6, 1.0, sx, base + 0.3, z, 0.04));
       stone.push(lathe([[0.5, 0], [0.47, sh * 0.25], [0.4, sh * 0.5], [0.3, sh * 0.66], [0.2, sh * 0.72], [0.16, sh * 0.74], [0.24, sh * 0.8], [0.22, sh * 0.88], [0.12, sh * 0.93], [0, sh * 0.95]], 16).translate(sx, base + 0.6, z));
     } else {
-      dark.push(arched(-0.012, z, y0, w, h, 'x'));
+      if (old) dark.push(arched(-0.012, z, y0, w, h, 'x'));
       framed(stone, v3(0, y0, z), west, w, h);
     }
   }
-  // balustrade with urns over the centre, between towers and turret
+  // balustrade over the centre, between the towers and the turret (or the 1800 gable)
+  const zt = old ? 3.6 : 4.1;
   for (const sgn of [-1, 1]) {
-    const za = sgn * 3.6, zb = sgn * (inner - 0.2);
+    const za = sgn * zt, zb = sgn * (inner - 0.2);
     fb(stone, (za + zb) / 2, T2, T2 + 0.25, Math.abs(zb - za), 0.6, -0.1);
     fb(stone, (za + zb) / 2, T2 + 1.0, T2 + 1.2, Math.abs(zb - za), 0.6, -0.1);
     for (let z = Math.min(za, zb) + 0.3; z < Math.max(za, zb) - 0.2; z += 0.45) stone.push(lathe(BALUSTER, 10).translate(-0.4, T2 + 0.25, z));
@@ -274,93 +413,186 @@ export function buildStCasimir(b: Building, mats: ChurchMaterials, variant: 'pho
       gilt.push(mbox(0.12, 0.12, hgt * 0.3, 0, 0, 0).rotateX(0.38).translate(x, y + hgt * 0.3, z));
     }
   };
+  const urn = (s: number, x: number, y: number, z: number) => stone.push(lathe(URN.map(([r, h]) => [r * s, h * s] as P2), 12).translate(x, y, z));
   for (const sgn of [-1, 1]) {
-    const z = sgn * towerZ, cx = towerW / 2, sw = towerW - 1.2;
-    wall.push(bevelBox(sw, T3 - T2 + 0.4, sw, cx, (T2 + T3) / 2, z, 0.05));
-    for (const [dx, dz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) stone.push(bevelBox(0.7, T3 - T2, 0.7, cx + (dx * sw) / 2, (T2 + T3) / 2, z + (dz * sw) / 2, 0.04));
-    {
-      const hw = sw / 2 + 0.35, sq = (y: number) => [v3(cx - hw, y, z - hw), v3(cx + hw, y, z - hw), v3(cx + hw, y, z + hw), v3(cx - hw, y, z + hw)];
-      stone.push(sweep(sq(T3 - 0.3), Y, corniceP(0, 0.5, 0.7), { closed: true }));
-    }
-    for (const k of [0, 1, 2, 3]) {
-      const a = (k * Math.PI) / 2, g = arched(0, 0, 0, 1.4, 3.2, 'x');
-      g.rotateY(-a);
-      g.translate(cx - Math.cos(a) * (sw / 2 + 0.02), T2 + 0.9, z + Math.sin(a) * (sw / 2 + 0.02));
-      dark.push(g);
-    }
-    // urn finials on the corners of the storey below
-    for (const dz of [-1, 1]) stone.push(lathe(URN, 16).translate(-0.3, T2, z + dz * (towerW / 2 - 0.4)));
-    const drumTop = T3 + 1.2;
-    wall.push(new THREE.CylinderGeometry(2.7, 2.9, 1.2, 24).translate(cx, T3 + 0.95, z));
+    const z = sgn * towerZ, cx = towerW / 2;
     if (old) {
+      const sw = towerW - 1.2;
+      wall.push(bevelBox(sw, T3 - T2 + 0.4, sw, cx, (T2 + T3) / 2, z, 0.05));
+      for (const [dx, dz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) stone.push(bevelBox(0.7, T3 - T2, 0.7, cx + (dx * sw) / 2, (T2 + T3) / 2, z + (dz * sw) / 2, 0.04));
+      {
+        const hw = sw / 2 + 0.35, sq = (y: number) => [v3(cx - hw, y, z - hw), v3(cx + hw, y, z - hw), v3(cx + hw, y, z + hw), v3(cx - hw, y, z + hw)];
+        stone.push(sweep(sq(T3 - 0.3), Y, corniceP(0, 0.5, 0.7), { closed: true }));
+      }
+      for (const k of [0, 1, 2, 3]) {
+        const a = (k * Math.PI) / 2, g = arched(0, 0, 0, 1.4, 3.2, 'x');
+        g.rotateY(-a);
+        g.translate(cx - Math.cos(a) * (sw / 2 + 0.02), T2 + 0.9, z + Math.sin(a) * (sw / 2 + 0.02));
+        dark.push(g);
+      }
+      // urn finials on the corners of the storey below
+      for (const dz of [-1, 1]) urn(1, -0.3, T2, z + dz * (towerW / 2 - 0.4));
+      const drumTop = T3 + 1.2;
+      wall.push(new THREE.CylinderGeometry(2.7, 2.9, 1.2, 24).translate(cx, T3 + 0.95, z));
       dome.push(baroqueCap(3.1, 5.0).translate(cx, drumTop, z));
       wall.push(new THREE.CylinderGeometry(0.75, 0.85, 1.8, 10).translate(cx, drumTop + 5.6, z));
       dome.push(baroqueCap(0.95, 1.6).translate(cx, drumTop + 6.5, z));
       cross(cx, drumTop + 8.0, z, 2.0);
-    } else {
-      dome.push(onion(3.0, 4.6).translate(cx, drumTop, z));
-      wall.push(new THREE.CylinderGeometry(0.7, 0.75, 1.7, 10).translate(cx, drumTop + 4.4, z));
-      for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; dark.push(mbox(0.05, 0.9, 0.3, cx + Math.cos(a) * 0.71, drumTop + 4.4, z + Math.sin(a) * 0.71).rotateY(0)); }
-      dome.push(onion(0.95, 1.7).translate(cx, drumTop + 5.25, z));
-      cross(cx, drumTop + 6.9, z, 2.4);
+      continue;
     }
+    // The photos (1870s and c.1900): on the upper cornice an attic with corner strips, a cartouche
+    // between two garlands on the front and outer faces, a cornice with an urn on each corner; then a
+    // bell dome, an open octagonal lantern, a bulb and the cross.
+    const aw = towerW - 0.5, y0 = T2, y1 = T3 - 0.7, ym = (y0 + y1) / 2;
+    wall.push(bevelBox(aw, y1 - y0 + 0.2, aw, cx, ym + 0.1, z, 0.04));
+    for (const [dx, dz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) stone.push(bevelBox(0.8, y1 - y0, 0.8, cx + dx * (aw / 2 - 0.3), ym, z + dz * (aw / 2 - 0.3), 0.03));
+    for (const [a, fx, fz] of [[0, cx - aw / 2, z], [sgn * Math.PI / 2, cx, z + sgn * aw / 2]] as [number, number, number][]) {
+      cartouche(stone, 1.45, a, fx - (a === 0 ? 0.02 : 0), ym + 0.15, fz + (a === 0 ? 0 : sgn * 0.02));
+      for (const s of [-1, 1]) {
+        // garlands either side of the cartouche, along the face
+        const along = s * 1.75;
+        swag(stone, 1.45, a, fx + (a === 0 ? 0 : along), y1 - 0.45, fz + (a === 0 ? along : 0));
+      }
+    }
+    {
+      const hw = aw / 2, sq = (y: number) => [v3(cx - hw, y, z - hw), v3(cx + hw, y, z - hw), v3(cx + hw, y, z + hw), v3(cx - hw, y, z + hw)];
+      stone.push(sweep(sq(y1), Y, corniceP(0, 0.55, 0.7), { closed: true }));
+    }
+    for (const [dx, dz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) urn(1.25, cx + dx * (aw / 2 - 0.05), T3, z + dz * (aw / 2 - 0.05));
+    // a low drum lifts the helm clear of the cornice and urns, as it reads from the street
+    wall.push(new THREE.CylinderGeometry(2.8, 2.85, 0.9, 32).translate(cx, T3 + 0.45, z));
+    stone.push(lathe(corniceP(2.8, 3.02, 0.28), 24).translate(cx, T3 + 0.62, z));
+    const hb = T3 + 0.9;
+    dome.push(bellDome(2.85, 4.2, 1.1).translate(cx, hb, z));
+    lantern(wall, stone, dark, cx, hb + 4.1, z, 1.35, 3.2);
+    dome.push(bellDome(1.62, 0.6, 0.32).translate(cx, hb + 7.3, z));
+    dome.push(bulb(0.95, 2.1).translate(cx, hb + 7.85, z));
+    cross(cx, hb + 9.9, z, 2.4);
   }
   if (!old) {
-    // central turret: window stage flanked by scrolls, bell dome, lantern, onion, cross (1864-68)
-    const tw = 5.8, td = 4.2, cx = td / 2;
-    wall.push(bevelBox(td, T3 + 1 - T2, tw, cx, (T2 + T3 + 1) / 2, 0, 0.05));
-    for (const dz of [-1, 1]) stone.push(bevelBox(0.5, T3 + 1 - T2, 0.6, -0.1, (T2 + T3 + 1) / 2, (dz * tw) / 2, 0.04));
-    dark.push(arched(-0.02, 0, T2 + 1.0, 1.8, 3.8, 'x'));
-    { const hx = td / 2 + 0.1, hz = tw / 2 + 0.3, y = T3 + 0.75;
-      stone.push(sweep([v3(cx - hx - 0.15, y, -hz), v3(cx + hx, y, -hz), v3(cx + hx, y, hz), v3(cx - hx - 0.15, y, hz)], Y, corniceP(0, 0.45, 0.7), { closed: true })); }
-    for (const dz of [-1, 1]) {
-      // scroll: a quarter-round sweep from the balustrade up to the turret side
-      const sh = new THREE.Shape();
-      sh.moveTo(0, 0); sh.lineTo(2.4, 0); sh.quadraticCurveTo(0.6, 0.4, 0.3, 3.4); sh.lineTo(0, 3.4); sh.lineTo(0, 0);
-      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.7, bevelEnabled: false, curveSegments: 10 });
-      g.translate(0, 0, -0.35);
-      g.rotateY(dz > 0 ? -Math.PI / 2 : Math.PI / 2);
-      g.translate(-0.2, T2, (dz * tw) / 2);
-      stone.push(g);
-      stone.push(new THREE.CylinderGeometry(0.45, 0.45, 0.72, 14).rotateX(Math.PI / 2).rotateY(Math.PI / 2).translate(-0.2, T2 + 0.45, dz * (tw / 2 + 2.2)));
+    // Central turret (1864-68): a square stage with a tall glazed window between corner pilasters,
+    // great S-scrolls down to the towers, a cornice with an urn on each corner, a dome with four round
+    // dormers, then lantern, bulb and cross: the highest point of the front (about 51 m in the photos).
+    const tw = 8, tx0 = 0.6, cx = tx0 + tw / 2, TC = 39.6;
+    wall.push(bevelBox(tw, TC - 1.4 - T2, tw, cx, (T2 + TC - 1.4) / 2, 0, 0.05));
+    {
+      const h = tw / 2, sq = (y: number) => [v3(cx - h, y, -h), v3(cx + h, y, -h), v3(cx + h, y, h), v3(cx - h, y, h)];
+      stone.push(sweep(sq(TC - 1.4), Y, [[0, 0], [0.3, 0], [0.3, 0.6], [0, 0.6]], { hard: 30, closed: true }));
+      stone.push(sweep(sq(TC - 0.8), Y, corniceP(0.3, 0.95, 0.8), { closed: true }));
     }
-    const dy = T3 + 1.45;
-    wall.push(new THREE.CylinderGeometry(3.0, 3.2, 1.3, 8).translate(cx, dy + 0.65, 0));
-    dome.push(baroqueCap(3.7, 5.6).translate(cx, dy + 1.3, 0));
-    wall.push(new THREE.CylinderGeometry(0.85, 0.9, 1.9, 10).translate(cx, dy + 7.2, 0));
-    dome.push(onion(1.1, 2.0).translate(cx, dy + 8.15, 0));
-    cross(cx, dy + 10.0, 0, 2.6);
+    for (const z of [-(tw / 2 - 0.45), tw / 2 - 0.45]) {
+      fb(stone, z, T2 + 0.5, TC - 1.4, 0.9, 0.22, tx0);
+      const u = (y: number) => [v3(tx0, y, z + 0.45), v3(tx0 - 0.22, y, z + 0.45), v3(tx0 - 0.22, y, z - 0.45), v3(tx0, y, z - 0.45)];
+      stone.push(sweep(u(TC - 1.9), Y, PIL_CAP));
+    }
+    dark.push(arched(tx0 - 0.012, 0, T2 + 1.5, 2.3, 5.9, 'x'));
+    framed(stone, v3(tx0, T2 + 1.5, 0), west, 2.3, 5.9, true, 1.1);
+    glazing(stone, tx0, 0, T2 + 1.5, 2.3, 5.9, true);
+    for (const sz of [-1, 1]) {
+      // a round window high on each side face
+      dark.push(new THREE.CircleGeometry(0.7, 20).translate(cx, TC - 3.2, sz * (tw / 2 + 0.012)));
+      stone.push(new THREE.TorusGeometry(0.78, 0.1, 6, 24).translate(cx, TC - 3.2, sz * (tw / 2 + 0.02)));
+      // the S-scroll: from high on the turret side down to the balustrade, a volute at each end
+      const sh = new THREE.Shape();
+      sh.moveTo(0, 0); sh.lineTo(sz * 3.3, 0); sh.lineTo(sz * 3.3, 0.75);
+      sh.bezierCurveTo(sz * 2.2, 0.95, sz * 0.95, 2.3, sz * 0.55, 5.4);
+      sh.lineTo(0, 5.7); sh.lineTo(0, 0);
+      const d = 0.9, sx = tx0 + 0.25;
+      const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 1, curveSegments: 14 });
+      stone.push(g.rotateY(-Math.PI / 2).translate(sx + d, T2 + 0.3, sz * tw / 2));
+      for (const [r, zz, yy] of [[0.62, 2.75, 0.75], [0.42, 0.55, 5.25]]) {
+        stone.push(new THREE.CylinderGeometry(r, r, d + 0.2, 20).rotateZ(Math.PI / 2).translate(sx + d / 2, T2 + 0.3 + yy, sz * (tw / 2 + zz)));
+        stone.push(new THREE.CylinderGeometry(r * 0.45, r * 0.45, d + 0.36, 12).rotateZ(Math.PI / 2).translate(sx + d / 2, T2 + 0.3 + yy, sz * (tw / 2 + zz)));
+      }
+    }
+    for (const dx of [0.35, tw - 0.35]) for (const dz of [-1, 1]) urn(1.15, tx0 + dx, TC, dz * (tw / 2 - 0.35));
+    // A drum under the dome: the photos were taken from further back than the square allows, and
+    // without it the cornice hides most of the dome from the street (a design choice, [U]).
+    wall.push(new THREE.CylinderGeometry(3.85, 3.9, 1.6, 40).translate(cx, TC + 0.8, 0));
+    stone.push(lathe(corniceP(3.85, 4.1, 0.3), 28).translate(cx, TC + 1.3, 0));
+    const db = TC + 1.6;
+    dome.push(lathe([[3.95, 0], [4.02, 0.1], [3.88, 0.32], [3.82, 0.72], [3.62, 1.78], [3.18, 2.95], [2.5, 3.95], [1.7, 4.62], [1.15, 4.92], [0, 5.0]], 40).translate(cx, db, 0));
+    for (let k = 0; k < 4; k++) {
+      // a lucarne on each quarter of the dome: an oval window in a moulded frame under a curved hood
+      const a = (k * Math.PI) / 2, yD = db + 1.35, R = 3.95;
+      wall.push(placeOn(bevelBox(1.4, 1.3, 1.1, -R + 0.7, 0, 0, 0.03), a, cx, yD, 0));
+      dome.push(placeOn(new THREE.CylinderGeometry(0.62, 0.62, 1.5, 14, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateX(Math.PI / 2).translate(-R + 0.7, 0.65, 0), a, cx, yD, 0));
+      stone.push(placeOn(new THREE.TorusGeometry(0.34, 0.07, 6, 20).scale(1, 1.3, 1).rotateY(Math.PI / 2).translate(-R - 0.01, 0, 0), a, cx, yD, 0));
+      dark.push(placeOn(new THREE.CircleGeometry(0.3, 16).scale(1, 1.3, 1).rotateY(-Math.PI / 2).translate(-R - 0.02, 0, 0), a, cx, yD, 0));
+    }
+    lantern(wall, stone, dark, cx, db + 4.9, 0, 1.25, 2.6);
+    dome.push(bellDome(1.55, 0.55, 0.3).translate(cx, db + 7.5, 0));
+    dome.push(bulb(1.0, 2.0).translate(cx, db + 8.0, 0));
+    cross(cx, db + 9.95, 0, 2.7);
 
-    // domed porch on columns before the portal (1864-68)
-    const px = -5.2, pw = 8.2, ph = 9.8;
+    // Porch before the portal (1864-68): paired Tuscan columns against a front wall with an arched
+    // door, the entablature round three sides and a pediment with a clock; behind, an attic carrying a
+    // ribbed dome with a garland ring, an open lantern, bulb and cross. Floor f above the street.
+    const px = -5.2, pw = 8.2, ph = 7.6, f = 0.8;
     for (const dz of [-1, 1]) for (const zz of [pw / 2 - 0.5, pw / 2 - 1.5]) {
-      stone.push(tuscan(0.38, ph - 1.6 - 0.2).translate(px - 0.5, 0.6, dz * zz));
-      stone.push(bevelBox(0.9, 0.6, 0.9, px - 0.5, 0.3, dz * zz, 0.04));                                     // plinth
+      stone.push(tuscan(0.38, ph - 1.2 - (f + 0.5)).translate(px - 0.5, f + 0.5, dz * zz));
+      stone.push(bevelBox(0.9, 0.5, 0.9, px - 0.5, f + 0.25, dz * zz, 0.04));                                // plinth
       stone.push(bevelBox(0.9, 0.2, 0.9, px - 0.5, ph - 1.1, dz * zz, 0.03));                                // abacus
     }
     for (const dz of [-1, 1]) wall.push(bevelBox(5.0, ph, 1.2, px + 2.5, ph / 2, (dz * (pw - 1.2)) / 2, 0.04)); // side walls
-    // entablature on three sides: architrave, frieze, cornice; the attic and dome above
-    const ex0 = px - 0.95, ez = pw / 2 + 0.05;
+    wall.push(bevelBox(0.6, ph - 1.0, pw - 2.4, px + 0.3, (ph - 1.0) / 2, 0, 0.02));                         // front wall
+    dark.push(arched(px - 0.012, 0, f, 2.4, 4.9, 'x'));                                                      // door
+    framed(stone, v3(px, f, 0), west, 2.4, 4.9, true, 0.9);
+    {
+      // fanlight: a transom at the springing and bars radiating from its middle; a cartouche over the door
+      const sp = f + 4.9 - 1.2;
+      stone.push(mbox(0.06, 0.08, 2.4, px - 0.03, sp, 0));
+      for (const al of [-1.05, -0.52, 0, 0.52, 1.05]) stone.push(mbox(0.05, 1.15, 0.05, 0, 0.575, 0).rotateX(al).translate(px - 0.03, sp, 0));
+      cartouche(stone, 0.6, 0, px - 0.06, f + 5.35, 0);
+    }
+    // entablature on three sides: architrave, a Doric frieze with triglyphs, cornice (1889 photo)
+    const ex0 = px - 0.95, ez = pw / 2 + 0.05, et = ph + 0.89;
     const run3 = (y: number, o: number) => [v3(0.2, y, ez + o), v3(ex0 - o, y, ez + o), v3(ex0 - o, y, -ez - o), v3(0.2, y, -ez - o)];
     stone.push(sweep(run3(ph - 1.0, 0), Y, [[0, 0], [0.04, 0], [0.04, 0.3], [0.08, 0.33], [0.08, 0.55], [0.12, 0.58], [0.12, 0.65], [0, 0.65]], { hard: 30 }));
     stone.push(sweep(run3(ph - 0.35, 0), Y, [[0, 0], [0.02, 0], [0.02, 0.62], [0, 0.62]], { hard: 30 }));
     stone.push(sweep(run3(ph + 0.27, 0), Y, corniceP(0.02, 0.62, 0.62)));
-    wall.push(bevelBox(5.6, 1.7, pw - 0.6, px + 2.3, ph + 1.75, 0, 0.04));                            // attic
-    { const ax0 = px + 2.3 - 2.8, ax1 = px + 2.3 + 2.8, az = (pw - 0.6) / 2;
-      stone.push(sweep([v3(ax0, ph + 2.3, -az), v3(ax1, ph + 2.3, -az), v3(ax1, ph + 2.3, az), v3(ax0, ph + 2.3, az)], Y, corniceP(0, 0.25, 0.3), { closed: true })); }
-    const pd = new THREE.SphereGeometry(3.3, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 1.05, 1).translate(px + 2.3, ph + 2.6, 0);
-    dome.push(pd);
+    for (let z = -ez + 0.3; z <= ez - 0.29; z += (2 * ez - 0.6) / 8) stone.push(bevelBox(0.08, 0.56, 0.36, ex0 - 0.06, ph - 0.04, z, 0.01));
+    for (const sz of [-1, 1]) for (let x = ex0 + 0.3; x < -0.2; x += 0.95) stone.push(bevelBox(0.36, 0.56, 0.08, x, ph - 0.04, sz * (ez + 0.06), 0.01));
+    // a broken segmental pediment, the clock in a scrolled frame rising through the break
+    {
+      const cw = ez + 0.35, rs = 1.9, R = (cw * cw + rs * rs) / (2 * rs), yc = et + rs - R;
+      const phi = Math.asin(cw / R), gap = Math.asin(1.0 / R);
+      const arc = (t0: number, t1: number) => Array.from({ length: 13 }, (_, i) => { const t = t0 + ((t1 - t0) * i) / 12; return v3(ex0, yc + R * Math.cos(t), R * Math.sin(t)); });
+      const RAKE: P2[] = [[0.5, 0], [0.5, 0.62], [0.42, 0.62], [0.3, 0.56], [0.18, 0.44], [0.08, 0.34], [0, 0.3], [0, 0]];
+      stone.push(sweep(arc(-phi, -gap), west, RAKE));
+      stone.push(sweep(arc(gap, phi), west, RAKE));
+      const ye = yc + Math.sqrt(R * R - ez * ez) - et, ae = Math.atan2(ye + (et - yc), ez);
+      const sh = new THREE.Shape();
+      sh.moveTo(-ez, 0); sh.lineTo(ez, 0); sh.lineTo(ez, ye); sh.absarc(0, yc - et, R, ae, Math.PI - ae, false);
+      wall.push(new THREE.ExtrudeGeometry(sh, { depth: 1.0, bevelEnabled: false, curveSegments: 16 }).rotateY(-Math.PI / 2).translate(ex0 + 1.0, et, 0));
+      const ck = v3(ex0 - 0.05, et + 1.35, 0);
+      wall.push(bevelBox(0.6, 1.5, 1.7, ex0 + 0.25, et + 1.35, 0, 0.04));
+      stone.push(new THREE.TorusGeometry(0.76, 0.13, 6, 28).rotateY(Math.PI / 2).translate(ck.x - 0.02, ck.y, ck.z));
+      for (const sz of [-1, 1]) stone.push(new THREE.TorusGeometry(0.22, 0.08, 5, 12, Math.PI * 1.4).rotateZ(sz > 0 ? -0.3 : Math.PI - 1.1).rotateY(Math.PI / 2).translate(ck.x - 0.02, ck.y - 0.55, sz * 0.8));
+      stone.push(new THREE.SphereGeometry(0.2, 10, 8).scale(0.6, 1.4, 1).translate(ck.x - 0.05, ck.y + 1.0, 0));
+      stone.push(new THREE.CylinderGeometry(0.62, 0.62, 0.1, 28).rotateZ(Math.PI / 2).translate(ck.x, ck.y, ck.z));
+      gilt.push(new THREE.TorusGeometry(0.64, 0.06, 6, 28).rotateY(Math.PI / 2).translate(ck.x - 0.03, ck.y, ck.z));
+      for (const [len, ang] of [[0.34, -1.0], [0.5, 1.05]]) dark.push(mbox(0.03, len, 0.06, 0, len / 2, 0).rotateX(ang).translate(ck.x - 0.07, ck.y, ck.z));
+    }
+    // attic, drum with a garland, ribbed dome, lantern
+    const dcx = -2.7, at = 11.2;
+    wall.push(bevelBox(5.7, at - et, pw - 1.0, (px - 0.8 + -0.3) / 2, (et + at) / 2, 0, 0.04));
+    { const ax0 = px - 0.8, ax1 = -0.3, az = (pw - 1.0) / 2;
+      stone.push(sweep([v3(ax0, at - 0.3, -az), v3(ax1, at - 0.3, -az), v3(ax1, at - 0.3, az), v3(ax0, at - 0.3, az)], Y, corniceP(0, 0.25, 0.3), { closed: true })); }
+    wall.push(new THREE.CylinderGeometry(3.25, 3.3, 0.6, 36).translate(dcx, at + 0.3, 0));
+    stone.push(new THREE.TorusGeometry(3.31, 0.14, 6, 48).rotateX(Math.PI / 2).translate(dcx, at + 0.3, 0));
+    festoon(stone, 12, 3.34, dcx, at + 0.5, 0);
+    dome.push(new THREE.SphereGeometry(3.2, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2).translate(dcx, at + 0.6, 0));
     for (let k = 0; k < 12; k++) {
       const a = (k / 12) * Math.PI * 2;
-      const rib = new THREE.TorusGeometry(3.32, 0.06, 4, 12, Math.PI / 2).rotateZ(0).rotateY(-a);
-      rib.translate(px + 2.3, ph + 2.6, 0);
-      stone.push(rib);
+      stone.push(new THREE.TorusGeometry(3.22, 0.06, 4, 12, Math.PI / 2).rotateY(-a).translate(dcx, at + 0.6, 0));
     }
-    wall.push(new THREE.CylinderGeometry(0.6, 0.65, 1.4, 10).translate(px + 2.3, ph + 6.5, 0));
-    dome.push(onion(0.75, 1.3).translate(px + 2.3, ph + 7.2, 0));
-    cross(px + 2.3, ph + 8.4, 0, 1.8);
+    lantern(wall, stone, dark, dcx, at + 3.7, 0, 0.75, 2.0);
+    dome.push(bellDome(0.95, 0.4, 0.2).translate(dcx, at + 5.7, 0));
+    dome.push(bulb(0.62, 1.3).translate(dcx, at + 6.05, 0));
+    cross(dcx, at + 7.3, 0, 1.8);
     for (let k = 0; k < 4; k++) {                                                                           // steps, solid to the porch floor
-      const xf = px - 1.225 - (3 - k) * 0.45, xb = px - 0.775, top = 0.2 * (k + 1);
+      const xf = px - 1.225 - (3 - k) * 0.45, xb = px + 0.05, top = 0.2 * (k + 1);
       stone.push(bevelBox(xb - xf, top + 0.5, pw + 2.4 - k * 0.4, (xf + xb) / 2, (top - 0.5) / 2, 0, 0.03));
     }
   } else {
@@ -446,6 +678,7 @@ export function buildStCasimir(b: Building, mats: ChurchMaterials, variant: 'pho
   add(roof, mats.roof);
   add(dome, mats.dome);
   add(gilt, mats.gilt);
+  add(bronze, mats.bronze);
   add(dark, mats.dark, false);
 
   // Place: origin at the west façade centre, +X along the nave (east)

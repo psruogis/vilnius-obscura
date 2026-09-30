@@ -383,6 +383,29 @@ Category: https://commons.wikimedia.org/wiki/Category:Church_of_St._Casimir_in_V
 | **1836 elevation before the Russian rebuild** | [Vilnia, Vialikaja, Jezuicki. Вільня, Вялікая, Езуіцкі (M. Januševič, 1836).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Vialikaja,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%92%D1%8F%D0%BB%D1%96%D0%BA%D0%B0%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%28M._Janu%C5%A1evi%C4%8D,_1836%29.jpg) | Public domain | Marceli Januszewicz | 621×587 |
 | 1837 survey | [Vilnia, Jezuicki. Вільня, Езуіцкі (1837).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%281837%29.jpg) | Public domain | unknown | 1000×661 |
 | **1840 façade survey** (crown, clock towers) | [Vilnia, Vialikaja, Jezuicki. Вільня, Вялікая, Езуіцкі (1840).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Vialikaja,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%92%D1%8F%D0%BB%D1%96%D0%BA%D0%B0%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%281840%29.jpg) | Public domain | unknown | 720×1161 |
+| **1870s, the west front after the 1864–68 rebuild** | [Vilnia, Vialikaja, Jezuicki. Вільня, Вялікая, Езуіцкі (1870-79).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Vialikaja,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%92%D1%8F%D0%BB%D1%96%D0%BA%D0%B0%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%281870-79%29.jpg) (State Museum of the History of St Petersburg, 190793) | Public Domain Mark | unknown | 800×596 |
+| **20 June 1889, the porch close up** (looking west from the church steps) | [Vilnia, Vialikaja, Jezuicki. Вільня, Вялікая, Езуіцкі (20.06.1889).jpg](https://commons.wikimedia.org/wiki/File:Vilnia,_Vialikaja,_Jezuicki._%D0%92%D1%96%D0%BB%D1%8C%D0%BD%D1%8F,_%D0%92%D1%8F%D0%BB%D1%96%D0%BA%D0%B0%D1%8F,_%D0%95%D0%B7%D1%83%D1%96%D1%86%D0%BA%D1%96_%2820.06.1889%29.jpg) (*Widoki Wilna i okolic*, Vilnius University Library F46-1537) | PD-old-100 | unknown | 4757×3721 |
+
+Not yet looked at (Commons rate-limited the download): *(S. Fleury, 1896)* and *(M. Butkoŭski, 1896-1914)*, same title pattern.
+
+### 5.3 The c.1900 west front as modelled (rebuilt 30 Sep 2026)
+
+From the owner's c.1900 photo (a frontal view from the square, source not recorded), checked against the 1870s and 1889
+photos above. `src/world/stcasimir.ts`, variant `photos` (the default).
+
+| Feature | Evidence | Status |
+|---|---|---|
+| Tower tops: on the upper cornice an attic with corner strips, a round cartouche between two garlands, a cornice with an urn on each corner; then a bell dome, an open octagonal lantern with arched openings, a bulb and the cross | 1870s photo (zoomed), owner's photo | [V] forms / [U] sizes |
+| The towers' upper-storey openings are belfries with bells hanging in them | 1870s photo: bells visible in both | [V] |
+| The two tower tops look unequal in both photos (the north one taller) | The right-hand side of the front is about 8% smaller in the 1870s photo too, so the camera was turned: read as perspective and modelled symmetric | [U] |
+| Central turret (1864–68): square stage about 8 m wide, cornice at about 40 m, a tall glazed arched window between corner pilasters, great S-scrolls down to the towers; a dome with round dormers and corner urns, lantern, bulb, cross; the highest point of the front | 1870s photo, owner's photo (heights scaled from the 30 m façade) | [V] forms / [U] sizes |
+| A 1.6 m drum under the turret dome | Not in the photos. They were taken from further back than the square allows; without it the cornice hides the dome from the street | [U] design choice |
+| Porch: paired Tuscan columns against a front wall with an arched door and a radiating fanlight, a cartouche over the door | 1889 photo | [V] |
+| Porch entablature Doric, with triglyphs | 1889 photo | [V] |
+| Porch pediment: broken segmental, a round clock in a scrolled frame rising through the break | 1889 photo (the face is blank there; hands added, set to ten past ten) | [V] form / [U] hands |
+| Porch dome: ribbed, a festoon of swags round its base, an open lantern, bulb and cross reaching the first cornice | 1889 and 1870s photos | [V] |
+| Ground storey: tower bays blind, with a large cartouche high up; the bays either side of the porch have tall glazed windows with a cartouche framing an oval window above | 1870s and 1889 photos | [V] |
+| An owner-supplied 3D model of today's church (source not stated) | Used only to check the 18th-century attic stage above the upper cornice; nothing from it is in the game. It shows the post-1942 crown and the lowered towers, so it is not a guide to 1900 | [U] |
 
 ---
 
