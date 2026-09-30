@@ -218,6 +218,7 @@ export function createChurchMaterials(anisotropy: number) {
     dark: new THREE.MeshStandardMaterial({ color: '#1d1b19', roughness: 0.9, side: THREE.DoubleSide }),
     bronze: new THREE.MeshStandardMaterial({ color: '#6b5636', metalness: 0.85, roughness: 0.5, side: THREE.DoubleSide }),
     icon: new THREE.MeshStandardMaterial({ map: iconTexture(anisotropy), color: '#d6cec2', roughness: 0.6, metalness: 0.15 }),
+    base: plasterMaterial('#a39c94', anisotropy),
   };
 }
 

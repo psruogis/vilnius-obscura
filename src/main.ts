@@ -151,17 +151,17 @@ async function main(force = false): Promise<void> {
   const stCasimirData = data.buildings.find(b => b.role === 'stcasimir');
   if (stCasimirData) {
     const m = createChurchMaterials(aniso);
-    for (const k of ['wall', 'stone'] as const) age(m[k], { ground: stCasimirData.groundY, strength: 1, seed: 2 });
+    for (const k of ['wall', 'stone', 'base'] as const) age(m[k], { ground: stCasimirData.groundY, strength: 1, seed: 2 });
     age(m.roof, { roof: true, strength: 0.7 });
-    if (RAIN) { for (const k of ['wall', 'stone'] as const) wet(m[k], 'wall', stCasimirData.groundY); }
-    // ?church=1800 shows the pre-1864 form; default follows the owner's c.1900 photographs:
-    // a pale limewashed front, its walls a shade warmer than the dressings so the relief reads in
-    // the rain, and dark painted-metal helms (docs/REFERENCES.md §5.3)
+    if (RAIN) { for (const k of ['wall', 'stone', 'base'] as const) wet(m[k], 'wall', stCasimirData.groundY); }
+    // ?church=1800 shows the pre-1864 form; default follows the owner's c.1900 photographs and the
+    // coloured 1915-18 postcard: rose walls and pilasters, pale dressings, a grey banded stone base,
+    // silver-grey helms (docs/REFERENCES.md §5.3)
     const churchForm = new URLSearchParams(location.search).get('church') === '1800' ? '1800' : 'photos';
     if (churchForm === 'photos') {
-      (m.wall as THREE.MeshStandardMaterial).color.set('#cdbfa3');
-      (m.stone as THREE.MeshStandardMaterial).color.set('#efe9dc');
-      (m.dome as THREE.MeshStandardMaterial).color.set('#46534c');
+      (m.wall as THREE.MeshStandardMaterial).color.set('#cc958a');
+      (m.stone as THREE.MeshStandardMaterial).color.set('#ece2d6');
+      (m.dome as THREE.MeshStandardMaterial).color.set('#a9b2b7');
       (m.roof as THREE.MeshStandardMaterial).color.set('#565d5c');
     }
     scene.add(buildStCasimir(stCasimirData, m, churchForm));
