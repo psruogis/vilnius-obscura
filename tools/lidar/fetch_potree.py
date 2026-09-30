@@ -7,6 +7,8 @@ The points themselves are NZT national LiDAR (CC BY 4.0).
 
 Usage: .venv/bin/python fetch_potree.py            (plan only, prints byte totals)
        .venv/bin/python fetch_potree.py --download (fetch and decode to cache/points.npz)
+       .venv/bin/python fetch_potree.py --box xmin,ymin,xmax,ymax [--box ...] --out points_east.npz --download
+           (other boxes, e.g. the strip east of the original one; see extend_heights.py)
 """
 import json, os, struct, sys, urllib.request
 import numpy as np
@@ -17,6 +19,8 @@ CACHE = os.path.join(HERE, "cache")
 CELL = "76_32"
 BASE = f"https://lidar.chgf.vu.lt/lt-lidar-data/{CELL}/potree_output"
 BOX = (582700.0, 6060650.0, 583300.0, 6061250.0)  # EPSG:3346 xmin, ymin, xmax, ymax
+BOXES = [tuple(float(v) for v in sys.argv[i + 1].split(",")) for i, a in enumerate(sys.argv) if a == "--box"] or [BOX]
+OUT = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else "points.npz"
 UA = {"User-Agent": "vilnius-town-hall-walk lidar spike (one-off, small area)"}
 
 meta = json.load(open(os.path.join(CACHE, "metadata.json")))
@@ -40,7 +44,7 @@ def child_box(bmin, bmax, i):
 
 
 def intersects(bmin, bmax):
-    return not (bmax[0] < BOX[0] or bmin[0] > BOX[2] or bmax[1] < BOX[1] or bmin[1] > BOX[3])
+    return any(not (bmax[0] < b[0] or bmin[0] > b[2] or bmax[1] < b[1] or bmin[1] > b[3]) for b in BOXES)
 
 
 def parse_chunk(offset, size, root):
@@ -159,7 +163,9 @@ def _decode_group(g, data, xs, cs, ints):
         for n in g["nodes"]:
             a = n["boff"] - g["start"]
             xyz, inten, cls = decode_node(data[a:a + n["bsize"]], n["npts"])
-            m = (xyz[:, 0] >= BOX[0]) & (xyz[:, 0] <= BOX[2]) & (xyz[:, 1] >= BOX[1]) & (xyz[:, 1] <= BOX[3])
+            m = np.zeros(len(xyz), dtype=bool)
+            for b in BOXES:
+                m |= (xyz[:, 0] >= b[0]) & (xyz[:, 0] <= b[2]) & (xyz[:, 1] >= b[1]) & (xyz[:, 1] <= b[3])
             xs.append(xyz[m].astype(np.float64))
             cs.append(cls[m])
             ints.append(inten[m])
@@ -169,7 +175,7 @@ def finish(xs, cs, ints):
     xyz = np.concatenate(xs)
     cls = np.concatenate(cs)
     inten = np.concatenate(ints)
-    np.savez_compressed(os.path.join(CACHE, "points.npz"),
+    np.savez_compressed(os.path.join(CACHE, OUT),
                         x=np.round((xyz[:, 0] - 583000) * 100).astype(np.int32),
                         y=np.round((xyz[:, 1] - 6061000) * 100).astype(np.int32),
                         z=np.round(xyz[:, 2] * 100).astype(np.int32),

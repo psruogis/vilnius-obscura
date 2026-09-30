@@ -3,6 +3,17 @@
 Result: **it worked with no login.** We have real building heights and a ground model for the box
 E 582700–583300, N 6060650–6061250 (EPSG:3346).
 
+**Extended 2026-09-30** east to the Subačius Gate site: one more targeted fetch of the same 2025 data for the boxes
+E 583250–583450 × N 6060550–6061250 and E 582900–583250 × N 6060550–6060650 (626 range requests, about 50 MB),
+merged by `extend_heights.py`. Where old and new overlap, the ground medians agree exactly (5,075 cells). The grid
+now covers E 582700–583450, N 6060550–6061250 (375 × 350 cells, origin (582700, 6060550)), and `heights.json`
+holds 407 footprints (66 added, 17 that ran past the old box's edge redone). To repeat it:
+
+```
+.venv/bin/python fetch_potree.py --box 583250,6060550,583450,6061250 --box 582900,6060550,583250,6060650 --out points_east.npz --download
+.venv/bin/python extend_heights.py cache/points_east.npz 583250,6060550,583450,6061250 582900,6060550,583250,6060650
+```
+
 ## Outputs
 
 | File | What it holds |
