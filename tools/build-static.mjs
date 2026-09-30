@@ -54,6 +54,20 @@ const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8')
   .replace('src="/src/main.ts"', 'src="src/main.js"');
 fs.writeFileSync(path.join(DIST, 'index.html'), html);
 
+// The Subačius Gate on its own (gate.html), and its artifact page (content only, stylesheet inlined)
+const gateCss = fs.readFileSync(path.join(ROOT, 'src', 'gate.css'), 'utf8');
+fs.writeFileSync(path.join(DIST, 'gate.html'), fs.readFileSync(path.join(ROOT, 'gate.html'), 'utf8')
+  .replace('<head>', `<head>\n    <script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>${ANALYTICS}`)
+  .replace('href="/src/gate.css"', 'href="src/gate.css"')
+  .replace('src="/src/gate.ts"', 'src="src/gate.js"'));
+fs.writeFileSync(path.join(DIST, 'gate-artifact.html'), `<title>Subačius Gate Model</title>
+<style>
+${gateCss}</style>
+<script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>
+<div id="app"></div>
+<script type="module" src="src/gate.js"></script>
+`);
+
 // claude.ai artifact page: content only (the host adds doctype, head and body), stylesheet inlined.
 // A single deliberate dark look, so the page paints its own background and pins color-scheme.
 const css = fs.readFileSync(path.join(ROOT, 'src', 'style.css'), 'utf8');

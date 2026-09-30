@@ -1,6 +1,6 @@
 import type { AreaData, XZ } from '../world/area';
 import { WalkZone } from '../world/zone';
-import { SUBACIUS_GATE } from '../world/subacius';
+import { SUBACIUS_GATE, type GateLook } from '../world/subacius';
 import { loadFonts } from './fonts';
 
 /**
@@ -115,8 +115,9 @@ interface Layers {
   landmarks: { text: string; x: number; z: number }[];
   veil: Path2D;
   edge: Path2D;
-  /** The Subačius Gate, gone since 1801: where it stood (world/subacius.ts). */
-  gone: Plot[];
+  /** The Subačius Gate (world/subacius.ts): standing, as in the walk by default, or gone, where it stood. */
+  gate: Plot[];
+  gateLook: GateLook;
   centre: XZ;
   radius: number;
   /** The walk's bounding box: x0, z0, x1, z1. */
@@ -235,7 +236,7 @@ function hatsFor(L: Layers, kind: 'fine' | 'coarse'): Hats {
     : { today: hatchSet(L.todayRings, [50], 2.3), plan: hatchSet(L.planRings, [50, -40], 2.5) };
 }
 
-function prepare(data: AreaData): Layers {
+function prepare(data: AreaData, gateLook: GateLook): Layers {
   const [thx, thz] = data.meta.townHall;
   const radius = data.meta.walkRadius;
   const named = data.areas.find(a => a.name);
@@ -261,8 +262,8 @@ function prepare(data: AreaData): Layers {
       landmarks.push({ text: b.role === 'townhall' ? 'Town Hall' : "St Casimir's", x, z });
     } else { today.push(s); todayRings.push(b.rings); }
   }
-  landmarks.push({ text: 'Subačius Gate site', x: SUBACIUS_GATE.x, z: SUBACIUS_GATE.z + 16 });
-  // the walk's edge: the square and the road out to the gate site (world/zone.ts)
+  landmarks.push({ text: gateLook === 'solid' ? 'Subačius Gate' : 'Subačius Gate site', x: SUBACIUS_GATE.x, z: SUBACIUS_GATE.z + 16 });
+  // the walk's edge: the square and the road out to the gate (world/zone.ts)
   const zone = new WalkZone(data);
   const veil = new Path2D();
   veil.rect(-6000, -6000, 12000, 12000);
@@ -273,7 +274,7 @@ function prepare(data: AreaData): Layers {
   return {
     areas: data.areas.map(a => plotOf([a.ring], false)),
     foot, today, plan, hall, todayRings, planRings, labels, landmarks, veil, edge,
-    gone: SUBACIUS_GATE.plan.map(r => plotOf([r], false)),
+    gate: SUBACIUS_GATE.plan.map(r => plotOf([r], false)), gateLook,
     square: named ? { text: named.name!, x: centroid(named.ring)[0], z: centroid(named.ring)[1] } : null,
     centre: [thx, thz], radius, walkBox: zone.box, hats: {},
   };
@@ -369,14 +370,15 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   g.strokeStyle = T.hallLine;
   g.lineWidth = px * (full ? 1.8 : 1.4);
   outlines(g, L.hall, seen);
-  // the Subačius Gate, gone: a faint fill and a broken line where it stood
+  // the Subačius Gate: standing, drawn like the Town Hall; or, with the ghost, a faint fill and a broken line
   g.save();
-  g.globalAlpha = full ? 0.3 : 0.25;
+  const standing = L.gateLook === 'solid';
+  g.globalAlpha = standing ? (full ? 0.95 : 0.8) : (full ? 0.3 : 0.25);
   g.fillStyle = T.hall;
-  fills(g, L.gone, seen);
-  g.globalAlpha = full ? 0.9 : 0.75;
-  g.setLineDash([px * 3, px * 3]);
-  outlines(g, L.gone, seen);
+  fills(g, L.gate, seen);
+  g.globalAlpha = standing ? 1 : (full ? 0.9 : 0.75);
+  if (!standing) g.setLineDash([px * 3, px * 3]);
+  outlines(g, L.gate, seen);
   g.restore();
 
   // glow: the ink gives off light, as wide faint strokes added on top
@@ -608,13 +610,13 @@ function drawCompass(g: CanvasRenderingContext2D, x: number, y: number, r: numbe
   g.restore();
 }
 
-const ABOUT_HTML = (walk: number) => `
+const ABOUT_HTML = (walk: number, gate: GateLook) => `
   <ul class="mv-legend">
     <li><i class="sw today"></i>Today's houses</li>
     <li><i class="sw plan"></i>1842 plan houses</li>
-    <li><i class="sw hall"></i>Town Hall, St Casimir's</li>
+    <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', Subačius Gate' : ''}</li>
     <li><i class="sw you"></i>You</li>
-    <li><i class="sw gone"></i>Subačius Gate, gone</li>
+    ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>Subačius Gate, gone</li>'}
     <li><i class="sw walk"></i>Edge of the walk</li>
   </ul>
   <h3>Where it comes from</h3>
@@ -623,8 +625,10 @@ const ABOUT_HTML = (walk: number) => `
     <li><b>1842 plan houses:</b> the 1842 plan of Vilnius (National Library of Poland), fitted to today's map to within a few metres, west of the square. Plot lines and storeys are guesses.</li>
     <li><b>Town Hall, St Casimir's:</b> modelled by hand: the Town Hall as finished in 1799, the church in its Orthodox form after 1864–68.</li>
     <li><b>Streets and names:</b> OpenStreetMap, 2026: today's names. Around 1900 many streets had other, Russian names.</li>
-    <li><b>Subačius Gate:</b> where the city wall's east gate stood until 1801, after P. Smuglevičius's drawing of 1785–86. In the street it is a ghost.</li>
-    <li><b>Edge of the walk:</b> the square, ${walk} m round the Town Hall, and the road out to the gate's site. Beyond it the town is only to be seen.</li>
+    <li><b>Subačius Gate:</b> the city wall's east gate, after P. Smuglevičius's drawing of 1785–86. ${gate === 'solid'
+      ? 'It was pulled down in 1801–02, with the wall; here it stands, with the wall either side, a century out of its time, on purpose.'
+      : 'It was pulled down in 1801–02; in the street it is a ghost, where it stood.'}</li>
+    <li><b>Edge of the walk:</b> the square, ${walk} m round the Town Hall, and the road out to the gate. Beyond it the town is only to be seen.</li>
   </ul>
   <p class="dim">This is not a copy of one old map: no plan from about 1900 is used yet, and the 1866 plan is not drawn.</p>
   <p class="dim">GRPK © Nacionalinė žemės tarnyba prie Aplinkos ministerijos, CC BY 4.0 · © OpenStreetMap contributors, ODbL · 1842 plan: public domain.</p>`;
@@ -636,8 +640,8 @@ const ICON = {
 };
 
 const LOOK_NAMES: Record<Look, string> = { pastel: 'Pastel', dark: 'Dark', glow: 'Glow' };
-export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, initialLook: Look = 'pastel'): MapUI {
-  const L = prepare(data);
+export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, initialLook: Look = 'pastel', gateLook: GateLook = 'solid'): MapUI {
+  const L = prepare(data, gateLook);
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
   // The corner map
@@ -669,7 +673,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
     </div>
     <aside class="mv-about">
       <button type="button" class="mv-about-head" aria-expanded="true"><span>About this map</span><i aria-hidden="true"></i></button>
-      <div class="mv-about-body">${ABOUT_HTML(L.radius)}</div>
+      <div class="mv-about-body">${ABOUT_HTML(L.radius, gateLook)}</div>
     </aside>`;
   const canvas = full.querySelector('canvas')!;
   const g = canvas.getContext('2d')!;

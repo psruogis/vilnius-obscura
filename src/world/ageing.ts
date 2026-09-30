@@ -103,7 +103,8 @@ export function age(m: THREE.Material, opts: AgeOptions = {}): THREE.Material {
           vec3 r1 = cross(dpdy, normal), r2 = cross(normal, dpdx);
           float det = dot(dpdx, r1);
           vec3 grad = sign(det) * (dFdx(hgt) * r1 + dFdy(hgt) * r2);
-          normal = normalize(abs(det) * normal - grad);
+          vec3 bumped = abs(det) * normal - grad;
+          normal = dot(bumped, bumped) > 1e-20 ? normalize(bumped) : normal;   // (a zero vector would put a NaN on screen, and bloom spreads it)
         }`);
     };
   }

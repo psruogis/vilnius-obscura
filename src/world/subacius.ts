@@ -6,8 +6,9 @@ import { merged } from './geom';
 /*
  * The Subačius Gate (Subačiaus vartai), the city wall's east gate on the road to Vitebsk, Polotsk and Moscow.
  * Built with the wall in 1503-22, first named 1528, rebuilt in the 17th c.; demolished from 27 May 1801 and gone
- * by September 1802 (docs/gates.md). Around 1900 nothing of it stood: by default it is a ghost, an ink drawing of
- * the gate laid over the street where it was; `?gate=solid` builds it in plaster and tile instead, for comparison.
+ * by September 1802 (docs/gates.md). It stands here as it stood before 1801, with the wall either side: in a walk
+ * set around 1900 that is a deliberate anachronism (the owner's choice). `?gate=ghost` shows it instead as a
+ * ghost, an ink drawing laid over the street, with the wall's low remnants as they might have been in 1900.
  *
  * Form after P. Smuglevičius's drawing of 1785-86 and the archaeology, as summarised by VSAA (vsaa.lt/sena/subac_v.html):
  * a massive block, rectangular in plan, with a saddle roof and round corner towers, at least three
@@ -17,9 +18,8 @@ import { merged } from './geom';
  * Place: the gap between the two surviving stretches of wall (OSM ways 194601579 and 1386286057) where they cross
  * Subačiaus g. at the Bokšto corner; the block stands on the street's line with its towers on the field (east)
  * side, clear of Subačiaus g. 16 (built 1775). Measurements are read off the drawing and are conjecture. [U]
- *
- * Also real in 1900 (a guess, [U]): the two stretches of wall either side, as low remnants; the ghost carries them
- * up to full height with the roofed gallery the drawing shows.
+ * Finish (lime render over brick, a fieldstone footing, clay tile, plank doors) is a guess from the drawing's light
+ * walls and dark roofs and from the gates and wall that survive in Vilnius. [U]
  */
 
 // The block: west (city) face, east (field) face, north and south sides, local metres
@@ -35,19 +35,27 @@ const TOWERS: XZ[] = [[X1, Z0], [X1, Z1]];
 // First stretch of each surviving wall (OSM), from the gate outwards; used if the area data has no walls
 const WALL_IDS = [194601579, 1386286057];
 const WALL_FALLBACK: XZ[][] = [[[323.1, 244.6], [304.2, 293.8]], [[328.1, 234], [340.6, 189]]];
+const BROKEN = 6;           // m at the far end of each stretch where the wall is broken off
 
-/** Where the gate stood and what it covered, for the map: the block and its two towers. */
+/** Where the gate stands, for the map: the block and its two towers. */
 export const SUBACIUS_GATE = {
   name: 'Subačius Gate', x: XC, z: ZC,
   plan: [[[X0, Z0], [X1, Z0], [X1, Z1], [X0, Z1]], ...TOWERS.map(([x, z]) => circle(x, z, TOWER_R, 24))] as XZ[][],
 };
 
 export type GateLook = 'ghost' | 'solid';
-export interface GateMaterials { wall: THREE.Material; roof: THREE.Material; dark: THREE.Material; remnant: THREE.Material }
+export interface GateMaterials {
+  /** The gate's walls: lime render over brick. */ render: THREE.Material;
+  /** Mouldings, courses, corbels and surrounds. */ trim: THREE.Material;
+  /** The fieldstone footing. */ stone: THREE.Material;
+  roof: THREE.Material; dark: THREE.Material; wood: THREE.Material; iron: THREE.Material;
+  /** The city wall either side. */ wall: THREE.Material;
+  /** Its remnants, for the ghost look. */ remnant: THREE.Material;
+}
 export interface Gate {
-  /** In the scene: the remnants of the wall, and the gate itself when solid. */
+  /** In the scene: the gate and the wall (or, with the ghost, the wall's remnants). */
   solid: THREE.Group;
-  /** Drawn over the finished picture (post.ts overlay), depth-tested against the town. Empty when solid. */
+  /** The ghost, drawn over the finished picture (post.ts overlay), depth-tested against the town. Empty unless ghost. */
   ghost: THREE.Group;
   /** Wall segments for the walker (WallGrid). */
   segments: [number, number, number, number][];
@@ -62,6 +70,24 @@ function circle(cx: number, cz: number, r: number, n: number): XZ[] {
   return out;
 }
 
+/** A surface of revolution round (cx, cz), profile [radius, height] from the bottom up, with UVs in metres: u round
+ *  the circumference at radius `ur`, v along the profile from `v0` (so tiles on a cone run in rings, and a wall's v,
+ *  started at its foot's height, is its height, as the masonry shader expects). */
+function lathe(profile: [number, number][], segs: number, cx: number, cz: number, ur = Math.max(...profile.map(p => p[0])), v0 = 0): THREE.BufferGeometry {
+  const g = new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), segs);
+  const P = profile.length, cum = [0];
+  for (let j = 1; j < P; j++) cum.push(cum[j - 1] + Math.hypot(profile[j][0] - profile[j - 1][0], profile[j][1] - profile[j - 1][1]));
+  const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i <= segs; i++) for (let j = 0; j < P; j++) uv.setXY(i * P + j, (i / segs) * 2 * Math.PI * ur, v0 + cum[j]);
+  g.userData.metres = true;                            // uvMetres() leaves these UVs be
+  return g.translate(cx, 0, cz);
+}
+
+/** A box w (along the face) x h x d (out of it), its back on a face at (x, y, z) with outward normal (nx, nz). */
+function faceBox(w: number, h: number, d: number, x: number, y: number, z: number, nx: number, nz: number): THREE.BufferGeometry {
+  return new THREE.BoxGeometry(w, h, d).rotateY(Math.atan2(nx, nz)).translate(x + nx * d / 2, y, z + nz * d / 2);
+}
+
 export function buildSubaciusGate(o: {
   data: AreaData; terrain: Terrain; look: GateLook; mats: GateMaterials;
   /** The scene's mist, for the ghost (it is drawn after the fog): exp² density, or a linear near/far. */
@@ -72,18 +98,23 @@ export function buildSubaciusGate(o: {
   let low = g0;
   for (const [x, z] of [[X0, Z0], [X1, Z0], [X1, Z1], [X0, Z1], ...TOWERS]) low = Math.min(low, terrain.heightAt(x, z) - TOWER_R * 0.1);
   const base = low - 0.6;                              // walls reach below the lowest ground
-  const yE = g0 + EAVE;
+  const yE = g0 + EAVE, yT = g0 + TOWER_TOP;
+  const hw = (Z1 - Z0) / 2, aw = ARCH_W / 2;
+  const towerR = (y: number) => TOWER_R + 0.15 * (yT - y) / (yT - base);   // the battered towers' radius at height y
 
-  // ---- the body: faces (for the solid look, and the ghost's wash) and ink lines (the ghost's drawing) ----
-  const wall: THREE.BufferGeometry[] = [], roof: THREE.BufferGeometry[] = [], dark: THREE.BufferGeometry[] = [];
+  // Parts by material. `shell` (render, band, roof, the wall's body) is also what the ghost is drawn from; `ink`
+  // holds the ghost's outlines of the openings.
+  const P = { render: [] as THREE.BufferGeometry[], band: [] as THREE.BufferGeometry[], trim: [] as THREE.BufferGeometry[], stone: [] as THREE.BufferGeometry[],
+    roof: [] as THREE.BufferGeometry[], dark: [] as THREE.BufferGeometry[], wood: [] as THREE.BufferGeometry[], iron: [] as THREE.BufferGeometry[],
+    wall: [] as THREE.BufferGeometry[], wallRoof: [] as THREE.BufferGeometry[], remnant: [] as THREE.BufferGeometry[] };
   const ink: number[] = [];                            // line segments, x y z x y z
   const line = (a: THREE.Vector3, b: THREE.Vector3) => ink.push(a.x, a.y, a.z, b.x, b.y, b.z);
   const loop = (pts: THREE.Vector3[]) => pts.forEach((p, i) => line(p, pts[(i + 1) % pts.length]));
+  // the section in the (z, y) plane, extruded west to east from x0 by depth: shape x = ZC - z
+  const alongX = (g: THREE.BufferGeometry, x0: number) => g.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, x0, 0, 1, 0, 0, -1, 0, 0, ZC, 0, 0, 0, 1));
 
-  // The block with its passage: the cross-section (north-south by height) with the arch cut from its foot,
-  // extruded west to east. Shape x = ZC - z, y = height; the extrusion runs along +x.
+  // ---- the block with its passage: the cross-section with the arch cut from its foot, extruded west to east ----
   const sec = new THREE.Shape();
-  const hw = (Z1 - Z0) / 2, aw = ARCH_W / 2;
   sec.moveTo(-hw, base);
   sec.lineTo(-aw, base);
   sec.lineTo(-aw, g0 + ARCH_SPRING);
@@ -93,129 +124,192 @@ export function buildSubaciusGate(o: {
   sec.lineTo(hw, yE);
   sec.lineTo(-hw, yE);
   sec.closePath();
-  const block = new THREE.ExtrudeGeometry(sec, { depth: X1 - X0, bevelEnabled: false, curveSegments: 14 });
-  block.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, X0, 0, 1, 0, 0, -1, 0, 0, ZC, 0, 0, 0, 1));
-  wall.push(block);
+  P.render.push(alongX(new THREE.ExtrudeGeometry(sec, { depth: X1 - X0, bevelEnabled: false, curveSegments: 14 }), X0));
 
-  // Saddle roof, ridge north-south, gables at the ends, 0.45 m eaves
-  const k = RISE / ((X1 - X0) / 2), ov = 0.45;
-  const tri = new THREE.Shape([new THREE.Vector2(X0 - ov, yE - ov * k), new THREE.Vector2(X1 + ov, yE - ov * k), new THREE.Vector2(XC, yE + RISE)]);
-  const roofG = new THREE.ExtrudeGeometry(tri, { depth: Z1 - Z0 + 0.5, bevelEnabled: false });
-  roofG.translate(0, 0, Z0 - 0.25);
-  roof.push(roofG);
-  // a chimney on the ridge (the drawing's small turret at the south gable)
-  roof.push(new THREE.BoxGeometry(0.7, 1.6, 0.7).translate(XC, yE + RISE - 0.1, Z1 - 1.2));
+  // ---- the saddle roof: two slopes 0.25 m thick with 0.45 m eaves, over gable walls at the north and south ends ----
+  const k = RISE / ((X1 - X0) / 2), ov = 0.45, rt = 0.25, gov = 0.35;
+  const roofSec = new THREE.Shape([
+    new THREE.Vector2(X0 - ov, yE - ov * k), new THREE.Vector2(XC, yE + RISE), new THREE.Vector2(X1 + ov, yE - ov * k),
+    new THREE.Vector2(X1 + ov, yE - ov * k - rt), new THREE.Vector2(XC, yE + RISE - rt * Math.hypot(1, k)), new THREE.Vector2(X0 - ov, yE - ov * k - rt),
+  ]);
+  P.roof.push(new THREE.ExtrudeGeometry(roofSec, { depth: Z1 - Z0 + 2 * gov, bevelEnabled: false }).translate(0, 0, Z0 - gov));
+  const gable = new THREE.Shape([new THREE.Vector2(X0, yE - 0.01), new THREE.Vector2(X1, yE - 0.01), new THREE.Vector2(XC, yE + RISE - rt * Math.hypot(1, k))]);
+  for (const z of [Z0, Z1 - 0.6]) P.render.push(new THREE.ExtrudeGeometry(gable, { depth: 0.6, bevelEnabled: false }).translate(0, 0, z));
+  P.roof.push(new THREE.BoxGeometry(0.34, 0.2, Z1 - Z0 + 2 * gov).translate(XC, yE + RISE + 0.02, ZC));   // ridge tiles
+  // the small turret the drawing shows at the south gable: a chimney-like shaft with a cap
+  P.render.push(new THREE.BoxGeometry(0.8, 2.0, 0.8).translate(XC, yE + RISE + 0.3, Z1 - 0.9));
+  P.trim.push(new THREE.BoxGeometry(1.05, 0.18, 1.05).translate(XC, yE + RISE + 1.35, Z1 - 0.9));
 
-  // Round towers on the field corners, a little battered, with cone roofs and finials
+  // ---- round towers on the field corners, a little battered, with tiled cones, soffits and finials ----
   for (const [tx, tz] of TOWERS) {
-    const h = g0 + TOWER_TOP - base;
-    wall.push(new THREE.CylinderGeometry(TOWER_R, TOWER_R + 0.15, h, 28, 1, true).translate(tx, base + h / 2, tz));
-    roof.push(new THREE.ConeGeometry(TOWER_R + 0.4, CONE_H, 28, 1, true).translate(tx, g0 + TOWER_TOP + CONE_H / 2, tz));
-    roof.push(new THREE.SphereGeometry(0.2, 8, 6).translate(tx, g0 + TOWER_TOP + CONE_H + 0.1, tz));
-    roof.push(new THREE.CylinderGeometry(0.03, 0.05, 1.3, 5).translate(tx, g0 + TOWER_TOP + CONE_H + 0.75, tz));
-    // the corbel course round the tower
-    wall.push(new THREE.CylinderGeometry(TOWER_R + 0.2, TOWER_R + 0.2, BAND_Y1 - BAND_Y0, 28, 1, true).translate(tx, g0 + (BAND_Y0 + BAND_Y1) / 2, tz));
+    P.render.push(lathe([[TOWER_R + 0.15, base], [TOWER_R, yT]], 36, tx, tz, TOWER_R, base));
+    P.roof.push(lathe([[TOWER_R + 0.45, yT - 0.05], [0.04, yT + CONE_H]], 36, tx, tz));
+    P.wood.push(lathe([[TOWER_R - 0.05, yT - 0.05], [TOWER_R + 0.45, yT - 0.05]], 36, tx, tz));   // under the eaves
+    P.iron.push(new THREE.SphereGeometry(0.2, 10, 8).translate(tx, yT + CONE_H + 0.1, tz));
+    P.iron.push(new THREE.CylinderGeometry(0.03, 0.05, 1.4, 6).translate(tx, yT + CONE_H + 0.8, tz));
+    P.iron.push(new THREE.BoxGeometry(0.55, 0.32, 0.02).translate(tx + 0.3, yT + CONE_H + 1.2, tz));   // a vane
+    // the course with the lower loopholes, 0.2 m proud, on corbels
+    P.band.push(lathe([[TOWER_R, g0 + BAND_Y0], [TOWER_R + 0.2, g0 + BAND_Y0], [TOWER_R + 0.2, g0 + BAND_Y1], [TOWER_R, g0 + BAND_Y1]], 36, tx, tz, TOWER_R + 0.2, g0 + BAND_Y0 - 0.2));
+    // the footing: fieldstone, a little wider, its top weathered to a slope
+    P.stone.push(lathe([[TOWER_R + 0.34, base], [TOWER_R + 0.34, g0 + 0.8], [TOWER_R + 0.14, g0 + 1.15]], 36, tx, tz, TOWER_R + 0.34, base));
   }
-  // the corbel course along the block's faces (between and beside the towers)
-  const course = (x0: number, z0: number, x1: number, z1: number, out: [number, number]) => {
-    const L = Math.hypot(x1 - x0, z1 - z0), h = BAND_Y1 - BAND_Y0;
-    const bx = new THREE.BoxGeometry(L, h, 0.2).rotateY(-Math.atan2(z1 - z0, x1 - x0));
-    wall.push(bx.translate((x0 + x1) / 2 + out[0] * 0.1, g0 + BAND_Y0 + h / 2, (z0 + z1) / 2 + out[1] * 0.1));
+  // the course along the block's faces, and its footing
+  const run = (a: XZ, b: XZ, n: [number, number], y0: number, h: number, d: number, list: THREE.BufferGeometry[]) => {
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (L > 0.05) list.push(faceBox(L, h, d, (a[0] + b[0]) / 2, y0 + h / 2, (a[1] + b[1]) / 2, n[0], n[1]));
   };
-  course(X1, Z0 + TOWER_R, X1, Z1 - TOWER_R, [1, 0]);
-  course(X0, Z0, X0, Z1, [-1, 0]);
-  course(X0, Z0, X1 - TOWER_R, Z0, [0, -1]);
-  course(X0, Z1, X1 - TOWER_R, Z1, [0, 1]);
-  // a cornice over the passage on both faces, and pilasters beside the field arch
-  for (const [x, s] of [[X1, 1], [X0, -1]] as const) {
-    wall.push(new THREE.BoxGeometry(0.24, 0.32, s > 0 ? Z1 - Z0 - 2 * TOWER_R : Z1 - Z0).translate(x + s * 0.12, g0 + 5.6, ZC));
+  const FACES: [XZ, XZ, [number, number]][] = [
+    [[X1, Z0 + TOWER_R], [X1, Z1 - TOWER_R], [1, 0]],   // field front, between the towers
+    [[X0, Z0], [X0, Z1], [-1, 0]],                        // city front
+    [[X0, Z0], [X1 - TOWER_R, Z0], [0, -1]],              // north side
+    [[X0, Z1], [X1 - TOWER_R, Z1], [0, 1]],               // south side
+  ];
+  for (const [a, b, n] of FACES) {
+    run(a, b, n, g0 + BAND_Y0, BAND_Y1 - BAND_Y0, 0.2, P.band);
+    // the footing, broken by the passage on the two fronts
+    const cut = n[0] !== 0;
+    if (cut) { run(a, [a[0], ZC - aw - 0.35], n, base, g0 + 1.0 - base, 0.3, P.stone); run([a[0], ZC + aw + 0.35], b, n, base, g0 + 1.0 - base, 0.3, P.stone); }
+    else run(a, b, n, base, g0 + 1.0 - base, 0.3, P.stone);
   }
-  for (const dz of [-1, 1]) wall.push(new THREE.BoxGeometry(0.12, 5.4, 0.5).translate(X1 + 0.06, g0 + 2.7, ZC + dz * (aw + 0.45)));
 
-  // ---- openings: dark in the solid look, drawn outlines in the ghost ----
-  // a rectangle on a face: centre (x, y, z), outward normal (nx, nz), width w, height h
-  const opening = (x: number, y: number, z: number, nx: number, nz: number, w: number, h: number) => {
+  // ---- openings: loopholes, windows, niches and cannon ports ----
+  // A rectangle on a face: centre (x, y, z), outward normal (nx, nz), w x h. A hole is dark inside a stone surround,
+  // a niche a shallow recess framed the same way; the ghost draws the outline.
+  const opening = (x: number, y: number, z: number, nx: number, nz: number, w: number, h: number, kind: 'hole' | 'niche' = 'hole', fw = 0.07) => {
     const tx = -nz, tz = nx, e = 0.03;
     const c = new THREE.Vector3(x + nx * e, y, z + nz * e);
-    const P = (u: number, v: number) => c.clone().add(new THREE.Vector3(tx * u, v, tz * u));
-    loop([P(-w / 2, -h / 2), P(w / 2, -h / 2), P(w / 2, h / 2), P(-w / 2, h / 2)]);
-    dark.push(new THREE.PlaneGeometry(w, h).rotateY(Math.atan2(nx, nz)).translate(c.x, c.y, c.z));
+    const Pt = (u: number, v: number) => c.clone().add(new THREE.Vector3(tx * u, v, tz * u));
+    loop([Pt(-w / 2, -h / 2), Pt(w / 2, -h / 2), Pt(w / 2, h / 2), Pt(-w / 2, h / 2)]);
+    if (kind === 'hole') P.dark.push(new THREE.PlaneGeometry(w, h).rotateY(Math.atan2(nx, nz)).translate(c.x, c.y, c.z));
+    const d = kind === 'hole' ? 0.05 : 0.09;
+    for (const s of [-1, 1]) {
+      P.trim.push(faceBox(w + 2 * fw, fw, d, x, y + s * (h / 2 + fw / 2), z, nx, nz));
+      P.trim.push(faceBox(fw, h, d, x + tx * s * (w / 2 + fw / 2), y, z + tz * s * (w / 2 + fw / 2), nx, nz));
+    }
   };
-  // a round cannon port
+  // a round cannon port in a stone ring
   const port = (x: number, y: number, z: number, nx: number, nz: number, r: number) => {
     const tx = -nz, tz = nx, c = new THREE.Vector3(x + nx * 0.03, y, z + nz * 0.03), n = 14;
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; pts.push(c.clone().add(new THREE.Vector3(tx * Math.cos(a) * r, Math.sin(a) * r, tz * Math.cos(a) * r))); }
     loop(pts);
-    dark.push(new THREE.CircleGeometry(r, n).rotateY(Math.atan2(nx, nz)).translate(c.x, c.y, c.z));
+    P.dark.push(new THREE.CircleGeometry(r, n).rotateY(Math.atan2(nx, nz)).translate(c.x, c.y, c.z));
+    P.trim.push(new THREE.TorusGeometry(r + 0.07, 0.07, 6, 18).rotateY(Math.atan2(nx, nz)).translate(x + nx * 0.02, y, z + nz * 0.02));
   };
-  // Loopholes round a tower (the side facing the field), at height y; slits w x h, about `step` m apart
-  const towerRow = (tx: number, tz: number, r: number, y: number, w: number, h: number, step: number) => {
+  // loopholes round a tower (the side facing the field), and corbels under the course there
+  const towerRow = (tx: number, tz: number, r: number, y: number, w: number, h: number, step: number, corbels = false) => {
     const n = Math.round((2 * Math.PI * r) / step);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2, nx = Math.cos(a), nz = Math.sin(a);
       if (tx + nx * r < X1 - 0.2 && Math.abs(tz + nz * r - ZC) < hw - 0.2) continue;   // inside the block
-      opening(tx + nx * r, y, tz + nz * r, nx, nz, w, h);
+      opening(tx + nx * r, y, tz + nz * r, nx, nz, w, h, 'hole', 0.05);
+      if (corbels) {
+        const b = a + Math.PI / n;                     // between two slits
+        P.trim.push(faceBox(0.24, 0.34, 0.2, tx + Math.cos(b) * TOWER_R, g0 + BAND_Y0 - 0.17, tz + Math.sin(b) * TOWER_R, Math.cos(b), Math.sin(b)));
+      }
     }
   };
   // ... and along a straight face from a to b
-  const faceRow = (a: XZ, b: XZ, n: [number, number], y: number, w: number, h: number, step: number, skip?: (x: number, z: number) => boolean) => {
+  const faceRow = (a: XZ, b: XZ, n: [number, number], y: number, w: number, h: number, step: number, skip?: (x: number, z: number) => boolean, corbels = false, out = 0.2) => {
     const L = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.floor(L / step);
     for (let i = 0; i < m; i++) {
       const t = (i + 0.5) / m, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;
-      if (!skip?.(x, z)) opening(x + n[0] * 0.2, y, z + n[1] * 0.2, n[0], n[1], w, h);
+      if (!skip?.(x, z)) opening(x + n[0] * out, y, z + n[1] * out, n[0], n[1], w, h, 'hole', 0.05);
+      if (corbels && i < m - 1) {
+        const t2 = (i + 1) / m;
+        P.trim.push(faceBox(0.24, 0.34, 0.2, a[0] + (b[0] - a[0]) * t2, g0 + BAND_Y0 - 0.17, a[1] + (b[1] - a[1]) * t2, n[0], n[1]));
+      }
     }
   };
   const bandY = g0 + (BAND_Y0 + BAND_Y1) / 2, upperY = g0 + 11.6;
   for (const [tx, tz] of TOWERS) {
-    towerRow(tx, tz, TOWER_R + 0.2, bandY, 0.16, 0.5, 0.8);        // the slits in the corbel course
-    towerRow(tx, tz, TOWER_R, upperY, 0.2, 0.75, 1.15);            // the upper row
+    towerRow(tx, tz, TOWER_R + 0.2, bandY, 0.16, 0.5, 0.8, true);  // the slits in the corbel course
+    towerRow(tx, tz, towerR(upperY), upperY, 0.2, 0.75, 1.15);     // the upper row
     const out = tz < ZC ? -1 : 1;                                  // round ports: east, outward and between
-    for (const a of [0, out * Math.PI / 4, out * Math.PI / 2]) port(tx + Math.cos(a) * TOWER_R, g0 + 4.8, tz + Math.sin(a) * TOWER_R, Math.cos(a), Math.sin(a), 0.34);
+    const pr = towerR(g0 + 4.8);
+    for (const a of [0, out * Math.PI / 4, out * Math.PI / 2]) port(tx + Math.cos(a) * pr, g0 + 4.8, tz + Math.sin(a) * pr, Math.cos(a), Math.sin(a), 0.34);
   }
-  faceRow([X1, Z0 + TOWER_R], [X1, Z1 - TOWER_R], [1, 0], bandY, 0.16, 0.5, 0.8);
-  faceRow([X1, Z0 + TOWER_R], [X1, Z1 - TOWER_R], [1, 0], upperY, 0.2, 0.75, 1.1);
-  for (const [a, b, n] of [[[X0, Z0], [X0, Z1], [-1, 0]], [[X0, Z0], [X1 - TOWER_R, Z0], [0, -1]], [[X0, Z1], [X1 - TOWER_R, Z1], [0, 1]]] as [XZ, XZ, [number, number]][]) {
-    faceRow(a, b, n, bandY, 0.16, 0.5, 0.8);
-    faceRow(a, b, n, upperY, 0.2, 0.75, 1.1);
-    faceRow(a, b, n, g0 + 7.4, 0.8, 1.2, 3.2, (_x, z) => n[0] !== 0 && Math.abs(z - ZC) < aw + 0.8);   // small windows
+  for (const [a, b, n] of FACES) {
+    faceRow(a, b, n, bandY, 0.16, 0.5, 0.8, undefined, true);
+    faceRow(a, b, n, upperY, 0.2, 0.75, 1.1, undefined, false, 0);
+    if (n[0] !== 1) faceRow(a, b, n, g0 + 7.4, 0.8, 1.2, 3.2, (_x, z) => n[0] !== 0 && Math.abs(z - ZC) < aw + 0.8, false, 0);   // small windows
   }
   // the field front over the arch: a window between two rectangular niches
-  opening(X1, g0 + 7.4, ZC, 1, 0, 1.0, 1.4);
-  for (const dz of [-1, 1]) opening(X1, g0 + 7.5, ZC + dz * 1.75, 1, 0, 0.7, 1.2);
+  opening(X1, g0 + 7.4, ZC, 1, 0, 1.0, 1.4, 'hole', 0.1);
+  for (const dz of [-1, 1]) opening(X1, g0 + 7.5, ZC + dz * 1.75, 1, 0, 0.7, 1.2, 'niche', 0.08);
 
-  // ---- the wall either side: remnants (real) and the ghost wall with its roofed gallery ----
+  // ---- the passage: stone surrounds on both fronts, a cornice over them, pilasters beside the field arch, doors ----
+  for (const [x0, s] of [[X1, 1], [X0 - 0.12, -1]] as const) {
+    const ring = new THREE.Shape();
+    ring.absarc(0, g0 + ARCH_SPRING, aw + 0.38, Math.PI, 0, true);
+    ring.lineTo(aw, g0 + ARCH_SPRING);
+    ring.absarc(0, g0 + ARCH_SPRING, aw, 0, Math.PI, false);
+    ring.closePath();
+    P.trim.push(alongX(new THREE.ExtrudeGeometry(ring, { depth: 0.12, bevelEnabled: false, curveSegments: 16 }), x0));
+    for (const dz of [-1, 1]) P.trim.push(faceBox(0.38, ARCH_SPRING + (g0 - base), 0.12, s > 0 ? X1 : X0, base + (ARCH_SPRING + g0 - base) / 2, ZC + dz * (aw + 0.19), s, 0));
+    P.trim.push(faceBox(0.5, 0.7, 0.18, s > 0 ? X1 : X0, g0 + ARCH_SPRING + aw + 0.2, ZC, s, 0));   // keystone
+    const span = s > 0 ? Z1 - Z0 - 2 * TOWER_R : Z1 - Z0;
+    P.trim.push(faceBox(span, 0.32, 0.24, s > 0 ? X1 : X0, g0 + 5.75, ZC, s, 0));                  // cornice
+  }
+  for (const dz of [-1, 1]) P.trim.push(faceBox(0.5, 5.4, 0.12, X1, g0 + 2.7, ZC + dz * (aw + 0.75), 1, 0));   // pilasters
+  // the gate leaves, standing open against the passage walls near the field front: planks, three iron straps each
+  for (const dz of [-1, 1]) {
+    const z = ZC + dz * (aw - 0.06), x = X1 - 0.45 - 0.85;
+    P.wood.push(new THREE.BoxGeometry(1.7, ARCH_SPRING - 0.1, 0.1).translate(x, g0 + (ARCH_SPRING - 0.1) / 2, z));
+    for (const h of [0.45, 1.45, 2.45]) P.iron.push(new THREE.BoxGeometry(1.6, 0.09, 0.02).translate(x, g0 + h, z - dz * 0.06));
+  }
+
+  // ---- the wall either side: full height (or, for the ghost look, the remnants) ----
+  // each stretch from the gate outwards (OSM draws one of them the other way)
   const lines = WALL_IDS.map((id, i) => {
     const w = o.data.cityWalls?.find(c => c.id === id);
-    return w ? [w.line[0], w.line[1]] as XZ[] : WALL_FALLBACK[i];
+    const [p, q] = w ? [w.line[0], w.line[1]] : WALL_FALLBACK[i];
+    return Math.hypot(p[0] - XC, p[1] - ZC) <= Math.hypot(q[0] - XC, q[1] - ZC) ? [p, q] : [q, p];
   });
-  const remnant: THREE.BufferGeometry[] = [], ghostWall: THREE.BufferGeometry[] = [], ghostRoof: THREE.BufferGeometry[] = [];
   const segments: [number, number, number, number][] = [];
   lines.forEach((ln, li) => {
-    const [a, b] = ln, L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
+    // Each stretch leaves the gate by its north or south side and starts 2.5 m inside the block, so its end and
+    // parapet are bonded into the gate's masonry; the gallery roof and its posts start at the gate's side.
+    // OSM ends the south stretch on the line of the gate's west face, running almost along it, which would leave
+    // its gallery against that face; for the solid look it is pivoted about its far end (by under a metre at the
+    // gate) to leave through the side, its town face flush with the gate's.
+    const [a1, b] = ln;
+    const zf = Math.abs(a1[1] - Z1) < Math.abs(a1[1] - Z0) ? Z1 : Z0;          // the side it leaves by
+    let a0 = a1;
+    if (o.look === 'solid') {
+      const xf = a1[0] + ((zf - a1[1]) / (b[1] - a1[1])) * (b[0] - a1[0]);   // where it crosses that side's plane
+      const min = X0 + (WALL_T / 2) * Math.hypot(b[0] - a1[0], b[1] - a1[1]) / Math.abs(b[1] - a1[1]) + 0.05;
+      if (xf < min) a0 = [min, zf];
+    }
+    const L0 = Math.hypot(b[0] - a0[0], b[1] - a0[1]);
+    const tx = (b[0] - a0[0]) / L0, tz = (b[1] - a0[1]) / L0;
+    const a: XZ = [a0[0] - tx * 2.5, a0[1] - tz * 2.5], L = L0 + 2.5;
     let nx = tz, nz = -tx;
     if (nx < 0) { nx = -nx; nz = -nz; }                  // outward: east, away from the city
-    const n = Math.ceil(L);
+    const n = Math.ceil(L), whole = n - BROKEN;          // samples every metre; the last BROKEN are broken off
     const at = (i: number) => [a[0] + tx * (L * i) / n, a[1] + tz * (L * i) / n] as XZ;
-    // a slab along the line, from its foot to top(i), between offsets s0 and s1 across it
-    const slab = (s0: number, s1: number, top: (i: number, x: number, z: number) => number, foot: (i: number, x: number, z: number) => number) => {
-      const pos: number[] = [], idx: number[] = [];
-      for (let i = 0; i <= n; i++) {
+    // how far along the line the parallel at offset s crosses the plane of the side it leaves by, and that point
+    const dSide = (s: number) => (zf - a[1] - nz * s) / tz;
+    const onSide = (s: number): XZ => [a[0] + tx * dSide(s) + nx * s, zf];
+    // a slab along the line over samples i0..i1, from its foot to top(i), between offsets s0 and s1 across it;
+    // with `cut`, its first row lies on the gate's side instead of square across the line
+    const slab = (s0: number, s1: number, top: (i: number, x: number, z: number) => number, foot: (i: number, x: number, z: number) => number, i0 = 0, i1 = n, cut?: (s: number) => XZ) => {
+      const pos: number[] = [], idx: number[] = [], m = i1 - i0;
+      for (let i = i0; i <= i1; i++) {
         const [x, z] = at(i);
         for (const s of [s0, s1]) {
-          const px = x + nx * s, pz = z + nz * s;
+          const [px, pz] = cut && i === i0 ? cut(s) : [x + nx * s, z + nz * s];
           pos.push(px, foot(i, px, pz), pz, px, top(i, px, pz), pz);
         }
       }
       // per step: 4 verts (s0 foot, s0 top, s1 foot, s1 top)
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < m; i++) {
         const q = i * 4, r = q + 4;
         idx.push(q, r, q + 1, r, r + 1, q + 1);             // the s0 face
         idx.push(q + 2, q + 3, r + 2, r + 2, q + 3, r + 3); // the s1 face
         idx.push(q + 1, r + 1, q + 3, r + 1, r + 3, q + 3); // the top
       }
-      for (const q of [0, n * 4]) idx.push(q, q + 1, q + 2, q + 2, q + 1, q + 3);   // the ends
+      for (const q of [0, m * 4]) idx.push(q, q + 1, q + 2, q + 2, q + 1, q + 3);   // the ends
       const ix = new THREE.BufferGeometry();
       ix.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       ix.setIndex(idx);
@@ -227,61 +321,74 @@ export function buildSubaciusGate(o: {
     const level = (i: number) => terrain.heightAt(at(i)[0], at(i)[1]);   // tops are level across the wall
     const across = (i: number, x: number, z: number) => (x - at(i)[0]) * nx + (z - at(i)[1]) * nz;
     // a broken top: courses lost here and there, a gap dropping a metre or more now and then
-    const hash = (k: number) => { const h = Math.sin(k * 12.9898 + li * 78.233) * 43758.5453; return h - Math.floor(h); };
+    const hash = (kk: number) => { const h = Math.sin(kk * 12.9898 + li * 78.233) * 43758.5453; return h - Math.floor(h); };
     const rough = (i: number) => {
-      const t = i * 0.45, k = Math.floor(t), f = t - k, u = f * f * (3 - 2 * f);   // smooth noise along the top
-      const n = hash(k) * (1 - u) + hash(k + 1) * u;
-      return -1.1 + 1.6 * n + 0.15 * Math.sin(i * 2.3 + li);
+      const t = i * 0.45, kk = Math.floor(t), f = t - kk, u = f * f * (3 - 2 * f);   // smooth noise along the top
+      return -1.1 + 1.6 * (hash(kk) * (1 - u) + hash(kk + 1) * u) + 0.15 * Math.sin(i * 2.3 + li);
     };
     const foot = (_i: number, x: number, z: number) => ground(x, z) - 0.5;
-    remnant.push(uvMetres(slab(-WALL_T / 2, WALL_T / 2, i => level(i) + REMNANT_H + rough(i), foot)));
-    // the whole wall: the body up to the wall walk, the parapet on the field side, and the gallery's lean-to roof
-    // (from over the parapet down towards the city)
-    ghostWall.push(slab(-WALL_T / 2, WALL_T / 2, i => level(i) + WALL_H - 2.2, foot));
-    ghostWall.push(slab(WALL_T / 2 - 0.6, WALL_T / 2, i => level(i) + WALL_H, i => level(i) + WALL_H - 2.3));
+    const i0 = Math.round((2.5 * n) / L);                // where the stretch leaves the gate: the remnants start there
+    P.remnant.push(slab(-WALL_T / 2, WALL_T / 2, i => level(i) + REMNANT_H + rough(i), foot, i0));
+    // The wall: its body up to the wall walk, broken off over its last metres; the parapet on the field side with
+    // its loopholes; the gallery's lean-to roof on posts, from over the parapet down towards the city.
+    const walk = WALL_H - 2.2;
+    const brokenTop = (i: number) => i <= whole ? walk : walk - (i - whole) / BROKEN * (walk - 4.5) + 1.2 * rough(i);
+    P.wall.push(slab(-WALL_T / 2, WALL_T / 2, i => level(i) + brokenTop(i), foot));
+    P.wall.push(slab(WALL_T / 2 - 0.6, WALL_T / 2, i => level(i) + WALL_H, i => level(i) + walk, 0, whole));
     const pitch = (i: number, x: number, z: number) => (WALL_T / 2 + 0.3 - across(i, x, z)) * 0.5;
-    ghostRoof.push(slab(-WALL_T / 2 - 0.6, WALL_T / 2 + 0.3, (i, x, z) => level(i) + WALL_H + 1.0 - pitch(i, x, z), (i, x, z) => level(i) + WALL_H + 0.8 - pitch(i, x, z)));
-    // loopholes along the parapet
-    for (let d = 2; d < L - 1; d += 1.8) {
-      const x = a[0] + tx * d, z = a[1] + tz * d;
-      opening(x + nx * WALL_T / 2, ground(x, z) + WALL_H - 1.0, z + nz * WALL_T / 2, nx, nz, 0.18, 0.6);
+    const [rs0, rs1] = [-WALL_T / 2 - 0.6, WALL_T / 2 + 0.3], r0 = Math.ceil((Math.max(dSide(rs0), dSide(rs1)) * n) / L);
+    P.wallRoof.push(slab(rs0, rs1, (i, x, z) => level(i) + WALL_H + 1.0 - pitch(i, x, z), (i, x, z) => level(i) + WALL_H + 0.8 - pitch(i, x, z), r0 - 1, whole, onSide));
+    P.stone.push(slab(WALL_T / 2, WALL_T / 2 + 0.25, (_i, x, z) => ground(x, z) + 0.9, foot));      // the footing, field side
+    for (let i = r0 + 0.2; i < whole; i += 2.5) {                                                        // gallery posts
+      const [x, z] = at(i), px = x - nx * (WALL_T / 2 - 0.15), pz = z - nz * (WALL_T / 2 - 0.15), y0 = level(i) + walk, y1 = level(i) + WALL_H - 0.2;
+      P.wood.push(new THREE.BoxGeometry(0.18, y1 - y0, 0.18).translate(px, (y0 + y1) / 2, pz));
     }
-    // the remnant stops the walker
-    for (const s of [-WALL_T / 2, WALL_T / 2]) segments.push([a[0] + nx * s, a[1] + nz * s, b[0] + nx * s, b[1] + nz * s]);
-    segments.push([a[0] - nx * WALL_T / 2, a[1] - nz * WALL_T / 2, a[0] + nx * WALL_T / 2, a[1] + nz * WALL_T / 2]);
+    for (let d = dSide(WALL_T / 2) + 1; d < (L * whole) / n - 1; d += 1.8) {                          // loopholes
+      const x = a[0] + tx * d, z = a[1] + tz * d;
+      opening(x + nx * WALL_T / 2, ground(x, z) + WALL_H - 1.0, z + nz * WALL_T / 2, nx, nz, 0.18, 0.6, 'hole', 0.05);
+    }
+    // a doorway in the gate's side where the wall walk comes in, on the middle of the walk
+    {
+      const [ex, ez] = onSide(-0.3), y = terrain.heightAt(ex, ez) + walk + 0.95;
+      opening(Math.min(X1 - TOWER_R - 0.6, Math.max(X0 + 0.6, ex)), y, zf, 0, zf === Z0 ? -1 : 1, 0.9, 1.9, 'hole', 0.1);
+    }
+    // the wall stops the walker (with the ghost, only the remnants do: from where the gate was)
+    const s0: XZ = o.look === 'solid' ? a : a0;
+    for (const s of [-WALL_T / 2, WALL_T / 2]) segments.push([s0[0] + nx * s, s0[1] + nz * s, b[0] + nx * s, b[1] + nz * s]);
+    segments.push([s0[0] - nx * WALL_T / 2, s0[1] - nz * WALL_T / 2, s0[0] + nx * WALL_T / 2, s0[1] + nz * WALL_T / 2]);
     segments.push([b[0] - nx * WALL_T / 2, b[1] - nz * WALL_T / 2, b[0] + nx * WALL_T / 2, b[1] + nz * WALL_T / 2]);
   });
 
   const solid = new THREE.Group(), ghost = new THREE.Group();
-  solid.name = 'subacius-remnants'; ghost.name = 'subacius-ghost';
-
   const uniforms = {
     uTime: { value: 0 },
     uFog: { value: 'density' in o.fog ? new THREE.Vector3(1, o.fog.density, 0) : new THREE.Vector3(0, o.fog.near, o.fog.far) },
     uGate: { value: new THREE.Vector2(XC, ZC) },
   };
+  const mesh = (parts: THREE.BufferGeometry[], mat: THREE.Material, shadow = true) => {
+    const m = new THREE.Mesh(merged(parts.map(uvMetres)), mat);
+    m.castShadow = shadow; m.receiveShadow = true;
+    solid.add(m);
+  };
   if (o.look === 'solid') {
-    // before 1799: the gate and the whole wall
-    for (const [parts, mat] of [[[...wall, ...ghostWall], o.mats.wall], [[...roof, ...ghostRoof], o.mats.roof], [dark, o.mats.dark]] as const) {
-      const m = new THREE.Mesh(merged(parts.map(uvMetres)), mat);
-      m.castShadow = mat !== o.mats.dark; m.receiveShadow = true;
-      solid.add(m);
-    }
     solid.name = 'subacius';
-    // the solid gate stops the walker too: its sides, the passage walls, the towers
+    const M = o.mats;
+    mesh(P.render, M.render); mesh([...P.band, ...P.trim], M.trim); mesh(P.stone, M.stone);
+    mesh([...P.roof, ...P.wallRoof], M.roof); mesh(P.dark, M.dark, false); mesh(P.wood, M.wood); mesh(P.iron, M.iron);
+    mesh(P.wall, M.wall);
+    // the gate stops the walker: its sides, the passage walls, the towers
     const box = (x0: number, z0: number, x1: number, z1: number) => segments.push([x0, z0, x1, z0], [x1, z0, x1, z1], [x1, z1, x0, z1], [x0, z1, x0, z0]);
     box(X0, Z0, X1, ZC - aw);
     box(X0, ZC + aw, X1, Z1);
-    for (const [tx, tz] of TOWERS) { const r = circle(tx, tz, TOWER_R + 0.1, 12); r.forEach((p, i) => segments.push([p[0], p[1], r[(i + 1) % 12][0], r[(i + 1) % 12][1]])); }
+    for (const [tx, tz] of TOWERS) { const r = circle(tx, tz, TOWER_R + 0.35, 12); r.forEach((p, i) => segments.push([p[0], p[1], r[(i + 1) % 12][0], r[(i + 1) % 12][1]])); }
   } else {
+    solid.name = 'subacius-remnants'; ghost.name = 'subacius-ghost';
     // c.1900: what was left of the wall, low and ragged
-    const rem = new THREE.Mesh(merged(remnant), o.mats.remnant);
-    rem.castShadow = rem.receiveShadow = true;
-    solid.add(rem);
+    mesh(P.remnant, o.mats.remnant);
     // the ghost: a pale wash on the faces, strongest where they turn away (as the paper shows through an ink wash),
     // and the drawing's lines; both fade into the street at the foot, into the mist, and when walked into.
     // A depth pass first, so only the nearest face is washed and lines behind the gate's own faces are hidden.
-    const faces = merged([...wall, ...roof, ...ghostWall, ...ghostRoof].map(g => (g.index ? g.toNonIndexed() : g)).map(g => { g.deleteAttribute('uv'); return g; }));
+    const faces = merged([...P.render, ...P.band, ...P.roof, ...P.wall, ...P.wallRoof].map(g => (g.index ? g.toNonIndexed() : g)).map(g => { g.deleteAttribute('uv'); return g; }));
     const edges = new THREE.EdgesGeometry(faces, 24);
     const inkPos = edges.getAttribute('position').array as Float32Array;
     const all = new Float32Array(inkPos.length + ink.length);
@@ -304,6 +411,7 @@ export function buildSubaciusGate(o: {
 /** UVs in metres for the plaster and tile textures: projected on the face's own plane. */
 function uvMetres(g: THREE.BufferGeometry): THREE.BufferGeometry {
   const geo = g.index ? g.toNonIndexed() : g;
+  if (g.userData.metres) return geo;                   // already in metres (lathe)
   if (!geo.getAttribute('normal')) geo.computeVertexNormals();
   const p = geo.getAttribute('position') as THREE.BufferAttribute, n = geo.getAttribute('normal') as THREE.BufferAttribute;
   const uv = new Float32Array(p.count * 2);

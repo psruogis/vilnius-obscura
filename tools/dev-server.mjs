@@ -66,8 +66,9 @@ const server = http.createServer((req, res) => {
   let p = decodeURIComponent(url.pathname);
   if (req.method === 'POST' && p === '/__snapshot') return saveSnapshot(req, res, url.searchParams.get('name'));
   try {
-    if (p === '/' || p === '/index.html') {
-      const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8').replace(
+    // the pages: the walk, and the Subačius Gate on its own (gate.html)
+    if (p === '/' || p === '/index.html' || p === '/gate.html') {
+      const html = fs.readFileSync(path.join(ROOT, p === '/' ? 'index.html' : p.slice(1)), 'utf8').replace(
         '<head>',
         `<head>\n    <script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>`,
       );

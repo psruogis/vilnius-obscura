@@ -135,11 +135,15 @@ export function plasterMaterial(tint: string, anisotropy: number, tile = 2.5): T
 }
 
 /**
- * Old brick wall, its lime plaster mostly fallen away (the city wall's remnants): brick courses with mortar joints,
- * and patches of pale plaster left here and there. UVs in metres.
+ * Brick masonry under lime plaster, UVs in metres: brick courses in running bond with mortar joints, and the plaster
+ * over them wherever it has held. `cover` is how much plaster is left (0: bare brick, 1: all rendered), `plaster` its
+ * colour (linear RGB), `grime` how much damp and soot darken it in streaks. With `ground` (the height of the foot of
+ * the wall, in the UVs' metres), the plaster has fallen more, and the damp risen, in the first metre or two.
  */
-export function oldBrickMaterial(anisotropy: number): THREE.MeshStandardMaterial {
-  const m = plasterMaterial('#7a5646', anisotropy, 1.4);
+export function masonryMaterial(anisotropy: number, o: { brick: string; plaster: [number, number, number]; cover: number; grime: number; ground?: number }): THREE.MeshStandardMaterial {
+  const m = plasterMaterial(o.brick, anisotropy, 1.4);
+  // plaster where the noise is above t (the noise sits around 0.5, spread about +-0.2)
+  const t = (0.72 - 0.5 * o.cover).toFixed(3), f = (x: number) => x.toFixed(3);
   m.onBeforeCompile = shader => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vMetres;')
@@ -153,23 +157,43 @@ export function oldBrickMaterial(anisotropy: number): THREE.MeshStandardMaterial
       .replace('#include <map_fragment>', `#include <map_fragment>
         ${PLASTER_DETAIL}
         {
+          float tex = dot(diffuseColor.rgb / max(diffuse, vec3(0.001)), vec3(0.3333));   // the plaster map's grain
           // bricks 0.28 x 0.08 m in running bond, each a slightly different fire
           float row = floor(vMetres.y / 0.085);
           vec2 cell = vec2(floor((vMetres.x + mod(row, 2.0) * 0.14) / 0.28), row);
           float fx = fract((vMetres.x + mod(row, 2.0) * 0.14) / 0.28), fy = fract(vMetres.y / 0.085);
           float joint = 1.0 - smoothstep(0.0, 0.08, fy) * smoothstep(1.0, 0.92, fy) * smoothstep(0.0, 0.03, fx) * smoothstep(1.0, 0.97, fx);
-          vec3 brick = diffuseColor.rgb * (0.88 + 0.18 * ob_h(cell));
-          vec3 mortar = vec3(0.45, 0.42, 0.38);
-          vec3 c = mix(brick, mortar, joint * 0.6);
-          // what is left of the plaster: soft-edged patches, stained
-          float n = 0.55 * ob_n(vMetres * 0.6) + 0.3 * ob_n(vMetres * 1.7 + 7.0) + 0.15 * ob_n(vMetres * 4.3 + 3.0);
-          c = mix(c, vec3(0.5, 0.47, 0.41) * (0.85 + 0.25 * ob_n(vMetres * 3.0)), 0.75 * smoothstep(0.6, 0.78, n));
-          // soot and damp streaks darken it towards the foot
-          c *= 0.78 + 0.22 * ob_n(vec2(vMetres.x * 2.5, vMetres.y * 0.25));
+          vec3 brick = diffuse * (0.88 + 0.18 * ob_h(cell));
+          vec3 c = mix(brick, vec3(0.45, 0.42, 0.38), joint * 0.6);
+          // the plaster: soft-edged, stained, with the grain of the plaster map
+          float n = 0.55 * ob_n(vMetres * 0.6) + 0.3 * ob_n(vMetres * 1.7 + 7.0) + 0.15 * ob_n(vMetres * 4.3 + 3.0) + 0.05 * ob_n(vMetres * 11.0);
+          vec3 plaster = vec3(${o.plaster.map(f).join(', ')}) * (0.88 + 0.2 * ob_n(vMetres * 3.0)) * tex;
+          float foot = ${o.ground === undefined ? '1.0' : `smoothstep(0.2, 2.2, vMetres.y - ${f(o.ground)})`};
+          float mt = ${t} + 0.1 * (1.0 - foot);
+          float edge = smoothstep(mt - 0.012, mt + 0.012, n);
+          c = mix(c, plaster, edge);
+          c *= 1.0 - 0.2 * edge * (1.0 - smoothstep(mt + 0.012, mt + 0.07, n));   // a damp rim where the plaster breaks
+          // damp and soot in long vertical streaks, and rising damp at the foot
+          c *= ${f(1 - o.grime)} + ${f(o.grime)} * ob_n(vec2(vMetres.x * 2.5, vMetres.y * 0.25));
+          c *= mix(0.74, 1.0, foot);
           diffuseColor.rgb = c;
         }`);
   };
   return m;
+}
+
+/** Old brick wall, its lime plaster mostly fallen away (the city wall's remnants, c. 1900). */
+export function oldBrickMaterial(anisotropy: number): THREE.MeshStandardMaterial {
+  return masonryMaterial(anisotropy, { brick: '#7a5646', plaster: [0.5, 0.47, 0.41], cover: 0.12, grime: 0.22 });
+}
+
+/** A fieldstone footing: the cobble texture's rounded stones, set in mortar. UVs in metres. */
+export function fieldstoneMaterial(anisotropy: number): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: '#a39b90', roughness: 0.95,
+    map: worldTex('cobblestone_floor_08', 'diff', true, anisotropy, 1.1),
+    normalMap: worldTex('cobblestone_floor_08', 'nor', false, anisotropy, 1.1),
+  });
 }
 
 /** Materials for the Town Hall model (UVs in metres). */

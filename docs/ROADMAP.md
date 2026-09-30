@@ -9,9 +9,11 @@ reorder freely.
   and St Casimir's (in its c. 1900 Orthodox form), townsfolk, cabs, the market, rain, sound, the
   title screen, credits. See `README.md` and the git log.
 - **The road to the Subačius Gate:** the walk now runs from the square down Didžioji g. and along Subačiaus g. to
-  the Bokšto corner, where the city wall's east gate stood until 1801, and a few steps outside it. The gate is a
-  ghost, drawn in pale ink over the street after P. Smuglevičius's drawing of 1785–86, rising from the ragged
-  remnants of the wall (`src/world/subacius.ts`, `docs/gates.md` §8); `?gate=solid` builds it as before 1799. The
+  the Bokšto corner, where the city wall's east gate stood until 1801, and a few steps outside it. The gate stands
+  there whole, with the wall either side, as it was before 1801, after P. Smuglevičius's drawing of 1785–86: a
+  century out of its time, the owner's choice (`src/world/subacius.ts`, `docs/gates.md` §8). `?gate=ghost` shows it
+  instead as a ghost in pale ink over the street, rising from ragged remnants of the wall. `gate.html` shows the
+  model on its own, in clear daylight, to be turned round (published as a claude.ai artifact). The
   walk's edge is now a shape, not a circle (`src/world/zone.ts`, `WALK_SHAPES` in `tools/build-area.mjs`): barriers,
   street furniture, water, townsfolk and the map follow it, so growing the walk street by street is a data change.
   The LiDAR was extended east to cover the gate site (`tools/lidar/README.md`). Cost: about 7% more draw calls and
@@ -42,8 +44,8 @@ reorder freely.
    scripted route-follower NPC; St Nicholas' Church modelled (or the walk extended west); and,
    optionally, a November-dusk light preset.
 3. **More characters.** The roster is in `docs/characters/README.md`.
-4. **Ghost gates.** `docs/gates.md`. The Subačius Gate is done (§8); the look of the ghost is the owner's to
-   judge. Next nearest: Rūdninkai (372 m), then the Gate of Dawn road (the one gate still standing). Research
+4. **The other gates.** `docs/gates.md`. The Subačius Gate is done (§8), standing as before 1801; the ghost is
+   kept as an option (`?gate=ghost`). Next nearest: Rūdninkai (372 m), then the Gate of Dawn road (the one gate still standing). Research
    each gate's pre-1799 appearance first; each is a new road in `WALK_SHAPES` plus a model.
 5. **The Great Synagogue and the Shulhoyf.** No model exists to import; it would be built from
    archives (`docs/research/city-1900.md` §6). It sits inside the existing map frame.

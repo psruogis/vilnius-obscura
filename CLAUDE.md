@@ -16,7 +16,8 @@ looks bad. Their design hours are the scarce resource.
 ## Run, build, ship
 
 ```bash
-node tools/dev-server.mjs      # http://localhost:5173 ; ?weather=clear for the dry morning, ?gate=solid
+node tools/dev-server.mjs      # http://localhost:5173 ; ?weather=clear for the dry morning, ?gate=ghost
+                               # /gate.html: the Subačius Gate model on its own
 node tools/build-static.mjs    # dist/ (about 41 MB, 8 of it music)
 ```
 

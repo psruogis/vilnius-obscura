@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { loadArea } from './world/area';
 import { buildWalls, buildRoofs, buildSoffits, hasTileRoof } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, plasterMaterial, oldBrickMaterial, worldTex } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, plasterMaterial, oldBrickMaterial, masonryMaterial, fieldstoneMaterial, worldTex } from './world/materials';
 import { buildBarriers } from './world/props';
 import { buildStreetProps, createStreetPropMaterials } from './world/streetprops';
 import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
-import { buildSubaciusGate } from './world/subacius';
+import { buildSubaciusGate, SUBACIUS_GATE } from './world/subacius';
 import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
 import { buildFacades } from './world/facades';
@@ -173,21 +173,31 @@ async function main(force = false): Promise<void> {
     scene.add(buildStCasimir(stCasimirData, m, churchForm));
   }
   const walls = new WallGrid(data);
-  // The Subačius Gate site at the end of the road (docs/gates.md): what was left of the wall in 1900, and the gate,
-  // gone since 1801, as a ghost drawn over the street; ?gate=solid builds it (and the whole wall) as before 1799.
+  // The Subačius Gate at the end of the road (docs/gates.md §8), standing as it stood before 1801, with the wall
+  // either side: a deliberate anachronism in 1900. ?gate=ghost (or #ghost) shows it as a ghost over the street instead.
+  const gateFloor = terrain.heightAt(SUBACIUS_GATE.x, SUBACIUS_GATE.z);
   const gateMats = {
-    wall: plasterMaterial('#e3dccb', aniso),
-    roof: new THREE.MeshStandardMaterial({ map: worldTex('clay_roof_tiles', 'diff', true, aniso, 1.6), normalMap: worldTex('clay_roof_tiles', 'nor', false, aniso, 1.6), color: '#7a6a63', roughness: 0.95, side: THREE.DoubleSide }),
+    render: masonryMaterial(aniso, { brick: '#5e4034', plaster: [0.55, 0.52, 0.45], cover: 0.97, grime: 0.2, ground: gateFloor }),
+    trim: plasterMaterial('#b3ab9b', aniso),
+    stone: fieldstoneMaterial(aniso),
+    roof: new THREE.MeshStandardMaterial({ map: worldTex('clay_roof_tiles', 'diff', true, aniso, 1.6), normalMap: worldTex('clay_roof_tiles', 'nor', false, aniso, 1.6), color: '#7d6258', roughness: 0.95, side: THREE.DoubleSide }),
     dark: new THREE.MeshStandardMaterial({ color: '#1c1815', roughness: 1 }),
+    wood: createWoodMaterial(aniso),
+    iron: new THREE.MeshStandardMaterial({ color: '#2b2a28', roughness: 0.55, metalness: 0.5 }),
+    wall: masonryMaterial(aniso, { brick: '#5e4034', plaster: [0.5, 0.47, 0.41], cover: 0.88, grime: 0.24, ground: gateFloor }),
     remnant: oldBrickMaterial(aniso),
   };
+  const ghostGate = new URLSearchParams(location.search).get('gate') === 'ghost' || location.hash === '#ghost';
   const gate = buildSubaciusGate({
-    data, terrain, mats: gateMats, look: new URLSearchParams(location.search).get('gate') === 'solid' || location.hash === '#solid' ? 'solid' : 'ghost',
+    data, terrain, mats: gateMats, look: ghostGate ? 'ghost' : 'solid',
     fog: RAIN ? { density: 0.0072 } : { near: 70, far: 800 },
   });
-  age(gateMats.wall, { ground: gate.floor, strength: 1, seed: 5 });
+  for (const m of [gateMats.render, gateMats.trim, gateMats.wall]) age(m, { ground: gate.floor, strength: 1, seed: 5 });
   age(gateMats.roof, { roof: true, strength: 0.8 });
-  if (RAIN) { wet(gateMats.wall, 'wall', gate.floor); wet(gateMats.remnant, 'wall', gate.floor); wet(gateMats.roof, 'roof'); }
+  if (RAIN) {
+    for (const m of [gateMats.render, gateMats.trim, gateMats.stone, gateMats.wall, gateMats.remnant]) wet(m, 'wall', gate.floor);
+    for (const m of [gateMats.roof, gateMats.wood]) wet(m, 'roof');
+  }
   scene.add(gate.solid);
   rainScene.add(gate.ghost);
   for (const [ax, az, bx, bz] of gate.segments) walls.addSegment(ax, az, bx, bz);
@@ -270,9 +280,9 @@ async function main(force = false): Promise<void> {
   document.addEventListener('visibilitychange', () => { if (document.hidden && touch.isActive) pauseWalk(); });
   const walker = new Walker(input, walls, zone, (x, z) => terrain.heightAt(x, z));
   walker.place(thx + 4, thz - 42, Math.PI);
-  // #gate (or #solid): start on Subačiaus g., walking up to the gate. A bare #anchor, because a claude.ai artifact
-  // passes that to the page and never the ?query
-  if (location.hash === '#gate' || location.hash === '#solid') walker.place(296, 241, -Math.PI / 2);
+  // #gate (or #ghost; #solid, as it was once linked, is the same as #gate): start on Subačiaus g., walking up to the
+  // gate. A bare #anchor, because a claude.ai artifact passes that to the page and never the ?query
+  if (['#gate', '#ghost', '#solid'].includes(location.hash)) walker.place(296, 241, -Math.PI / 2);
   scene.add(walker.object);
   // The map: a round plan in the corner while walking; Tab (or a tap on it) opens it full-screen and holds the walk still
   let hadLock = false; // embedded pages (claude.ai artifacts) never get the lock: nothing to give back, no pause screen
@@ -285,7 +295,7 @@ async function main(force = false): Promise<void> {
       input.requestLock().then(ok => { if (!ok && !touch.isActive) overlay.setVisible(true); });
     },
     onLook: look => settings.keep('mapLook', look),
-  }, settings.current.mapLook);
+  }, settings.current.mapLook, ghostGate ? 'ghost' : 'solid');
   const streetTitle = new PlaceTitle(data); // the street you are on, as a title for a few seconds
   overlay.onVisibility(visible => { map.setWalking(!visible); streetTitle.setActive(!visible); });
   // The character model streams in; the placeholder capsule stands in until then.

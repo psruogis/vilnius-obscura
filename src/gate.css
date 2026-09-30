@@ -1,0 +1,48 @@
+/* The Subačius Gate on its own (gate.html, src/gate.ts): the game's iron-and-oxblood menu look, kept small so the
+   model has the screen. One dark look; the page paints its own ground. */
+:root {
+  color-scheme: dark;
+  --ground: #1a1714;
+  --panel: rgba(20, 17, 16, 0.78);
+  --edge: rgba(201, 164, 95, 0.35);
+  --cream: #e8dcc9;
+  --dim: #b3a596;
+  --oxblood: #8e2f2c;
+  --steel: #3a3431;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); color: var(--cream); }
+body { font: 16px/1.4 'Cormorant Garamond', Georgia, 'Times New Roman', serif; font-variant-numeric: lining-nums; }
+#app, canvas { display: block; width: 100%; height: 100%; }
+
+.gv { position: fixed; inset: 0; pointer-events: none; }
+.gv-card {
+  position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); left: calc(16px + env(safe-area-inset-left, 0px));
+  max-width: min(27rem, calc(100vw - 32px)); box-sizing: border-box; padding: 14px 18px 16px;
+  background: var(--panel); border: 1px solid var(--edge); border-radius: 4px; pointer-events: auto;
+}
+.gv-card h1 { margin: 0; font: 700 1.7rem/1.1 Cinzel, Georgia, serif; letter-spacing: 0.06em; text-wrap: balance; }
+.gv-sub { margin: 0.35rem 0 0; font-style: italic; font-size: 1.1rem; color: var(--dim); }
+.gv-note { margin: 0.7rem 0 0; font-size: 1rem; line-height: 1.45; color: var(--cream); }
+
+.gv-views {
+  position: absolute; left: 50%; bottom: calc(40px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: max-content; max-width: calc(100vw - 32px);
+  pointer-events: auto;
+}
+.gv-views button {
+  font: 600 0.8rem/1 Cinzel, Georgia, serif; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cream);
+  padding: 11px 16px; border: 1px solid var(--edge); border-radius: 3px; background: var(--steel); cursor: pointer;
+}
+.gv-views button:hover { background: #4a423e; }
+.gv-views button[aria-pressed="true"] { background: var(--oxblood); border-color: #c9a45f; }
+.gv-views button:focus-visible { outline: 2px solid var(--cream); outline-offset: 2px; }
+.gv-hint {
+  position: absolute; left: 0; right: 0; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); margin: 0;
+  text-align: center; font-style: italic; font-size: 0.95rem; color: var(--dim); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+@media (max-width: 640px) {
+  .gv-note { display: none; }
+  .gv-card h1 { font-size: 1.35rem; }
+  .gv-views button { padding: 10px 12px; font-size: 0.72rem; }
+}
