@@ -392,17 +392,20 @@ Not yet looked at (Commons rate-limited the download): *(S. Fleury, 1896)* and *
 
 From four owner-supplied images (sources not recorded): **(a)** a c.1900 frontal view from the square; **(b)** a c.1900 view
 of the square from the south-west, the church at an angle; **(c)** a German postcard of 1915–18, *Die griechisch-katholische
-Kirche in Wilna*, hand-tinted; **(d)** a 3D model of today's church. Checked against the 1870s and 1889 photos above.
+Kirche in Wilna*, hand-tinted; **(d)** a 3D model of today's church; **(e)** a sharp view from the square,
+[pastvu.com/915912](https://pastvu.com/915912) (uploaded by Goharskiy; date and licence not checked, used as reference only);
+**(f)** a winter view from the south-west (source not recorded). Checked against the 1870s and 1889 photos above.
 `src/world/stcasimir.ts`, variant `photos` (the default).
 
 | Feature | Evidence | Status |
 |---|---|---|
-| Tower tops: on the upper cornice an attic with corner strips, a cartouche with an oval window between two garlands, a cornice with an urn on each corner; then a bell dome, a slim open octagonal lantern, a ribbed bulb and the cross | 1870s photo (zoomed), (a), (b), (c) | [V] forms / [U] sizes |
+| An attic storey across the whole front on the upper cornice (about 3 m): over each tower a block with pedestals on the pilaster lines, a framed panel and a cartouche with an oval window; between the towers and the turret a lower block with a balustrade; a cornice round it | (e), (f): the layer between the towers and the main storeys | [V] |
+| Tower tops, on the attic: a narrower stage (about 2 m) with scroll brackets at the corners, garlands and urns; a bell dome about 6 m across; a small open lantern, a ribbed bulb, the cross at about 43 m | 1870s photo, (a), (b), (c), (e); heights scaled from (e) | [V] forms / [U] sizes |
 | The towers' upper-storey openings are belfries with bells hanging in them, a balustrade across each | 1870s photo: bells visible in both; (c): the balustrades | [V] |
 | The north tower looks taller in the 1870s photo and (a) | (b) shows why: from the square the crossing dome's lantern stands just behind the north tower. The towers are modelled alike | [V] |
 | The three middle niches hold painted icons (saints on gold), not statues | (c) shows them in colour; the Orthodox conversion would have removed the Catholic statues. The saints themselves are drawn generically | [V] icons / [U] subjects |
-| Central turret (1864–68): square stage about 8 m wide, cornice at about 40 m, a tall glazed arched window between corner pilasters, great S-scrolls down to the towers; a dome with round dormers and corner urns, lantern, bulb, cross; the highest point of the front | 1870s photo, owner's photo (heights scaled from the 30 m façade) | [V] forms / [U] sizes |
-| A 1.6 m drum under the turret dome | Not in the photos. They were taken from further back than the square allows; without it the cornice hides the dome from the street | [U] design choice |
+| Central turret (1864–68): square stage about 8 m wide standing forward through the attic, cornice at about 39 m, a tall glazed arched window under a segmental hood between corner pilasters, S-scrolls from the attic up its sides; a dome straight on the cornice with round dormers, a **clock** in the one facing the square, corner urns; lantern, bulb, cross at about 52 m, the highest point of the front | 1870s photo, (a), (e) (heights scaled from the 30 m façade) | [V] forms / [U] sizes |
+| Upper-storey arches crowned with small cartouches; composite volutes on the pilaster capitals; garland drops under the lower capitals | (e) | [V] |
 | Porch: paired Tuscan columns against a front wall with an arched door and a radiating fanlight, a cartouche over the door | 1889 photo | [V] |
 | Porch entablature Doric, with triglyphs | 1889 photo | [V] |
 | Porch pediment: broken segmental, a round clock in a scrolled frame rising through the break | 1889 photo (the face is blank there; hands added, set to ten past ten) | [V] form / [U] hands |
