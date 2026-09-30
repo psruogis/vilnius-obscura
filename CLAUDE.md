@@ -16,7 +16,7 @@ looks bad. Their design hours are the scarce resource.
 ## Run, build, ship
 
 ```bash
-node tools/dev-server.mjs      # http://localhost:5173 ; ?weather=clear for the dry morning
+node tools/dev-server.mjs      # http://localhost:5173 ; ?weather=clear for the dry morning, ?gate=solid
 node tools/build-static.mjs    # dist/ (about 41 MB, 8 of it music)
 ```
 
@@ -51,7 +51,7 @@ the same hotspot.
 |---|---|
 | `docs/ROADMAP.md` | What's done, what's next, open questions. **Start here.** |
 | `docs/characters/` | Character roster (`README.md`) and briefs (`knygnesys.md`, with route data) |
-| `docs/gates.md` | The ten city gates, ghost gates, the courier's ways in |
+| `docs/gates.md` | The ten city gates, ghost gates, the courier's ways in; the Subačius Gate as built (§8) |
 | `docs/research/city-1900.md` | Researched facts: population, city limits, the Lithuanian community, landmarks |
 | `docs/REFERENCES.md` | Visual and architectural references for the square |
 | `docs/FIDELITY-PLAN.md` | The seven-stream visual fidelity pass. **Complete**, all merged |

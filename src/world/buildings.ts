@@ -97,7 +97,7 @@ export function buildWalls(data: AreaData): THREE.BufferGeometry {
     if (bd.role === 'stcasimir') tint.set('#efe8da');
     else tint.set(LIMEWASH[seed % LIMEWASH.length]);
     const info = [bd.eave, ROLE_CODE[bd.role], (seed % 997) / 997, 0];
-    const near = bd.dist < 260;
+    const near = bd.edge < 150;
     bd.rings.forEach((ring, ri) => {
       // Outer ring CCW, holes CW (seen from above): then "outward" is always to the right.
       const ccw = signedArea(ring) > 0;
@@ -194,7 +194,7 @@ export function roofModel(bd: Building, k: number): RoofModel {
   let tMax = 0, maxE = 0;
   for (let i = 2; i < V.length; i += 3) tMax = Math.max(tMax, V[i]);
   for (const f of F) for (let i = 0; i < f.length; i++) { const a = f[i], c = f[(i + 1) % f.length]; maxE = Math.max(maxE, Math.hypot(vx(a) - vx(c), vz(a) - vz(c))); }
-  const N = bd.detail ? Math.min(3, Math.max(1, Math.ceil(maxE / 5))) : bd.dist < 200 ? Math.min(2, Math.max(1, Math.ceil(maxE / 9))) : 1;
+  const N = bd.detail ? Math.min(3, Math.max(1, Math.ceil(maxE / 5))) : bd.edge < 90 ? Math.min(2, Math.max(1, Math.ceil(maxE / 9))) : 1;
   // the long axis: the sag is deepest half way along it
   const ring = bd.rings[0];
   let ax = 1, az = 0, best = 0, cx = 0, cz = 0;
@@ -422,7 +422,7 @@ export function buildRoofs(data: AreaData, pick: (b: Building) => boolean = () =
       for (let i = 0; i < 3; i++) b.vertex(p[i].x, p[i].y, p[i].z, n[i], us[i][0] / ROOF_TILE, us[i][1] / ROOF_TILE, tint, [us[i][0], us[i][1], sf, 0], none);
     });
     addEaves(b, m, bd, tint, [0, 0, sf, 0], metal);
-    if (bd.detail || bd.dist < 170) roofCaps(m, metal, !bd.detail, (p, n, uv) => { for (let i = 0; i < 3; i++) b.vertex(p[i].x, p[i].y, p[i].z, n[i], uv[i][0], uv[i][1], tint, [0, 0, sf, 0], none); });
+    if (bd.detail || bd.edge < 60) roofCaps(m, metal, !bd.detail, (p, n, uv) => { for (let i = 0; i < 3; i++) b.vertex(p[i].x, p[i].y, p[i].z, n[i], uv[i][0], uv[i][1], tint, [0, 0, sf, 0], none); });
   }
   const g = b.geometry('aRoof', 'aUnused');
   fixWinding(g);

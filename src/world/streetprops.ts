@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { WalkZone } from './zone';
 import type { AreaData, Building, XZ } from './area';
 import type { Terrain } from './terrain';
 import type { FacadeAnchor } from './facades';
@@ -645,14 +646,14 @@ interface Chain { P: number[][]; t: number[][]; n: number[][]; L: number[] }
 
 export function buildStreetProps(opts: {
   data: AreaData; terrain: Terrain; anchors: FacadeAnchor[]; flow: FlowMap; ground: GroundGrid;
-  mats: StreetPropMaterials; th?: Building;
+  mats: StreetPropMaterials; th?: Building; zone: WalkZone;
   /** Raining: water runs in the kerb gutters. */
   rain?: boolean;
 }): StreetProps {
   const { data, terrain, flow, mats } = opts;
-  const [cx, cz] = data.meta.townHall, walkR = data.meta.walkRadius;
+  const [cx, cz] = data.meta.townHall, walkR = data.meta.walkRadius, zone = opts.zone;
   // only what can be seen from the walk (the fog and the barriers end it)
-  const inWalk = (x: number, z: number, margin = 12) => Math.hypot(x - cx, z - cz) < walkR + margin;
+  const inWalk = (x: number, z: number, margin = 12) => zone.contains(x, z, margin);
   const anchors = opts.anchors.filter(a => inWalk(a.x, a.z, 8));
   const G = meshHeight(terrain, opts.ground);
   const bags = new Bags();
@@ -673,7 +674,7 @@ export function buildStreetProps(opts: {
   };
 
   // exact building test via a coarse grid of bounding boxes
-  const near = data.buildings.filter(b => b.dist < walkR + 90);
+  const near = data.buildings.filter(b => b.edge < 90);
   const bcell = 16, bgrid = new Map<number, Building[]>();
   const bkey = (i: number, j: number) => (i + 5000) * 10007 + (j + 5000);
   for (const b of near) {
@@ -701,7 +702,7 @@ export function buildStreetProps(opts: {
   }));
   const fronts: Front[] = [];
   for (const b of data.buildings) {
-    if (!b.detail || b.role === 'townhall' || b.role === 'stcasimir' || b.dist > walkR + 25) continue;
+    if (!b.detail || b.role === 'townhall' || b.role === 'stcasimir' || b.edge > 25) continue;
     const r0 = b.rings[0], n = r0.length;
     for (let i = 0; i < n; i++) {
       let [ax, az] = r0[i], [bx, bz] = r0[(i + 1) % n];
@@ -944,7 +945,7 @@ export function buildStreetProps(opts: {
   let corners = 0;
   const cornerPts: number[][] = [];
   for (const b of data.buildings) {
-    if (!b.detail || b.role === 'townhall' || b.role === 'stcasimir' || b.dist > walkR) continue;
+    if (!b.detail || b.role === 'townhall' || b.role === 'stcasimir' || b.edge > 0) continue;
     const r0 = b.rings[0], n = r0.length;
     for (let i = 0; i < n; i++) {
       const p = r0[(i - 1 + n) % n], c = r0[i], q = r0[(i + 1) % n];
@@ -972,21 +973,21 @@ export function buildStreetProps(opts: {
 
   // --- Drain grates where the flow map collects water in a pit ------------------------------------------
   {
-    const N = Math.round(1 / flow.box.z), px = flow.tex.image.data as Uint8Array, x0 = flow.box.x, z0 = flow.box.y;
+    const W = Math.round(1 / flow.box.z), H = Math.round(1 / flow.box.w), px = flow.tex.image.data as Uint8Array, x0 = flow.box.x, z0 = flow.box.y;
     const cand: { x: number; z: number; v: number; i: number; j: number }[] = [];
-    for (let j = 3; j < N - 3; j++) for (let i = 3; i < N - 3; i++) {
-      const v = px[(j * N + i) * 4];
+    for (let j = 3; j < H - 3; j++) for (let i = 3; i < W - 3; i++) {
+      const v = px[(j * W + i) * 4];
       if (v < 140) continue;
       const x = x0 + i + 0.5, z = z0 + j + 0.5;
-      if (Math.hypot(x - cx, z - cz) > walkR - 4) continue;
+      if (zone.distance(x, z) > -4) continue;
       let peak = true;
-      for (let dj = -3; dj <= 3 && peak; dj++) for (let di = -3; di <= 3; di++) { const w = px[((j + dj) * N + i + di) * 4]; if (w > v || (w === v && (dj < 0 || (dj === 0 && di < 0)))) { peak = false; break; } }
+      for (let dj = -3; dj <= 3 && peak; dj++) for (let di = -3; di <= 3; di++) { const w = px[((j + dj) * W + i + di) * 4]; if (w > v || (w === v && (dj < 0 || (dj === 0 && di < 0)))) { peak = false; break; } }
       if (peak) cand.push({ x, z, v, i, j });
     }
     cand.sort((a, b) => b.v - a.v);
     const placed: number[][] = [];
     for (const c of cand) {
-      if (placed.length >= 7) break;
+      if (placed.length >= 10) break;
       let { x, z } = c;
       let yaw = 0;
       const w = nearestWall(x, z);
@@ -996,7 +997,7 @@ export function buildStreetProps(opts: {
         x = ax + (bx - ax) * w.u + tz * (PAVE_W + 0.34); z = az + (bz - az) * w.u - tx * (PAVE_W + 0.34);
         yaw = Math.atan2(tz, -tx);
       } else {
-        const fk = (c.j * N + c.i) * 4, fx = px[fk + 1] / 127.5 - 1, fz = px[fk + 2] / 127.5 - 1;
+        const fk = (c.j * W + c.i) * 4, fx = px[fk + 1] / 127.5 - 1, fz = px[fk + 2] / 127.5 - 1;
         yaw = Math.atan2(fx, fz);
       }
       if (inside(x, z) || placed.some(([ox, oz]) => Math.hypot(ox - x, oz - z) < 16) || nearAnchor(x, z, 1.4)) continue;
@@ -1102,12 +1103,12 @@ export function buildStreetProps(opts: {
     // droppings here and there where the carts pass (open ground, well off the walls and the garden)
     const rr = mulberry(77);
     let dropped = 0;
-    const N = Math.round(1 / flow.box.z), fpx = flow.tex.image.data as Uint8Array;
+    const W = Math.round(1 / flow.box.z), H = Math.round(1 / flow.box.w), fpx = flow.tex.image.data as Uint8Array;
     for (let k = 0; k < 400 && dropped < 9; k++) {
       const a = rr() * Math.PI * 2, rad = 10 + rr() * (walkR - 18), x = cx + Math.cos(a) * rad, z = cz + Math.sin(a) * rad;
       const i = Math.floor(x - flow.box.x), j = Math.floor(z - flow.box.y);
-      if (i < 0 || j < 0 || i >= N || j >= N) continue;
-      const wallD = (fpx[(j * N + i) * 4 + 3] / 255) * 8;
+      if (i < 0 || j < 0 || i >= W || j >= H) continue;
+      const wallD = (fpx[(j * W + i) * 4 + 3] / 255) * 8;
       if (wallD < 3.5 || inside(x, z) || inGarden(x, z) || onPavement(x, z)) continue;
       droppings(x, z, rr, 3 + Math.floor(rr() * 4));
       spot('dropping', x, G(x, z), z);

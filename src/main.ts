@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { loadArea } from './world/area';
 import { buildWalls, buildRoofs, buildSoffits, hasTileRoof } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, plasterMaterial, oldBrickMaterial, worldTex } from './world/materials';
 import { buildBarriers } from './world/props';
 import { buildStreetProps, createStreetPropMaterials } from './world/streetprops';
 import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
+import { buildSubaciusGate } from './world/subacius';
 import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
 import { buildFacades } from './world/facades';
@@ -22,6 +23,7 @@ import { installHeightFog, createOvercastSky, createRain, wet, WET, RAIN_TIME, F
 import { buildFlowMap } from './world/flow';
 import { StreetLamps, type LampSpot } from './world/lamps';
 import { WallGrid } from './world/collision';
+import { WalkZone } from './world/zone';
 import { createSky, sunDirection } from './world/sky';
 import { Input } from './player/input';
 import { Walker } from './player/walker';
@@ -79,6 +81,11 @@ async function main(force = false): Promise<void> {
 
   const data = await loadArea();
   const [thx, thz] = data.meta.townHall;
+  // The walk: the square and the road out to the Subačius Gate site (world/zone.ts)
+  const zone = new WalkZone(data);
+  const around = (m: number): [number, number, number, number] => [zone.box[0] - m, zone.box[1] - m, zone.box[2] + m, zone.box[3] + m];
+  // Open ground: a 1 m raster of the building outlines over the walk and its surroundings
+  const free = openGround(data, around(120));
 
   // Sky and sun
   const sunDir = sunDirection(SCENE_TIME);
@@ -107,7 +114,7 @@ async function main(force = false): Promise<void> {
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const terrain = new Terrain(data);
   // Streets: mud in the joints and along the walls always; in rain, water running in the gutters
-  const flow = buildFlowMap(terrain, openGround(data, thx, thz, 200), thx, thz, 200);
+  const flow = buildFlowMap(terrain, free, around(90));
   FLOW.map.value = flow.tex;
   FLOW.box.value.copy(flow.box);
   const groundMat = createGroundMaterial(aniso);
@@ -134,7 +141,7 @@ async function main(force = false): Promise<void> {
     wet(houseMats.metal, 'roof');
     houseMats.glass.emissiveIntensity = 1.6; // a few rooms lit against the gloom
   }
-  const facades = buildFacades(data, terrain, houseMats, openGround(data, thx, thz, 240));
+  const facades = buildFacades(data, terrain, houseMats, free);
   scene.add(facades.group);
   // Eave soffits: the limewashed undersides of the overhanging roofs (buildings.ts)
   const soffits = new THREE.Mesh(buildSoffits(data), houseMats.trim);
@@ -166,6 +173,24 @@ async function main(force = false): Promise<void> {
     scene.add(buildStCasimir(stCasimirData, m, churchForm));
   }
   const walls = new WallGrid(data);
+  // The Subačius Gate site at the end of the road (docs/gates.md): what was left of the wall in 1900, and the gate,
+  // gone since 1801, as a ghost drawn over the street; ?gate=solid builds it (and the whole wall) as before 1799.
+  const gateMats = {
+    wall: plasterMaterial('#e3dccb', aniso),
+    roof: new THREE.MeshStandardMaterial({ map: worldTex('clay_roof_tiles', 'diff', true, aniso, 1.6), normalMap: worldTex('clay_roof_tiles', 'nor', false, aniso, 1.6), color: '#7a6a63', roughness: 0.95, side: THREE.DoubleSide }),
+    dark: new THREE.MeshStandardMaterial({ color: '#1c1815', roughness: 1 }),
+    remnant: oldBrickMaterial(aniso),
+  };
+  const gate = buildSubaciusGate({
+    data, terrain, mats: gateMats, look: new URLSearchParams(location.search).get('gate') === 'solid' ? 'solid' : 'ghost',
+    fog: RAIN ? { density: 0.0072 } : { near: 70, far: 800 },
+  });
+  age(gateMats.wall, { ground: gate.floor, strength: 1, seed: 5 });
+  age(gateMats.roof, { roof: true, strength: 0.8 });
+  if (RAIN) { wet(gateMats.wall, 'wall', gate.floor); wet(gateMats.remnant, 'wall', gate.floor); wet(gateMats.roof, 'roof'); }
+  scene.add(gate.solid);
+  rainScene.add(gate.ghost);
+  for (const [ax, az, bx, bz] of gate.segments) walls.addSegment(ax, az, bx, bz);
   let promenadeRef: { update(dt: number): void } | null = null;
   // gas lamps: the garden's lamp posts and the lanterns on the house fronts
   const lampSpots: LampSpot[] = [...facades.lamps];
@@ -183,7 +208,7 @@ async function main(force = false): Promise<void> {
   const propMats = createStreetPropMaterials(aniso);
   if (RAIN) for (const m of Object.values(propMats)) wet(m, 'roof');
   propMats.gutter.envMap = propMats.water.envMap = scene.environment; // standing water mirrors the full sky, as the glass does
-  const streetProps = buildStreetProps({ data, terrain, anchors: facades.anchors, flow, mats: propMats, th: townHallData, ground: { cx: thx, cz: thz, size: 1000, step: 4 }, rain: RAIN }); // ground: the terrain mesh's grid
+  const streetProps = buildStreetProps({ data, terrain, anchors: facades.anchors, flow, mats: propMats, th: townHallData, zone, ground: { cx: thx, cz: thz, size: 1000, step: 4 }, rain: RAIN }); // ground: the terrain mesh's grid
   scene.add(streetProps.group);
   for (const [ax, az, bx, bz, low] of streetProps.segments) walls.addSegment(ax, az, bx, bz, low);
   // Market stalls, carts and townsfolk stream in after the first frame
@@ -195,21 +220,26 @@ async function main(force = false): Promise<void> {
       scene.add(mk.group);
       shadows.apply(mk.group);
       for (const [ax, az, bx, bz] of mk.segments) walls.addSegment(ax, az, bx, bz);
-      // Open ground: a 1 m occupancy raster of the building outlines around the walk
-      const free = openGround(data, thx, thz, 180);
       // Droshkies, a closed carriage and a farm cart on a loop fitted round the square (hoods up in the rain)
       buildTraffic({
         th: townHallData, walls, terrain, free, wood: createWoodMaterial(aniso), rain: RAIN, wet: RAIN ? wet : undefined,
       }).then(tr => { traffic = tr; scene.add(tr.group); shadows.apply(tr.group); }).catch(err => console.warn('traffic', err));
-      // Townsfolk: knots of people talking, and strollers
+      // Townsfolk: knots of people talking (on the square, and a few along the road to the gate), and strollers
       const groups: THREE.Vector2[] = [];
+      const roomy = (x: number, z: number) => free(x, z) && free(x + 1.5, z) && free(x - 1.5, z) && free(x, z + 1.5) && free(x, z - 1.5);
       for (let k = 0, tries = 0; k < 16 && tries < 400; tries++) {
         const a = tries * 2.399, r = 12 + ((tries * 37) % 90);
         const x = thx + Math.cos(a) * r, z = thz + Math.sin(a) * r;
-        if (free(x, z) && free(x + 1.5, z) && free(x - 1.5, z) && free(x, z + 1.5) && free(x, z - 1.5)) { groups.push(new THREE.Vector2(x, z)); k++; }
+        if (roomy(x, z)) { groups.push(new THREE.Vector2(x, z)); k++; }
+      }
+      let gseed = 7;
+      const grnd = () => ((gseed = (gseed * 16807) % 2147483647) / 2147483647);
+      for (let k = 0, tries = 0; k < 3 && tries < 400; tries++) {
+        const [x, z] = zone.sample(grnd, 1);
+        if (Math.hypot(x - thx, z - thz) > data.meta.walkRadius + 20 && roomy(x, z)) { groups.push(new THREE.Vector2(x, z)); k++; }
       }
       buildCrowd({
-        walls, terrain, free, centre: new THREE.Vector2(thx, thz), radius: data.meta.walkRadius + 25, groups, strollers: 46,
+        walls, terrain, free, zone, reach: 25, groups, strollers: 54,
         material: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }),
         accessories: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }),
         umbrellas: RAIN,
@@ -229,7 +259,7 @@ async function main(force = false): Promise<void> {
   scene.add(lamps.group);
   const barrierWood = createWoodMaterial(aniso);
   if (RAIN) wet(barrierWood, 'roof');
-  const barriers = buildBarriers(data, terrain, thx, thz, data.meta.walkRadius, barrierWood, propMats.iron);
+  const barriers = buildBarriers(data, terrain, zone, barrierWood, propMats.iron);
   if (barriers) scene.add(barriers);
 
   // Walker: start on the square, north of the Town Hall, facing it
@@ -238,7 +268,7 @@ async function main(force = false): Promise<void> {
   const pauseWalk = () => { touch.setActive(false); overlay.setVisible(true); };
   const touch = new TouchControls(renderer.domElement, input, { pause: pauseWalk, mute: () => ambience?.toggleMute() ?? false });
   document.addEventListener('visibilitychange', () => { if (document.hidden && touch.isActive) pauseWalk(); });
-  const walker = new Walker(input, walls, { cx: thx, cz: thz, radius: data.meta.walkRadius }, (x, z) => terrain.heightAt(x, z));
+  const walker = new Walker(input, walls, zone, (x, z) => terrain.heightAt(x, z));
   walker.place(thx + 4, thz - 42, Math.PI);
   scene.add(walker.object);
   // The map: a round plan in the corner while walking; Tab (or a tap on it) opens it full-screen and holds the walk still
@@ -320,6 +350,7 @@ async function main(force = false): Promise<void> {
     crowd?.update(dt, walker.position);
     traffic?.update(dt, walker.position);
     promenadeRef?.update(dt);
+    gate.update(dt);
     lamps.update(dt, camera.position);
     shadows.update();
     post.render(dt);
@@ -350,23 +381,24 @@ async function main(force = false): Promise<void> {
   }
 }
 
-/** Open ground test from a 1 m raster of the building outlines within `radius` of (cx, cz). */
-function openGround(data: Awaited<ReturnType<typeof loadArea>>, cx: number, cz: number, radius: number): (x: number, z: number) => boolean {
-  const N = Math.ceil(radius * 2), c = document.createElement('canvas');
-  c.width = c.height = N;
-  const g = c.getContext('2d')!;
+/** Open ground test from a 1 m raster of the building outlines over the box [x0, z0, x1, z1]; outside it, nothing is open. */
+function openGround(data: Awaited<ReturnType<typeof loadArea>>, box: [number, number, number, number]): (x: number, z: number) => boolean {
+  const x0 = Math.floor(box[0]), z0 = Math.floor(box[1]), W = Math.ceil(box[2]) - x0, H = Math.ceil(box[3]) - z0;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
   g.fillStyle = '#fff';
   for (const b of data.buildings) {
-    if (b.dist > radius + 60) continue;
+    if (b.rings[0].every(([x, z]) => x < x0 || z < z0 || x > x0 + W || z > z0 + H)) continue;
     g.beginPath();
-    for (const ring of b.rings) ring.forEach(([x, z], i) => (i ? g.lineTo : g.moveTo).call(g, x - cx + radius, z - cz + radius));
+    for (const ring of b.rings) ring.forEach(([x, z], i) => (i ? g.lineTo : g.moveTo).call(g, x - x0, z - z0));
     g.fill('evenodd');
   }
-  const px = g.getImageData(0, 0, N, N).data;
+  const px = g.getImageData(0, 0, W, H).data;
   return (x, z) => {
-    const i = Math.floor(x - cx + radius), j = Math.floor(z - cz + radius);
-    if (i < 0 || j < 0 || i >= N || j >= N) return false;
-    return px[(j * N + i) * 4] < 64;
+    const i = Math.floor(x - x0), j = Math.floor(z - z0);
+    if (i < 0 || j < 0 || i >= W || j >= H) return false;
+    return px[(j * W + i) * 4] < 64;
   };
 }
 

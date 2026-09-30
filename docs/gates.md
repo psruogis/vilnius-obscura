@@ -1,6 +1,6 @@
 # The Vilnius city gates — research brief
 
-Version 0.1 · 2026-09-28 · status: **research brief, not built**
+Version 0.2 · 2026-09-30 · status: **research brief; the Subačius Gate is built (§8), the rest are not**
 
 The old city wall and its gates, meant to be rebuilt in the game. Tags follow `docs/REFERENCES.md`:
 **[V]** verified against a cited source, **[U]** unverified or a design choice.
@@ -21,8 +21,8 @@ The old city wall and its gates, meant to be rebuilt in the game. Tags follow `d
 
 Locations follow the Lithuanian article ¹. Map positions are the nearest meeting point of the named
 modern streets in `public/data/area.json`. They are **approximate**: a street corner, not a gate
-footprint [U]. Frame: `X = E − 583000, Z = −(N − 6061000)`, metres, +Z south. The playable radius is
-110 m and the backdrop radius 450 m, both around the Town Hall.
+footprint [U]. Frame: `X = E − 583000, Z = −(N − 6061000)`, metres, +Z south. The walk is the square
+(110 m round the Town Hall) and the road out to the Subačius site (§8); the backdrop reaches 450 m from the Town Hall.
 
 | # | Gate | Where it stood | Fate | On the game map |
 |---|---|---|---|---|
@@ -35,12 +35,15 @@ footprint [U]. Frame: `X = E − 583000, Z = −(N − 6061000)`, metres, +Z sou
 | 7 | **Pilies vartai** (Castle) | Top of Pilies g. | Demolished early 1800s | Outside the map data |
 | 8 | **Bernardinų vartai** | By the Bernardine church, at the bridge to Užupis | Demolished early 1800s | Not located yet (Užupio tiltas is in the data) |
 | 9 | **Išganytojo (Spaso) vartai**: Saviour's | Near the Vilnia, on the road to Užupis | Demolished 1801 | Not located yet |
-| 10 | **Subačiaus vartai** | Bokšto × Subačiaus × Strazdelio | Demolished **27 May 1801** ³; about half the foundations survive ¹ | (324.4, 239.4), 379 m, backdrop |
+| 10 | **Subačiaus vartai** | Bokšto × Subačiaus × Strazdelio | Demolished **27 May 1801** ³; about half the foundations survive ¹ | (328, 239.5), 379 m. **Built as a ghost, at the end of the walk (§8)** |
 
 **The sources disagree** on three locations. The English article ² puts the Tatar Gate at
 Liejyklos × Totorių, the Vilija Gate at Vilniaus × Bernardinų, and the Subačius Gate at "the end of
 what is now Holy Spirit street". The Lithuanian article's Subačius corner matches the gate's own
-article ³. Check all three against pre-1799 plans before building. [U]
+article ³. Check the Tatar and Vilija gates against pre-1799 plans before building. [U]
+The Subačius corner is settled: the two surviving stretches of wall in OpenStreetMap (ways 194601579 and
+1386286057) end either side of Subačiaus g. at the Bokšto corner, 12 m apart, and the gate's remains lie under
+the street there ¹ ⁵. [V]
 
 ## 3. The problem with 1900
 
@@ -98,14 +101,51 @@ came 60 years later. The two versions of the city tell separate stories.
 
 ## 7. Open questions
 
-1. Settle the three disputed locations (Tatar, Vilija, Subačius) against old plans.
+1. Settle the two disputed locations still open (Tatar, Vilija) against old plans. (Subačius: settled, §2.)
 2. Locate the Bernardine and Saviour's gates on the map.
 3. What did each gate look like? Tower gate or plain passage, roofs, heraldry?
-4. Ghost gates first, or the pre-1799 era?
-5. How far should the walkable city grow, and in what order? The Subačius and Rūdninkų sites are the
-   nearest.
+4. Ghost gates first, or the pre-1799 era? The Subačius Gate is a ghost by default; `?gate=solid` shows it
+   (and the whole wall) as before 1799, for comparison.
+5. How far should the walkable city grow, and in what order? The walk now reaches the Subačius site. Rūdninkai
+   is the next nearest.
 6. Were there police or toll posts on the roads into the city around 1902? That decides which gate
    road is dangerous.
+
+## 8. The Subačius Gate as built (2026-09-30)
+
+The walk runs from the square down Didžioji g. and along Subačiaus g. to the Bokšto corner, where the gate
+stood, and a few steps down Šv. Dvasios g. outside the wall. The code is `src/world/subacius.ts`; the walk's shape
+is `WALK_SHAPES` in `tools/build-area.mjs`.
+
+**What the sources say** [V]:
+- Built with the wall in 1503–22, first named in 1528, rebuilt in the 17th century; it stood over a deep,
+  spring-fed ravine that served as its moat. On the road to Vitebsk, Polotsk, Smolensk and Moscow. ⁵ ³
+- Massive, **rectangular in plan, with a saddle roof and round corner towers, at least three storeys**. Round
+  cannon ports on the second floor. Near the top, **two rows of close-set upright loopholes**; the lower row sits
+  on a course projecting only 15 cm, long read as machicolations. A cornice, **two rectangular niches** and
+  **pilasters beside the barrel-vaulted passage**. ⁵ (from P. Smuglevičius's drawings of 1785 and the archaeology)
+- The gate "protruded" from the wall, for frontal and flanking fire. North of it stood the artillery tower,
+  rebuilt in the 17th century as the bastion. ⁵
+- Demolition was ordered in 1799, began in 1801 (27 May ³) and was complete by September 1802; it gave 48,000
+  whole bricks. The lower north-east corner with part of its tower's foundation survives, and a stretch of
+  the wall to the south with one loophole. ⁵
+- The drawing: P. Smuglevičius, 1785–86, the gate from outside with the wall running off to one side ⁶.
+
+**What is a design choice** [U]:
+- Place and size: the block fills the 12 m gap between the two wall stretches (§2), on the street's line, 10 m
+  deep and 12 m wide, its west face on the wall line and its two towers (6 m across) on the field corners, clear
+  of Subačiaus g. 16 (built 1775, KVR). The passage is 3.6 m wide. Walls 13 m to the eaves, the roof rising 7.2 m,
+  the towers 14 m with 5.8 m cones. All read off the drawing; nothing measured.
+- The wall either side: 10 m high, 1.8 m thick, with a parapet of loopholes and a lean-to roof over the wall walk
+  (the drawing shows a roofed wall; the sources say "covered galleries" ¹).
+- **1900:** the gate is a ghost, drawn in pale ink over the street where it stood (a wash on its faces, its
+  lines), rising out of the cobbles, thinning in the mist and when walked into; it does not stop the walker. The
+  two wall stretches stand as ragged brick remnants about 4 m high, where OpenStreetMap has them today: that they
+  stood like this around 1900 is a guess.
+- `?gate=solid` builds the gate and the whole wall in whitewash and tile, as before 1799, for comparison.
+
+**Still open:** what the gate's field front looked like in detail (the drawing is small); whether the road
+through it ran straight east, as Subačiaus g. does now; the 1900 name of the street (ROADMAP open question 4).
 
 ## Sources
 
@@ -113,5 +153,7 @@ came 60 years later. The two versions of the city tell separate stories.
 2. [Wall of Vilnius (en.wikipedia)](https://en.wikipedia.org/wiki/Wall_of_Vilnius)
 3. [Subačius Gate (en.wikipedia)](https://en.wikipedia.org/wiki/Suba%C4%8Dius_Gate)
 4. [Lithuanian press ban (en.wikipedia)](https://en.wikipedia.org/wiki/Lithuanian_press_ban)
+5. [Subačiaus vartai (VSAA, vsaa.lt; the source the English article cites)](https://vsaa.lt/sena/subac_v.html)
+6. [P. Smuglevičius, the Subačius Gate, 1785–86 (Wikimedia Commons, public domain)](https://commons.wikimedia.org/wiki/File:Suba%C4%8Dius_gate.Vilnius.Lithuania.jpg)
 
 Map data: streets © OpenStreetMap contributors (ODbL).

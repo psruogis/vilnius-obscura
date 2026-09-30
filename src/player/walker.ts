@@ -53,7 +53,8 @@ export class Walker {
   constructor(
     private readonly input: Input,
     private readonly walls: WallGrid,
-    private readonly bounds: { cx: number; cz: number; radius: number },
+    /** The walk's limit (world/zone.ts): pulls a point that strayed outside back onto the edge. */
+    private readonly bounds: { clamp(p: { x: number; z: number }): unknown },
     private readonly groundAt: (x: number, z: number) => number,
   ) {
     const body = new THREE.Mesh(
@@ -129,7 +130,7 @@ export class Walker {
     this.pos2.x = this.position.x + this.velocity.x * dt;
     this.pos2.z = this.position.z + this.velocity.y * dt;
     this.walls.resolveCircle(this.pos2, RADIUS);
-    this.keepInBounds(this.pos2);
+    this.bounds.clamp(this.pos2);
     // what the walls let through is the real velocity (so the feet don't run against a wall)
     if (dt > 0) this.velocity.set((this.pos2.x - this.position.x) / dt, (this.pos2.z - this.position.z) / dt);
     this.position.x = this.pos2.x;
@@ -155,15 +156,6 @@ export class Walker {
     this.object.rotation.y = this.facing;
 
     this.updateCamera(dt, camera);
-  }
-
-  private keepInBounds(p: { x: number; z: number }): void {
-    const dx = p.x - this.bounds.cx, dz = p.z - this.bounds.cz;
-    const d = Math.hypot(dx, dz);
-    if (d > this.bounds.radius) {
-      p.x = this.bounds.cx + (dx / d) * this.bounds.radius;
-      p.z = this.bounds.cz + (dz / d) * this.bounds.radius;
-    }
   }
 
   private updateCamera(dt: number, camera: THREE.PerspectiveCamera): void {

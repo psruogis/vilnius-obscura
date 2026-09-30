@@ -134,6 +134,44 @@ export function plasterMaterial(tint: string, anisotropy: number, tile = 2.5): T
     return m;
 }
 
+/**
+ * Old brick wall, its lime plaster mostly fallen away (the city wall's remnants): brick courses with mortar joints,
+ * and patches of pale plaster left here and there. UVs in metres.
+ */
+export function oldBrickMaterial(anisotropy: number): THREE.MeshStandardMaterial {
+  const m = plasterMaterial('#7a5646', anisotropy, 1.4);
+  m.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vMetres;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvMetres = uv;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        varying vec2 vMetres;
+        float ob_h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float ob_n(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+          return mix(mix(ob_h(i), ob_h(i + vec2(1, 0)), u.x), mix(ob_h(i + vec2(0, 1)), ob_h(i + vec2(1, 1)), u.x), u.y); }`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        ${PLASTER_DETAIL}
+        {
+          // bricks 0.28 x 0.08 m in running bond, each a slightly different fire
+          float row = floor(vMetres.y / 0.085);
+          vec2 cell = vec2(floor((vMetres.x + mod(row, 2.0) * 0.14) / 0.28), row);
+          float fx = fract((vMetres.x + mod(row, 2.0) * 0.14) / 0.28), fy = fract(vMetres.y / 0.085);
+          float joint = 1.0 - smoothstep(0.0, 0.08, fy) * smoothstep(1.0, 0.92, fy) * smoothstep(0.0, 0.03, fx) * smoothstep(1.0, 0.97, fx);
+          vec3 brick = diffuseColor.rgb * (0.88 + 0.18 * ob_h(cell));
+          vec3 mortar = vec3(0.45, 0.42, 0.38);
+          vec3 c = mix(brick, mortar, joint * 0.6);
+          // what is left of the plaster: soft-edged patches, stained
+          float n = 0.55 * ob_n(vMetres * 0.6) + 0.3 * ob_n(vMetres * 1.7 + 7.0) + 0.15 * ob_n(vMetres * 4.3 + 3.0);
+          c = mix(c, vec3(0.5, 0.47, 0.41) * (0.85 + 0.25 * ob_n(vMetres * 3.0)), 0.75 * smoothstep(0.6, 0.78, n));
+          // soot and damp streaks darken it towards the foot
+          c *= 0.78 + 0.22 * ob_n(vec2(vMetres.x * 2.5, vMetres.y * 0.25));
+          diffuseColor.rgb = c;
+        }`);
+  };
+  return m;
+}
+
 /** Materials for the Town Hall model (UVs in metres). */
 export function createTownHallMaterials(anisotropy: number) {
   const plaster = (tint: string, tile = 2.5) => plasterMaterial(tint, anisotropy, tile);

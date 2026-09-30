@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { AreaData, XZ } from './area';
 import type { Terrain } from './terrain';
 import { barrelParts } from './streetprops';
+import type { WalkZone } from './zone';
 
 function pointInRing(x: number, z: number, r: XZ[]): boolean {
   let inside = false;
@@ -15,34 +16,39 @@ function pointInRing(x: number, z: number, r: XZ[]): boolean {
 
 function insideAnyBuilding(data: AreaData, x: number, z: number): boolean {
   for (const b of data.buildings) {
-    if (b.dist > data.meta.walkRadius + 80) continue;
+    if (b.edge > 80) continue;
     const [outer, ...holes] = b.rings;
     if (pointInRing(x, z, outer) && !holes.some(h => pointInRing(x, z, h))) return true;
   }
   return false;
 }
 
-/** Arcs of the walk boundary that cross open ground (street exits), as [startAngle, endAngle]. */
-export function findExits(data: AreaData, cx: number, cz: number, radius: number): [number, number][] {
-  const steps = Math.ceil((2 * Math.PI * radius) / 0.75);
-  const open: boolean[] = [];
-  for (let i = 0; i < steps; i++) {
-    const a = (i / steps) * Math.PI * 2;
-    open.push(!insideAnyBuilding(data, cx + Math.cos(a) * radius, cz + Math.sin(a) * radius));
-  }
-  const exits: [number, number][] = [];
-  const start = open.findIndex(o => !o); // begin scanning from a closed point
-  if (start < 0) return [[0, Math.PI * 2]];
-  let run = -1;
-  for (let k = 1; k <= steps; k++) {
-    const i = (start + k) % steps;
-    if (open[i] && run < 0) run = i;
-    if (!open[i] && run >= 0) {
-      const a0 = (run / steps) * Math.PI * 2;
-      let a1 = (i / steps) * Math.PI * 2;
-      if (a1 < a0) a1 += Math.PI * 2;
-      if ((a1 - a0) * radius > 1.2) exits.push([a0, a1]);
-      run = -1;
+/**
+ * Stretches of the walk's edge that cross open ground (street exits and open yards), each as points every 0.75 m
+ * along the edge with the outward normal there.
+ */
+export function findExits(data: AreaData, zone: WalkZone): { x: number; z: number; nx: number; nz: number }[][] {
+  const exits: { x: number; z: number; nx: number; nz: number }[][] = [];
+  for (const poly of zone.outline) for (const ring of poly) {
+    const pts: { x: number; z: number; nx: number; nz: number; open: boolean }[] = [];
+    for (let i = 0; i < ring.length; i++) {
+      const [ax, az] = ring[i], [bx, bz] = ring[(i + 1) % ring.length], L = Math.hypot(bx - ax, bz - az);
+      if (L < 1e-6) continue;
+      let nx = (bz - az) / L, nz = -(bx - ax) / L;
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      if (zone.distance(mx + nx * 0.3, mz + nz * 0.3) < zone.distance(mx - nx * 0.3, mz - nz * 0.3)) { nx = -nx; nz = -nz; }
+      for (let t = 0; t < L; t += 0.75) {
+        const x = ax + ((bx - ax) * t) / L, z = az + ((bz - az) * t) / L;
+        pts.push({ x, z, nx, nz, open: !insideAnyBuilding(data, x, z) });
+      }
+    }
+    const start = pts.findIndex(p => !p.open); // begin scanning from a closed point
+    if (start < 0) { exits.push(pts); continue; }
+    let run: typeof pts = [];
+    for (let k = 1; k <= pts.length; k++) {
+      const p = pts[(start + k) % pts.length];
+      if (p.open) run.push(p);
+      else { if (run.length * 0.75 > 1.2) exits.push(run); run = []; }
     }
   }
   return exits;
@@ -54,7 +60,7 @@ export function findExits(data: AreaData, cx: number, cz: number, radius: number
  * `iron` (optional) paints the barrels' hoops; without it the hoops take the wood.
  */
 export function buildBarriers(
-  data: AreaData, terrain: Terrain, cx: number, cz: number, radius: number, material: THREE.Material, iron?: THREE.Material,
+  data: AreaData, terrain: Terrain, zone: WalkZone, material: THREE.Material, iron?: THREE.Material,
 ): THREE.Group | null {
   const wood: THREE.BufferGeometry[] = [], hoops: THREE.BufferGeometry[] = [];
   const barrel = barrelParts(0.9, 0.31, 12);
@@ -69,7 +75,7 @@ export function buildBarriers(
     group.add(mesh);
   };
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), X = new THREE.Vector3(1, 0, 0);
-  const r = radius + 0.6; // just outside the walker's limit
+  const OUT = 0.6; // just outside the walker's limit
   let seed = 1;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   // a hewn post: slightly irregular girth, weathered to a blunt top
@@ -95,14 +101,15 @@ export function buildBarriers(
     wood.push(g.applyMatrix4(m.compose(p.set(mid.x, mid.y + h, mid.z), q, s)));
   };
 
-  for (const [a0, a1] of findExits(data, cx, cz, radius)) {
-    const len = (a1 - a0) * r;
+  for (const run of findExits(data, zone)) {
+    const len = run.length * 0.75;
     const n = Math.max(2, Math.ceil(len / 2.2));
-    const pts: THREE.Vector3[] = [];
+    const pts: THREE.Vector3[] = [], inward: [number, number][] = [];
     for (let i = 0; i <= n; i++) {
-      const a = a0 + ((a1 - a0) * i) / n;
-      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      const e = run[Math.min(run.length - 1, Math.round(((run.length - 1) * i) / n))];
+      const x = e.x + e.nx * OUT, z = e.z + e.nz * OUT;
       pts.push(new THREE.Vector3(x, terrain.heightAt(x, z), z));
+      inward.push([-e.nx, -e.nz]);
     }
     for (const pt of pts) post(pt.x, pt.y, pt.z);
     for (let i = 0; i < pts.length - 1; i++) for (const hgt of [0.45, 0.95]) rail(pts[i], pts[i + 1], hgt);
@@ -110,9 +117,8 @@ export function buildBarriers(
     const inset = 0.9;
     for (let i = 1; i < pts.length - 1; i += 2) {
       if (i > 1 && rnd() < 0.4) continue;
-      const pt = pts[i];
-      const dx = cx - pt.x, dz = cz - pt.z, dl = Math.hypot(dx, dz);
-      const x = pt.x + (dx / dl) * inset + (rnd() - 0.5) * 0.3, z = pt.z + (dz / dl) * inset + (rnd() - 0.5) * 0.3;
+      const pt = pts[i], [ix, iz] = inward[i];
+      const x = pt.x + ix * inset + (rnd() - 0.5) * 0.3, z = pt.z + iz * inset + (rnd() - 0.5) * 0.3;
       m.compose(p.set(x, terrain.heightAt(x, z) - 0.02, z), q.setFromEuler(e.set((rnd() - 0.5) * 0.04, rnd() * 6, (rnd() - 0.5) * 0.04)), s);
       wood.push(barrel.wood.clone().applyMatrix4(m));
       const hoop = barrel.iron.clone().applyMatrix4(m);

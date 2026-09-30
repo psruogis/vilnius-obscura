@@ -126,7 +126,11 @@ export class Post {
     const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 0, depthTexture: depth });
     this.composer = new EffectComposer(renderer, target);
     this.composer.renderTarget2.depthTexture = depth;
-    this.composer.addPass(new RenderPass(scene, camera));
+    // The scene's depth must last the whole frame, so the overlay (rain, the ghost gate) can be tested against it:
+    // only the scene pass clears depth; every full-screen pass after it clears colour alone.
+    const main = new RenderPass(scene, camera), drawScene = main.render.bind(main);
+    main.render = (r, write, read, dt, mask) => { r.autoClearDepth = true; drawScene(r, write, read, dt, mask); r.autoClearDepth = false; };
+    this.composer.addPass(main);
 
     this.gtao = new GTAOPass(scene, camera, w, h);
     // (passing depthTexture to the constructor trips a three.js r186 bug in setGBuffer; switching afterwards works)
@@ -227,7 +231,7 @@ export class Post {
     if (this.ssr && --this.alphaCheck <= 0) { this.alphaCheck = 120; this.keepAlpha(); }
     SSR_MASK.value = this.enabled && this.ssr?.enabled ? 1 : 0;
     if (this.enabled) this.composer.render(dt);
-    else this.renderer.render(this.scene, this.camera);
+    else { this.renderer.autoClearDepth = true; this.renderer.render(this.scene, this.camera); }
     if (dt <= 0 || this.fixedScale !== null) return;
     this.acc += dt; this.frames++;
     if (this.acc < 1.5) return;

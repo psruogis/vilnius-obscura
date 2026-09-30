@@ -4,7 +4,7 @@
 // Also reports console errors and a rough frame time.
 //
 //   node tools/shot.mjs [--port 5173] [--out .screens] [--prefix x_] [--query weather=clear]
-//                       [--views square,wall,vok,shops,hotel,street,puddles,roofs,aerial]
+//                       [--views square,wall,vok,shops,hotel,street,puddles,roofs,aerial,gate,smug]
 //                       [--view name:ex,ez,h,tx,tz,ty]   (a free camera: eye x/z/height, target x/z/height)
 //                       [--js-view 'name:<js>']   (camera from page JS; `w` is window.__walk; the expression
 //                                                  returns {eye: [x, y, z], target: [x, y, z]} in world coordinates)
@@ -49,6 +49,10 @@ const VIEWS = {
   roofs: { free: [-30, 20, 16], target: [-70, 30, 12] },
   aerial: { free: [20, -80, 26], target: [-10, 10, 4] },
   hotel: { hotel: true },
+  // the road to the Subačius Gate: walking up Subačiaus g. to the ghost gate, and the gate from outside the wall,
+  // about where P. Smuglevičius drew it in 1785-86
+  gate: { walk: [296, 241], look: [335, 240], pitch: -0.12 },
+  smug: { free: [338, 272, 1.7], target: [329, 240, 9] },
 };
 
 const views = [];

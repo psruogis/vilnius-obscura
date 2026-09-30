@@ -8,7 +8,7 @@ import * as THREE from 'three';
 
 export const WET = { value: 1 };           // 0 dry .. 1 soaked (shared by every wet material)
 export const RAIN_TIME = { value: 0 };     // seconds, drives drops and ripples
-/** The baked street flow map (world/flow.ts) and its box: (x0, z0, 1/size, 0). */
+/** The baked street flow map (world/flow.ts) and its box: (x0, z0, 1/width, 1/depth). */
 export const FLOW = { map: { value: null as THREE.Texture | null }, box: { value: new THREE.Vector4(0, 0, 1, 0) } };
 
 // --- Height fog --------------------------------------------------------------------------------------
@@ -172,10 +172,10 @@ export const WET_GLSL = /* glsl */ `
   // the baked flow map at a world position, wobbled so the gutters don't follow its 1 m grid:
   // r = how much water runs here, gb = direction, a = distance to the nearest wall / 8 m
   vec4 wt_flowAt(vec2 xz) {
-    vec2 fuv = (xz - uFlowBox.xy) * uFlowBox.z;
+    vec2 fuv = (xz - uFlowBox.xy) * uFlowBox.zw;
     float inMap = step(0.0, fuv.x) * step(fuv.x, 1.0) * step(0.0, fuv.y) * step(fuv.y, 1.0);
     vec2 wob = vec2(wt_noise(xz * 1.3), wt_noise(xz.yx * 1.3 + 5.0)) - 0.5;
-    return mix(vec4(0.0, 0.5, 1.0, 1.0), texture2D(uFlowMap, fuv + wob * uFlowBox.z * 0.45), inMap);
+    return mix(vec4(0.0, 0.5, 1.0, 1.0), texture2D(uFlowMap, fuv + wob * uFlowBox.zw * 0.45), inMap);
   }
   vec2 wt_flowDir(vec4 fm) { vec2 d = fm.gb * 2.0 - 1.0; float l = length(d); return l > 0.05 ? d / l : vec2(0.0, 1.0); }
   // gutters running with water

@@ -22,10 +22,13 @@ Controls: W A S D to walk, Shift to jog, mouse (or click-drag) to look, mouse wh
 zoom the camera in and out, Tab opens the full-screen map (Tab or Esc closes it), M to mute,
 backtick (`` ` ``) toggles the stats overlay. On a phone, tap the round map in the corner. The full map has a
 Pastel / Dark / Glow switch (pastel is the default; or `?map=dark`, `?map=glow`).
-`?weather=clear` for the dry morning.
+`?weather=clear` for the dry morning, `?gate=solid` for the Subačius Gate as it stood before 1799.
 
 Music: none, except klezmer that drifts in as you walk west towards the Jewish quarter (`docs/music.md`; the Music
 slider is in Options).
+
+The walk is the square and the road out to the Subačius Gate site: down Didžioji g., along Subačiaus g. to the
+Bokšto corner, where the city wall's east gate stood until 1801. It is there as a ghost (`docs/gates.md` §8).
 
 When you settle onto a new street its name shows at the top for a few seconds and fades (the square's name at the
 start); names are today's, as on the map.

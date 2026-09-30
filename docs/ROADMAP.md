@@ -1,6 +1,6 @@
 # Roadmap
 
-Updated 2026-09-28. The order of "Next" is **a proposal**. The owner hasn't ranked it yet, so
+Updated 2026-09-30. The order of "Next" is **a proposal**. The owner hasn't ranked it yet, so
 reorder freely.
 
 ## Done
@@ -8,6 +8,14 @@ reorder freely.
 - **The walk (M1–M4):** real footprints and heights, period façades and roofs, cobbles, the Town Hall
   and St Casimir's (in its c. 1900 Orthodox form), townsfolk, cabs, the market, rain, sound, the
   title screen, credits. See `README.md` and the git log.
+- **The road to the Subačius Gate:** the walk now runs from the square down Didžioji g. and along Subačiaus g. to
+  the Bokšto corner, where the city wall's east gate stood until 1801, and a few steps outside it. The gate is a
+  ghost, drawn in pale ink over the street after P. Smuglevičius's drawing of 1785–86, rising from the ragged
+  remnants of the wall (`src/world/subacius.ts`, `docs/gates.md` §8); `?gate=solid` builds it as before 1799. The
+  walk's edge is now a shape, not a circle (`src/world/zone.ts`, `WALK_SHAPES` in `tools/build-area.mjs`): barriers,
+  street furniture, water, townsfolk and the map follow it, so growing the walk street by street is a data change.
+  The LiDAR was extended east to cover the gate site (`tools/lidar/README.md`). Cost: about 7% more draw calls and
+  14% more triangles when the road is in view (the houses along Subačiaus are big blocks, windowed on every side).
 - **Street title:** the name of the street you are walking on shows at the top for a few seconds, then fades
   (`src/ui/place.ts`). Today's names from OpenStreetMap, like the map's: what each street was called around 1900 is
   not researched (open question 4), so the title will need a second source when it is.
@@ -28,13 +36,15 @@ reorder freely.
    "Click to walk" button (Android); keeping the screen awake (Wake Lock); viewport and CSS hardening
    (`viewport-fit=cover`, `touch-action: none` on the canvas, `overscroll-behavior: none`, no pinch
    zoom); and a lighter phone quality tier (fewer shadow cascades, AO off, capped pixel ratio). Keep
-   touch controls out of the bottom ~20 px on iPhone.
+   touch controls out of the bottom ~20 px on iPhone. As the walk grows, build or hide the façade chunks by
+   distance to the walker, not to the walk, for phones.
 2. **The knygnešys**, the book courier. The brief is ready: `docs/characters/knygnesys.md`. Needs a
    scripted route-follower NPC; St Nicholas' Church modelled (or the walk extended west); and,
    optionally, a November-dusk light preset.
 3. **More characters.** The roster is in `docs/characters/README.md`.
-4. **Ghost gates.** `docs/gates.md`. Research the pre-1799 appearance first. Showing the gates
-   properly means growing the walk towards the whole Old Town.
+4. **Ghost gates.** `docs/gates.md`. The Subačius Gate is done (§8); the look of the ghost is the owner's to
+   judge. Next nearest: Rūdninkai (372 m), then the Gate of Dawn road (the one gate still standing). Research
+   each gate's pre-1799 appearance first; each is a new road in `WALK_SHAPES` plus a model.
 5. **The Great Synagogue and the Shulhoyf.** No model exists to import; it would be built from
    archives (`docs/research/city-1900.md` §6). It sits inside the existing map frame.
 6. **The crowd, balanced to the 1897 census.** Mix in `docs/research/city-1900.md` §2.

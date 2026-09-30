@@ -9,27 +9,33 @@ import type { Terrain } from './terrain';
  * A = distance to the nearest wall (0-8 m). The street shader (render/weather.ts) turns it into
  * running water, wet joints and mud.
  */
-export interface FlowMap { tex: THREE.DataTexture; box: THREE.Vector4; stats: { cells: number; maxAcc: number; streams: number } }
+export interface FlowMap {
+  tex: THREE.DataTexture;
+  /** x0, z0 (the map's corner) and 1 / width, 1 / depth in metres: one texel per metre. */
+  box: THREE.Vector4;
+  stats: { cells: number; maxAcc: number; streams: number };
+}
 
-export function buildFlowMap(terrain: Terrain, free: (x: number, z: number) => boolean, cx: number, cz: number, R = 200): FlowMap {
-  const N = R * 2, x0 = cx - R, z0 = cz - R, NN = N * N;
+/** Bakes the flow over the box [x0, z0, x1, z1] (local metres). */
+export function buildFlowMap(terrain: Terrain, free: (x: number, z: number) => boolean, area: [number, number, number, number]): FlowMap {
+  const x0 = Math.floor(area[0]), z0 = Math.floor(area[1]), N = Math.ceil(area[2]) - x0, M = Math.ceil(area[3]) - z0, NN = N * M;
   const open = new Uint8Array(NN);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) open[j * N + i] = free(x0 + i + 0.5, z0 + j + 0.5) ? 1 : 0;
+  for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) open[j * N + i] = free(x0 + i + 0.5, z0 + j + 0.5) ? 1 : 0;
 
   // distance to the nearest building cell (two-pass chamfer)
   const D = new Float32Array(NN);
   for (let k = 0; k < NN; k++) D[k] = open[k] ? 1e6 : 0;
   const S2 = Math.SQRT2;
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+  for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) {
     const k = j * N + i; let d = D[k];
     if (i > 0) d = Math.min(d, D[k - 1] + 1);
     if (j > 0) { d = Math.min(d, D[k - N] + 1); if (i > 0) d = Math.min(d, D[k - N - 1] + S2); if (i < N - 1) d = Math.min(d, D[k - N + 1] + S2); }
     D[k] = d;
   }
-  for (let j = N - 1; j >= 0; j--) for (let i = N - 1; i >= 0; i--) {
+  for (let j = M - 1; j >= 0; j--) for (let i = N - 1; i >= 0; i--) {
     const k = j * N + i; let d = D[k];
     if (i < N - 1) d = Math.min(d, D[k + 1] + 1);
-    if (j < N - 1) { d = Math.min(d, D[k + N] + 1); if (i < N - 1) d = Math.min(d, D[k + N + 1] + S2); if (i > 0) d = Math.min(d, D[k + N - 1] + S2); }
+    if (j < M - 1) { d = Math.min(d, D[k + N] + 1); if (i < N - 1) d = Math.min(d, D[k + N + 1] + S2); if (i > 0) d = Math.min(d, D[k + N - 1] + S2); }
     D[k] = d;
   }
 
@@ -41,7 +47,7 @@ export function buildFlowMap(terrain: Terrain, free: (x: number, z: number) => b
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   };
   const H = new Float32Array(NN);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+  for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) {
     const k = j * N + i;
     if (!open[k]) { H[k] = 1e6; continue; }
     const x = x0 + i + 0.5, z = z0 + j + 0.5, d = D[k];
@@ -52,7 +58,7 @@ export function buildFlowMap(terrain: Terrain, free: (x: number, z: number) => b
   // D8 downstream neighbour (steepest descent among open cells)
   const down = new Int32Array(NN).fill(-1);
   const nb = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, S2], [1, -1, S2], [-1, 1, S2], [-1, -1, S2]];
-  for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+  for (let j = 1; j < M - 1; j++) for (let i = 1; i < N - 1; i++) {
     const k = j * N + i;
     if (!open[k]) continue;
     let best = -1, bs = 0;
@@ -83,12 +89,12 @@ export function buildFlowMap(terrain: Terrain, free: (x: number, z: number) => b
   }
   const data = new Uint8Array(NN * 4);
   let maxAcc = 0, streams = 0;
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+  for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) {
     const k = j * N + i;
     let a = 0, wsum = 0, vx = 0, vz = 0;
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
       const ii = i + di, jj = j + dj;
-      if (ii < 0 || jj < 0 || ii >= N || jj >= N) continue;
+      if (ii < 0 || jj < 0 || ii >= N || jj >= M) continue;
       const q = jj * N + ii, w = di === 0 && dj === 0 ? 0.4 : 0.075;
       a += amt[q] * w; wsum += w; vx += dx[q]; vz += dz[q];
     }
@@ -101,9 +107,9 @@ export function buildFlowMap(terrain: Terrain, free: (x: number, z: number) => b
     maxAcc = Math.max(maxAcc, acc[k]);
     if (a > 0.6) streams++;
   }
-  const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  const tex = new THREE.DataTexture(data, N, M, THREE.RGBAFormat);
   tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearFilter;
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.needsUpdate = true;
-  return { tex, box: new THREE.Vector4(x0, z0, 1 / N, 0), stats: { cells: order.length, maxAcc, streams } };
+  return { tex, box: new THREE.Vector4(x0, z0, 1 / N, 1 / M), stats: { cells: order.length, maxAcc, streams } };
 }

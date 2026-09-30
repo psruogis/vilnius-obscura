@@ -31,6 +31,44 @@ const E0 = 583000, N0 = 6061000;
 const TOWN_HALL = { E: 582993, N: 6060944 };
 const WALK_RADIUS = 110;     // walkable area around the Town Hall (owner: keep it close)
 const CONTEXT_RADIUS = 450;  // backdrop buildings beyond it
+// The walk: the square (WALK_RADIUS round the Town Hall) and the road out to the Subačius Gate site
+// (docs/gates.md): Didžioji g. south, Subačiaus g. east to the Bokšto corner where the wall crossed the street,
+// the gate site, and a few steps down Šv. Dvasios g. outside the wall, where the 1785 drawing was made from.
+// Local metres (X = E - E0, Z = N0 - N), points on the OSM street centrelines. `w` is the half-width (the
+// walker's reach from the centreline: Subačiaus is 6-8 m between the house fronts). Houses get full façades
+// when their middle lies within `detail` m of a shape, or (along the road) any part of them within `front` m:
+// every house that faces the road, however deep its block, and none of the row behind.
+const WALK_SHAPES = [
+  { circle: [-7, 56], r: WALK_RADIUS, detail: 70 },
+  { line: [[37, 90], [41, 112], [44, 125], [47, 138], [51, 150], [69, 198], [72, 208], [74, 214]], w: 12, detail: 12, front: 8 },
+  { line: [[74, 214], [92, 217], [109, 225], [116, 227], [126, 231], [152, 237], [176, 242], [230, 244], [276, 242], [300, 241], [324, 239], [342, 239]], w: 6.5, detail: 12, front: 8 },
+  { circle: [333, 241], r: 22, detail: 12, front: 8 },                                // the gate site and the Bokšto corner
+  { line: [[342, 239], [342, 243], [337, 265], [334, 276]], w: 7, detail: 12, front: 8 }, // Šv. Dvasios g., outside the wall
+];
+/** Signed distance (m) from local (x, z) to one walk shape: negative inside. */
+function shapeDist(s, x, z) {
+  if (s.circle) return Math.hypot(x - s.circle[0], z - s.circle[1]) - s.r;
+  let d = Infinity;
+  for (let i = 1; i < s.line.length; i++) {
+    const [ax, az] = s.line[i - 1], [bx, bz] = s.line[i], dx = bx - ax, dz = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+    d = Math.min(d, Math.hypot(x - ax - t * dx, z - az - t * dz));
+  }
+  return d - s.w;
+}
+const walkDist = (x, z) => Math.min(...WALK_SHAPES.map(s => shapeDist(s, x, z)));
+/** How near a footprint (local ring) comes to a walk shape, sampled every metre along its walls. */
+function fronts(ring, s) {
+  let d = Infinity;
+  for (let i = 0; i < ring.length; i++) {
+    const [ax, az] = ring[i], [bx, bz] = ring[(i + 1) % ring.length], L = Math.hypot(bx - ax, bz - az);
+    for (let t = 0; t <= L; t += 1) d = Math.min(d, shapeDist(s, ax + ((bx - ax) * t) / (L || 1), az + ((bz - az) * t) / (L || 1)));
+  }
+  return d;
+}
+const CONTEXT_MARGIN = 120;  // backdrop reaches this far beyond the rest of the walk too
+/** In the backdrop: within CONTEXT_RADIUS of the Town Hall, or CONTEXT_MARGIN of the walk (plus `extra` m). */
+const inContext = (p, extra = 0) => dist(p, TOWN_HALL) <= CONTEXT_RADIUS + extra || walkDist(p.E - E0, N0 - p.N) <= CONTEXT_MARGIN + extra;
 // Setting: c.1900 (the owner's photographs). Tall shop ground floors, 3-4 storeys, lower metal roofs.
 const STOREY_GROUND = 4.4, STOREY_UPPER = 3.7;
 const DEFAULT_EAVE = STOREY_GROUND + 2 * STOREY_UPPER + 0.7; // three storeys
@@ -79,6 +117,7 @@ const wayRing = w => w.nodes.map(id => nodes.get(id)).filter(Boolean).map(n => t
 const osmBuildings = [];   // {centroid, height, levels, name, id}
 const osmAreas = [];       // pedestrian areas and squares
 const osmRoads = [];       // street centrelines
+const osmWalls = [];       // what survives of the city wall (barrier=city_wall)
 let townHallRing = null, stCasimirRing = null;
 
 for (const el of osm.elements) {
@@ -88,7 +127,7 @@ for (const el of osm.elements) {
     const ring = wayRing(el);
     if (ring.length < 3) continue;
     const c = ringCentroid(ring);
-    if (dist(c, TOWN_HALL) > CONTEXT_RADIUS + 50) continue;
+    if (!inContext(c, 50)) continue;
     const h = parseFloat(t.height), lv = parseFloat(t['building:levels']);
     if (t.building) osmBuildings.push({ id: el.id, centroid: c, height: isFinite(h) ? h : null, levels: isFinite(lv) ? lv : null });
     if (el.id === 111866535) townHallRing = ring;
@@ -96,12 +135,16 @@ for (const el of osm.elements) {
   }
   if (t.highway === 'pedestrian' && (t.area === 'yes' || el.nodes[0] === el.nodes[el.nodes.length - 1])) {
     const ring = wayRing(el);
-    if (ring.length >= 3 && dist(ringCentroid(ring), TOWN_HALL) < CONTEXT_RADIUS) osmAreas.push({ id: el.id, name: t.name || null, ring });
+    if (ring.length >= 3 && inContext(ringCentroid(ring))) osmAreas.push({ id: el.id, name: t.name || null, ring });
   } else if (t.highway && !t.area && ['pedestrian', 'living_street', 'residential', 'footway', 'service', 'secondary', 'tertiary', 'primary', 'unclassified', 'steps'].includes(t.highway)) {
     const line = wayRing(el);
-    if (line.length >= 2 && line.some(p => dist({ E: p[0], N: p[1] }, TOWN_HALL) < CONTEXT_RADIUS)) {
+    if (line.length >= 2 && line.some(p => inContext({ E: p[0], N: p[1] }))) {
       osmRoads.push({ id: el.id, kind: t.highway, name: t.name || null, tunnel: t.tunnel || null, line });
     }
+  }
+  if (t.barrier === 'city_wall') {
+    const line = wayRing(el);
+    if (line.length >= 2 && line.some(p => inContext({ E: p[0], N: p[1] }))) osmWalls.push({ id: el.id, line });
   }
 }
 
@@ -153,7 +196,7 @@ for (const f of grpk.features) {
   if (area < 15) continue;
   const c = ringCentroid(outer);
   const d = dist(c, TOWN_HALL);
-  if (d > CONTEXT_RADIUS) continue;
+  if (!inContext(c)) continue;
   const id = f.properties.TOP_ID;
   if (removeIds.has(id)) { stats.removedModern = (stats.removedModern || 0) + 1; continue; }
 
@@ -175,14 +218,12 @@ for (const f of grpk.features) {
       const e = h ? Math.min(h.eave - h.ground, cap) : DEFAULT_EAVE;
       buildings.push({
         id: `${id}-rest${i}`, role: 'ordinary', area: Math.round(a), dist: Math.round(dist(ringCentroid(rr[0]), TOWN_HALL)),
-        walk: dist(ringCentroid(rr[0]), TOWN_HALL) <= WALK_RADIUS + 40,
         eave: round(e), heightSource: h ? 'lidar' : 'default', capped: !!h && h.eave - h.ground > cap, ground: h ? round(h.ground) : 0,
         rings: rr.map(r => r.map(local)),
       });
     });
     buildings.push({
-      id: `${id}-church`, role: 'stcasimir', area: Math.round(ringArea(stCasimirRing)), dist: Math.round(d),
-      walk: d <= WALK_RADIUS + 40, eave: h ? round(h.eave - h.ground) : 17.8,
+      id: `${id}-church`, role: 'stcasimir', area: Math.round(ringArea(stCasimirRing)), dist: Math.round(d), eave: h ? round(h.eave - h.ground) : 17.8,
       heightSource: h ? 'lidar' : 'default', capped: false, ground: h ? round(h.ground) : 0,
       rings: [dropClosing(stCasimirRing).map(local)],
     });
@@ -211,7 +252,6 @@ for (const f of grpk.features) {
 
   buildings.push({
     id, role, area: Math.round(area), dist: Math.round(d),
-    walk: d <= WALK_RADIUS + 40,
     eave, heightSource: source, capped, ground: round(ground),
     rings: rings.map(r => r.map(local)),
   });
@@ -233,7 +273,7 @@ for (const reconFile of reconFiles('_historic.geojson')) {
       const eave = storeys ? STOREY_GROUND + (storeys - 1) * STOREY_UPPER + 0.6 : RECON_EAVE;
       buildings.push({
         id: `${tag}-${f.properties.id ?? buildings.length}-${i}`, role: 'recon', area: Math.round(ringArea(rings[0])),
-        dist: Math.round(dist(c, TOWN_HALL)), walk: dist(c, TOWN_HALL) <= WALK_RADIUS + 40,
+        dist: Math.round(dist(c, TOWN_HALL)),
         eave: round(eave), heightSource: storeys ? 'recon-storeys' : 'recon-default', capped: false, ground: 0,
         rings: rings.map(r => r.map(local)), source: f.properties.source || null, grade: f.properties.grade || 'C',
       });
@@ -285,9 +325,8 @@ function buildRoof(localRings) {
   } catch { return null; }
 }
 
-// Houses near the walk get full façade geometry in the browser (src/world/facades.ts) and roofs that
-// overhang the walls by EAVE_OVERHANG; the rest keep painted façades.
-const DETAIL_RADIUS = WALK_RADIUS + 70;
+// Houses near the walk (WALK_SHAPES `detail`) get full façade geometry in the browser (src/world/facades.ts)
+// and roofs that overhang the walls by EAVE_OVERHANG; the rest keep painted façades.
 const EAVE_OVERHANG = 0.3;
 
 /** Offsets every ring away from the building's inside (outer ring outwards, courtyards inwards). */
@@ -341,7 +380,11 @@ for (const b of buildings) {
   b.groundY = round(groundAbs - H0);        // façade floor lines start here
   b.baseY = round(minG - H0 - 0.4);         // walls reach below the lowest ground
   b.eaveY = round(groundAbs - H0 + b.eave);
-  b.detail = (b.role === 'ordinary' || b.role === 'recon') && b.dist <= DETAIL_RADIUS;
+  // edge: how far the house stands outside the walk (m, negative inside), which sets how much of it is modelled
+  const lx = c.E - E0, lz = N0 - c.N;
+  b.edge = round(walkDist(lx, lz));
+  b.walk = b.edge <= 40;
+  b.detail = (b.role === 'ordinary' || b.role === 'recon') && WALK_SHAPES.some(s => shapeDist(s, lx, lz) <= s.detail || (s.front && fronts(b.rings[0], s) <= s.front));
   b.roof = null;
   if (b.detail) {
     b.roof = buildRoof(offsetRings(b.rings, EAVE_OVERHANG));
@@ -382,6 +425,20 @@ if (terrain) {
   terrainOut = { e0: origin[0], n0: origin[1], cell: TERRAIN_CELL, nx: tx, ny: ty, h: smooth };
 }
 
+// The walk's outline, for the map and the barriers: the shapes as polygons (circles and round-ended strips), merged.
+function shapePolygon(s) {
+  const circle = (cx, cz, r, n) => { const ring = []; for (let k = 0; k <= n; k++) { const a = (k / n) * Math.PI * 2; ring.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r]); } ring[n] = ring[0]; return [[ring]]; };
+  if (s.circle) return circle(s.circle[0], s.circle[1], s.r, 128);
+  const parts = s.line.map(([x, z]) => circle(x, z, s.w, 32)[0]);
+  for (let i = 1; i < s.line.length; i++) {
+    const [ax, az] = s.line[i - 1], [bx, bz] = s.line[i], L = Math.hypot(bx - ax, bz - az) || 1, nx = (bz - az) / L * s.w, nz = -(bx - ax) / L * s.w;
+    parts.push([[[ax + nx, az + nz], [bx + nx, bz + nz], [bx - nx, bz - nz], [ax - nx, az - nz], [ax + nx, az + nz]]]);
+  }
+  return polygonClipping.union(...parts);
+}
+const walkOutline = polygonClipping.union(...WALK_SHAPES.map(shapePolygon))
+  .map(poly => poly.map(r => cleanRing(dropClosing(r).map(([x, z]) => [round(x), round(z)]))));
+
 const out = {
   meta: {
     generated: new Date().toISOString(),
@@ -390,6 +447,8 @@ const out = {
     townHall: local([TOWN_HALL.E, TOWN_HALL.N]),
     h0: H0,
     walkRadius: WALK_RADIUS, contextRadius: CONTEXT_RADIUS,
+    // the walk: signed-distance shapes (src/world/zone.ts) and their merged outline
+    walk: { shapes: WALK_SHAPES.map(({ detail, front, ...s }) => s), outline: walkOutline },
     sources: [
       'GRPK PASTAT © Nacionalinė žemės tarnyba prie Aplinkos ministerijos (CC BY 4.0)',
       'Street layout and height tags © OpenStreetMap contributors (ODbL)',
@@ -401,6 +460,7 @@ const out = {
   terrain: terrainOut,
   areas: osmAreas.map(a => ({ id: a.id, name: a.name, ring: dropClosing(a.ring).map(local) })),
   roads: osmRoads.map(r => ({ id: r.id, kind: r.kind, name: r.name, tunnel: r.tunnel, line: r.line.map(local) })),
+  cityWalls: osmWalls.map(w => ({ id: w.id, line: w.line.map(local) })),
 };
 
 fs.mkdirSync(path.dirname(OUT), { recursive: true });

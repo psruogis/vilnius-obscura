@@ -1,4 +1,6 @@
 import type { AreaData, XZ } from '../world/area';
+import { WalkZone } from '../world/zone';
+import { SUBACIUS_GATE } from '../world/subacius';
 import { loadFonts } from './fonts';
 
 /**
@@ -113,8 +115,12 @@ interface Layers {
   landmarks: { text: string; x: number; z: number }[];
   veil: Path2D;
   edge: Path2D;
+  /** The Subačius Gate, gone since 1801: where it stood (world/subacius.ts). */
+  gone: Plot[];
   centre: XZ;
   radius: number;
+  /** The walk's bounding box: x0, z0, x1, z1. */
+  walkBox: [number, number, number, number];
   hats: { fine?: Hats; coarse?: Hats };
 }
 interface View { cx: number; cz: number; s: number }
@@ -255,16 +261,21 @@ function prepare(data: AreaData): Layers {
       landmarks.push({ text: b.role === 'townhall' ? 'Town Hall' : "St Casimir's", x, z });
     } else { today.push(s); todayRings.push(b.rings); }
   }
+  landmarks.push({ text: 'Subačius Gate site', x: SUBACIUS_GATE.x, z: SUBACIUS_GATE.z + 16 });
+  // the walk's edge: the square and the road out to the gate site (world/zone.ts)
+  const zone = new WalkZone(data);
   const veil = new Path2D();
   veil.rect(-6000, -6000, 12000, 12000);
-  veil.arc(thx, thz, radius, 0, Math.PI * 2);
   const edge = new Path2D();
-  edge.arc(thx, thz, radius, 0, Math.PI * 2);
+  for (const poly of zone.outline) for (const ring of poly) {
+    for (const path of [veil, edge]) { ring.forEach(([x, z], i) => (i ? path.lineTo(x, z) : path.moveTo(x, z))); path.closePath(); }
+  }
   return {
     areas: data.areas.map(a => plotOf([a.ring], false)),
     foot, today, plan, hall, todayRings, planRings, labels, landmarks, veil, edge,
+    gone: SUBACIUS_GATE.plan.map(r => plotOf([r], false)),
     square: named ? { text: named.name!, x: centroid(named.ring)[0], z: centroid(named.ring)[1] } : null,
-    centre: [thx, thz], radius, hats: {},
+    centre: [thx, thz], radius, walkBox: zone.box, hats: {},
   };
 }
 
@@ -358,6 +369,15 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   g.strokeStyle = T.hallLine;
   g.lineWidth = px * (full ? 1.8 : 1.4);
   outlines(g, L.hall, seen);
+  // the Subačius Gate, gone: a faint fill and a broken line where it stood
+  g.save();
+  g.globalAlpha = full ? 0.3 : 0.25;
+  g.fillStyle = T.hall;
+  fills(g, L.gone, seen);
+  g.globalAlpha = full ? 0.9 : 0.75;
+  g.setLineDash([px * 3, px * 3]);
+  outlines(g, L.gone, seen);
+  g.restore();
 
   // glow: the ink gives off light, as wide faint strokes added on top
   if (glow) {
@@ -375,15 +395,7 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
 
   // Past the walk the town is only to be looked at: it fades into the vellum, and the edge is marked.
   if (full) {
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const cx = W / 2 + (L.centre[0] - v.cx) * s, cz = H / 2 + (L.centre[1] - v.cz) * s, R = L.radius * s;
-    const fade = g.createRadialGradient(cx, cz, R * 1.05, cx, cz, R * 2.7);
-    fade.addColorStop(0, `rgba(${T.veil}, 0)`);
-    fade.addColorStop(0.35, `rgba(${T.veil}, 0.62)`);
-    fade.addColorStop(1, `rgba(${T.veil}, 0.88)`);
-    g.fillStyle = fade;
-    g.fillRect(0, 0, W, H);
-    g.setTransform(dpr * s, 0, 0, dpr * s, dpr * (W / 2 - v.cx * s), dpr * (H / 2 - v.cz * s));
+    veilBeyond(g, W, H, dpr, v, L, T);
   } else {
     g.fillStyle = `rgba(${T.veil}, 0.55)`;
     g.fill(L.veil, 'evenodd');
@@ -437,6 +449,42 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
     g.fillStyle = T.text;
     halo(g, 'you', sx(pose.x) + 14, sy(pose.z) + 5, T.halo);
   }
+}
+
+/**
+ * Past the walk the town fades into the vellum with distance from the walk's edge: a veil, cleared inside the walk
+ * and thinned near its edge by strokes of shrinking width (clear at the edge, 0.62 at 70 m, 0.88 by 190 m).
+ */
+let veilCanvas: HTMLCanvasElement | null = null;
+function veilBeyond(g: CanvasRenderingContext2D, W: number, H: number, dpr: number, v: View, L: Layers, T: Theme): void {
+  const c = (veilCanvas ??= document.createElement('canvas'));
+  const cw = Math.round(W * dpr), ch = Math.round(H * dpr);
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+  const f = c.getContext('2d')!;
+  f.setTransform(1, 0, 0, 1, 0, 0);
+  f.globalCompositeOperation = 'source-over';
+  f.globalAlpha = 1;
+  f.clearRect(0, 0, cw, ch);
+  f.fillStyle = `rgba(${T.veil}, 0.88)`;
+  f.fillRect(0, 0, cw, ch);
+  f.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * (W / 2 - v.cx * v.s), dpr * (H / 2 - v.cz * v.s));
+  f.globalCompositeOperation = 'destination-out';
+  f.lineJoin = 'round';
+  f.strokeStyle = '#000';
+  f.fillStyle = '#000';
+  let left = 0.88;
+  for (const [d, a] of [[190, 0.8], [150, 0.72], [110, 0.62], [70, 0.45], [45, 0.25], [25, 0.08], [10, 0]]) {
+    f.globalAlpha = 1 - a / left;       // what is left beyond d, down to a within it
+    f.lineWidth = 2 * d;
+    f.stroke(L.edge);
+    left = a || 1;
+  }
+  f.globalAlpha = 1;
+  f.fill(L.edge, 'evenodd');
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.drawImage(c, 0, 0);
+  g.restore();
 }
 
 function halo(g: CanvasRenderingContext2D, text: string, x: number, y: number, colour: string): void {
@@ -566,6 +614,7 @@ const ABOUT_HTML = (walk: number) => `
     <li><i class="sw plan"></i>1842 plan houses</li>
     <li><i class="sw hall"></i>Town Hall, St Casimir's</li>
     <li><i class="sw you"></i>You</li>
+    <li><i class="sw gone"></i>Subačius Gate, gone</li>
     <li><i class="sw walk"></i>Edge of the walk</li>
   </ul>
   <h3>Where it comes from</h3>
@@ -574,7 +623,8 @@ const ABOUT_HTML = (walk: number) => `
     <li><b>1842 plan houses:</b> the 1842 plan of Vilnius (National Library of Poland), fitted to today's map to within a few metres, west of the square. Plot lines and storeys are guesses.</li>
     <li><b>Town Hall, St Casimir's:</b> modelled by hand: the Town Hall as finished in 1799, the church in its Orthodox form after 1864–68.</li>
     <li><b>Streets and names:</b> OpenStreetMap, 2026: today's names. Around 1900 many streets had other, Russian names.</li>
-    <li><b>Edge of the walk:</b> ${walk} m from the Town Hall. Beyond it the town is only to be seen.</li>
+    <li><b>Subačius Gate:</b> where the city wall's east gate stood until 1801, after P. Smuglevičius's drawing of 1785–86. In the street it is a ghost.</li>
+    <li><b>Edge of the walk:</b> the square, ${walk} m round the Town Hall, and the road out to the gate's site. Beyond it the town is only to be seen.</li>
   </ul>
   <p class="dim">This is not a copy of one old map: no plan from about 1900 is used yet, and the 1866 plan is not drawn.</p>
   <p class="dim">GRPK © Nacionalinė žemės tarnyba prie Aplinkos ministerijos, CC BY 4.0 · © OpenStreetMap contributors, ODbL · 1842 plan: public domain.</p>`;
@@ -671,9 +721,10 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
   const inset = () => (!narrow() && !full.classList.contains('about-closed') ? 372 : 0);
   const fit = () => {
     const free = Math.max(160, W - inset());
-    view.s = Math.min(S_MAX, Math.max(sMin(), Math.min(free, H - (narrow() ? 200 : 150)) / (L.radius * 2 + 40)));
-    view.cx = L.centre[0] + inset() / 2 / view.s;
-    view.cz = L.centre[1];
+    const [bx0, bz0, bx1, bz1] = L.walkBox;
+    view.s = Math.min(S_MAX, Math.max(sMin(), Math.min(free / (bx1 - bx0 + 40), (H - (narrow() ? 200 : 150)) / (bz1 - bz0 + 40))));
+    view.cx = (bx0 + bx1) / 2 + inset() / 2 / view.s;
+    view.cz = (bz0 + bz1) / 2;
   };
   const clamp = () => {
     view.s = Math.min(S_MAX, Math.max(sMin(), view.s));

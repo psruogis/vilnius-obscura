@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { WallGrid } from './collision';
+import type { WalkZone } from './zone';
 import type { Terrain } from './terrain';
 import { twoBoneIK } from '../player/ik';
 import { loadFolk, dress, figure, figureMaterial, measureGait, type FolkBody, type Outfit, type Palette, type MaleCoat, type MaleHat, type FemaleHat } from './folk';
@@ -59,7 +60,8 @@ export interface Crowd {
 }
 
 export async function buildCrowd(opts: {
-  walls: WallGrid; terrain: Terrain; centre: THREE.Vector2; radius: number;
+  walls: WallGrid; terrain: Terrain;
+  zone: WalkZone; reach: number;                      // the walk, and how far beyond its edge people may go
   free: (x: number, z: number) => boolean;           // open ground (not inside a building)
   groups: THREE.Vector2[];                            // spots where people stand in knots
   strollers: number; umbrellas: boolean;
@@ -159,8 +161,7 @@ export async function buildCrowd(opts: {
   // Strollers at random open points
   let tries = 0;
   while (people.filter(p => p.mode !== 'stand').length < opts.strollers && tries++ < opts.strollers * 40) {
-    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * opts.radius;
-    const x = opts.centre.x + Math.cos(a) * r, z = opts.centre.y + Math.sin(a) * r;
+    const [x, z] = opts.zone.sample(rnd);
     if (!opts.free(x, z)) continue;
     spawn(x, z, 'pause', rnd() * Math.PI * 2);
   }
@@ -170,7 +171,7 @@ export async function buildCrowd(opts: {
     for (let k = 0; k < 12; k++) {
       const a = rnd() * Math.PI * 2, d = 8 + rnd() * 30;
       const tx = px + Math.cos(a) * d, tz = pz + Math.sin(a) * d;
-      if (Math.hypot(tx - opts.centre.x, tz - opts.centre.y) > opts.radius) continue;
+      if (!opts.zone.contains(tx, tz, opts.reach)) continue;
       if (!opts.free(tx, tz)) continue;
       if (opts.walls.castSegment(px, pz, tx, tz) < 0.999) continue;
       p.target.set(tx, tz);
