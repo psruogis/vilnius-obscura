@@ -151,7 +151,10 @@ async function main(force = false): Promise<void> {
   const stCasimirData = data.buildings.find(b => b.role === 'stcasimir');
   if (stCasimirData) {
     const m = createChurchMaterials(aniso);
-    for (const k of ['wall', 'stone', 'base'] as const) age(m[k], { ground: stCasimirData.groundY, strength: 1, seed: 2 });
+    // faded, uneven limewash as in the tinted postcard: fully on the walls, less on the base and dressings
+    const fade = { wall: 1, base: 0.8, stone: 0.45 } as const;
+    const churchFade = new URLSearchParams(location.search).get('church') === '1800' ? 0 : 1;
+    for (const k of ['wall', 'stone', 'base'] as const) age(m[k], { ground: stCasimirData.groundY, strength: 1, seed: 2, fade: fade[k] * churchFade });
     age(m.roof, { roof: true, strength: 0.7 });
     if (RAIN) { for (const k of ['wall', 'stone', 'base'] as const) wet(m[k], 'wall', stCasimirData.groundY); }
     // ?church=1800 shows the pre-1864 form; default follows the owner's c.1900 photographs and the
