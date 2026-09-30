@@ -182,7 +182,7 @@ async function main(force = false): Promise<void> {
     remnant: oldBrickMaterial(aniso),
   };
   const gate = buildSubaciusGate({
-    data, terrain, mats: gateMats, look: new URLSearchParams(location.search).get('gate') === 'solid' ? 'solid' : 'ghost',
+    data, terrain, mats: gateMats, look: new URLSearchParams(location.search).get('gate') === 'solid' || location.hash === '#solid' ? 'solid' : 'ghost',
     fog: RAIN ? { density: 0.0072 } : { near: 70, far: 800 },
   });
   age(gateMats.wall, { ground: gate.floor, strength: 1, seed: 5 });
@@ -270,6 +270,9 @@ async function main(force = false): Promise<void> {
   document.addEventListener('visibilitychange', () => { if (document.hidden && touch.isActive) pauseWalk(); });
   const walker = new Walker(input, walls, zone, (x, z) => terrain.heightAt(x, z));
   walker.place(thx + 4, thz - 42, Math.PI);
+  // #gate (or #solid): start on Subačiaus g., walking up to the gate. A bare #anchor, because a claude.ai artifact
+  // passes that to the page and never the ?query
+  if (location.hash === '#gate' || location.hash === '#solid') walker.place(296, 241, -Math.PI / 2);
   scene.add(walker.object);
   // The map: a round plan in the corner while walking; Tab (or a tap on it) opens it full-screen and holds the walk still
   let hadLock = false; // embedded pages (claude.ai artifacts) never get the lock: nothing to give back, no pause screen

@@ -22,7 +22,8 @@ Controls: W A S D to walk, Shift to jog, mouse (or click-drag) to look, mouse wh
 zoom the camera in and out, Tab opens the full-screen map (Tab or Esc closes it), M to mute,
 backtick (`` ` ``) toggles the stats overlay. On a phone, tap the round map in the corner. The full map has a
 Pastel / Dark / Glow switch (pastel is the default; or `?map=dark`, `?map=glow`).
-`?weather=clear` for the dry morning, `?gate=solid` for the Subačius Gate as it stood before 1799.
+`?weather=clear` for the dry morning, `?gate=solid` for the Subačius Gate as it stood before 1799; `#gate` starts
+the walk on Subačiaus g. by the gate (`#solid`: the same, with the gate solid).
 
 Music: none, except klezmer that drifts in as you walk west towards the Jewish quarter (`docs/music.md`; the Music
 slider is in Options).
