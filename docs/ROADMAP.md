@@ -22,6 +22,11 @@ reorder freely.
   attics with cartouches and urns under bell domes and open lanterns, bells in the belfries, painted icons in the niches,
   the 1864–68 turret with its scrolls and dormered dome, the porch with its broken pediment and clock, rustication below
   (`src/world/stcasimir.ts`, `docs/REFERENCES.md` §5.3).
+- **The city gates on the map:** all ten gates of the city wall are drawn where they stood, from the heritage
+  register (KVR 39), Wikipedia, the LNDM and V. Drėma; a dotted ring where the site was never found
+  (`src/world/citygates.ts`, `docs/gates.md` §2). The register's strip along the wall is drawn as the wall's line,
+  and the full map now reaches the whole Old Town out to the gates, from OpenStreetMap outlines that load only when
+  the map opens (`tools/build-oldtown.mjs`, `public/data/oldtown.json`, 127 KB).
 - **Street title:** the name of the street you are walking on shows at the top for a few seconds, then fades
   (`src/ui/place.ts`). Today's names from OpenStreetMap, like the map's: what each street was called around 1900 is
   not researched (open question 4), so the title will need a second source when it is.

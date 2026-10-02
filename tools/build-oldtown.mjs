@@ -1,0 +1,94 @@
+// Builds public/data/oldtown.json: the rest of the Old Town for the full map, past the walk's own data
+// (area.json), out to the city gates: OpenStreetMap building outlines, squares and named streets (ODbL), inside
+// the protected Old Town boundary (KVR 16073) and the box round the gates, wherever area.json has no house; and
+// the strip the heritage register protects along the city wall (KVR 39, "Vilniaus miesto gynybinių įtvirtinimų
+// liekanų kompleksas"), which follows the wall's course from the Wet Gate round to the Bernardine Gate.
+// The walk never loads it; the map fetches it when it is first opened.
+//
+// Local frame: X = E - 583000, Z = -(N - 6061000), 1 unit = 1 m.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { toLks94 } from './lks94.mjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const SEED = path.join(ROOT, 'shadows-of-vilnius-seed');
+const OUT = path.join(ROOT, 'public', 'data', 'oldtown.json');
+const E0 = 583000, N0 = 6061000;
+
+// The gates' box (src/world/citygates.ts), with room round it
+const [BX0, BZ0, BX1, BZ1] = [-576 - 150, -714 - 150, 391 + 150, 469 + 150];
+const CELL = 8;              // m: the grid that tells where area.json already has houses
+
+const area = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'area.json'), 'utf8'));
+const osm = JSON.parse(fs.readFileSync(path.join(SEED, 'osm', 'overpass_oldtown_bbox_2026-09-26T1341Z.json'), 'utf8'));
+const boundary = JSON.parse(fs.readFileSync(path.join(SEED, 'boundary', 'kvr_16073_oldtown_epsg3346.geojson'), 'utf8'));
+const kvr = JSON.parse(fs.readFileSync(path.join(SEED, 'kvr', 'kvr_objects_polygons_details.json'), 'utf8'));
+const oldTown = (boundary.features ? boundary.features[0] : boundary).geometry.coordinates[0].map(([e, n]) => [e - E0, -(n - N0)]);
+
+const round = v => Math.round(v * 10) / 10;
+const inside = ([x, z], ring) => {
+  let c = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, zi] = ring[i], [xj, zj] = ring[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c;
+  }
+  return c;
+};
+const centroid = r => [r.reduce((s, p) => s + p[0], 0) / r.length, r.reduce((s, p) => s + p[1], 0) / r.length];
+const inBox = ([x, z]) => x >= BX0 && x <= BX1 && z >= BZ0 && z <= BZ1;
+
+// where area.json already draws houses: every cell one of its rings touches, and the cells round them
+const taken = new Set();
+const key = (x, z) => `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
+for (const b of area.buildings) for (const r of b.rings) for (let i = 0; i < r.length; i++) {
+  const [ax, az] = r[i], [bx, bz] = r[(i + 1) % r.length], n = Math.ceil(Math.hypot(bx - ax, bz - az) / (CELL / 2)) || 1;
+  for (let k = 0; k <= n; k++) {
+    const x = ax + ((bx - ax) * k) / n, z = az + ((bz - az) * k) / n;
+    for (const dx of [-CELL, 0, CELL]) for (const dz of [-CELL, 0, CELL]) taken.add(key(x + dx, z + dz));
+  }
+}
+
+const nodes = new Map();
+for (const el of osm.elements) if (el.type === 'node') nodes.set(el.id, el);
+const line = w => w.nodes.map(id => nodes.get(id)).filter(Boolean).map(n => { const [e, nn] = toLks94(n.lon, n.lat); return [round(e - E0), round(-(nn - N0))]; });
+const open = r => (r.length > 1 && r[0][0] === r.at(-1)[0] && r[0][1] === r.at(-1)[1] ? r.slice(0, -1) : r);
+
+const buildings = [], areas = [], roads = [];
+const kinds = ['pedestrian', 'living_street', 'residential', 'secondary', 'tertiary', 'primary', 'unclassified'];
+const haveRoad = new Set(area.roads.map(r => r.id)), haveArea = new Set(area.areas.map(a => a.id));
+for (const el of osm.elements) {
+  if (el.type !== 'way' || !el.tags) continue;
+  const t = el.tags;
+  if (t.building && !t['building:part']) {
+    const r = open(line(el));
+    if (r.length < 3) continue;
+    const c = centroid(r);
+    if (!inBox(c) || !inside(c, oldTown) || taken.has(key(...c))) continue;
+    buildings.push(r);
+  } else if (t.highway === 'pedestrian' && (t.area === 'yes' || el.nodes[0] === el.nodes.at(-1))) {
+    const r = open(line(el));
+    if (r.length >= 3 && !haveArea.has(el.id) && inBox(centroid(r))) areas.push({ name: t.name || null, ring: r });
+  } else if (t.highway && t.name && !t.area && !t.tunnel && kinds.includes(t.highway)) {
+    const l = line(el);
+    if (l.length >= 2 && !haveRoad.has(el.id) && l.some(inBox)) roads.push({ kind: t.highway, name: t.name, line: l });
+  }
+}
+
+const k39 = Object.values(kvr).find(o => o.attr.Code === '39');
+const wall = k39 ? open(k39.geom.rings[0].map(([lon, lat]) => { const [e, n] = toLks94(lon, lat); return [round(e - E0), round(-(n - N0))]; })) : null;
+
+const out = {
+  meta: {
+    generated: new Date().toISOString(),
+    frame: 'X = E - 583000, Z = -(N - 6061000), metres',
+    box: [BX0, BZ0, BX1, BZ1],
+    sources: [
+      'Building outlines, squares and streets © OpenStreetMap contributors (ODbL)',
+      'Old Town boundary (KVR 16073) and the city wall\'s protected strip (KVR 39): Kultūros vertybių registras, Kultūros paveldo departamentas (CC BY 4.0)',
+    ],
+  },
+  buildings, areas, roads, wall,
+};
+fs.writeFileSync(OUT, JSON.stringify(out));
+console.log(`oldtown.json: ${buildings.length} buildings, ${areas.length} squares, ${roads.length} named streets, wall strip ${wall ? wall.length + ' points' : 'MISSING'}; ${(fs.statSync(OUT).size / 1024).toFixed(0)} KB`);

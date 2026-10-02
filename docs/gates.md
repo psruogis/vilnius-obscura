@@ -1,6 +1,6 @@
 # The Vilnius city gates — research brief
 
-Version 0.3 · 2026-09-30 · status: **research brief; the Subačius Gate is built (§8), the rest are not**
+Version 0.4 · 2026-10-02 · status: **research brief; all ten gates are on the map (§2); the Subačius Gate is built (§8)**
 
 The old city wall and its gates, meant to be rebuilt in the game. Tags follow `docs/REFERENCES.md`:
 **[V]** verified against a cited source, **[U]** unverified or a design choice.
@@ -11,7 +11,8 @@ The old city wall and its gates, meant to be rebuilt in the game. Tags follow `d
 - Almost **2.5 km** long ("beveik pustrečio kilometro"), **up to 10–12 m** high, with **five towers**
   at first. [V] ¹
 - Russian-appointed city administrators demolished it bit by bit from **1799**. The last gate on
-  the list below came down in **1804**. [V] ¹
+  the list below came down in **1804**. [V] ¹ Two sources put the Castle Gate (1837 ⁸) and the Bernardine Gate
+  (1869 ¹⁰) later; either way, all but the Gate of Dawn were gone by 1900 (§2).
 - **Only the Gate of Dawn survives**, together with the 17th-century **artillery bastion** (Bastėja)
   by the Subačius Gate, restored 1966 and a museum since 1987. [V] ¹ ²
 - Number of gates: the Lithuanian article gives **ten** ¹, the English one **nine** ². The difference
@@ -19,31 +20,36 @@ The old city wall and its gates, meant to be rebuilt in the game. Tags follow `d
 
 ## 2. The gates, clockwise from the Gate of Dawn
 
-Locations follow the Lithuanian article ¹. Map positions are the nearest meeting point of the named
-modern streets in `public/data/area.json`. They are **approximate**: a street corner, not a gate
-footprint [U]. Frame: `X = E − 583000, Z = −(N − 6061000)`, metres, +Z south. The walk is the square
-(110 m round the Town Hall) and the road out to the Subačius site (§8); the backdrop reaches 450 m from the Town Hall.
+Every gate is drawn on the in-game map (2026-10-02): `src/world/citygates.ts` holds the sites, `src/ui/map.ts`
+draws them. Frame: `X = E − 583000, Z = −(N − 6061000)`, metres, +Z south; the Town Hall is at (−7, 56).
+"Within" is about how far the true site may lie from the point. Where the heritage register says the site has
+never been found ⁷, the map draws a dotted ring of that size round it, not a point.
 
-| # | Gate | Where it stood | Fate | On the game map |
+| # | Gate | Where it stood | Fate | On the map (x, z), within |
 |---|---|---|---|---|
-| 1 | **Aušros vartai**: Gate of Dawn, Medininkų, Aštrieji (Sharp), Krėvos | Aušros Vartų g. | **Standing** | (170.6, 480.3), 460 m, at the south edge of the map data |
-| 2 | **Rūdninkų vartai** | Rūdninkų × Pylimo | Demolished 1800 | (−239.3, 346.7), 372 m, backdrop |
-| 3 | **Trakų vartai** (the main gate ²) | Near Trakų × Pylimo | Demolished 1804 | Not located. The two streets don't meet in the map data (Trakų g. is clipped); roughly 440 m west |
-| 4 | **Vilijos (Vilniaus) vartai** | Benediktinių × Šv. Ignoto | Demolished 1802 | Outside the map data |
-| 5 | **Totorių vartai** (Tatar) | East side of Benediktinių × Totorių | Demolished 1802 | Outside the map data |
-| 6 | **Šv. Marijos Magdalenos vartai**: the Wet Gate (Šlapieji) | L. Stuokos-Gucevičiaus × Universiteto, by Cathedral Square | **Walled up 1677** | Outside the map data |
-| 7 | **Pilies vartai** (Castle) | Top of Pilies g. | Demolished early 1800s | Outside the map data |
-| 8 | **Bernardinų vartai** | By the Bernardine church, at the bridge to Užupis | Demolished early 1800s | Not located yet (Užupio tiltas is in the data) |
-| 9 | **Išganytojo (Spaso) vartai**: Saviour's | Near the Vilnia, on the road to Užupis | Demolished 1801 | Not located yet |
-| 10 | **Subačiaus vartai** | Bokšto × Subačiaus × Strazdelio | Demolished **27 May 1801** ³; about half the foundations survive ¹ | (328, 239.5), 379 m. **Built, standing, at the end of the walk (§8)** |
+| 1 | **Aušros (Medininkų) vartai**: Gate of Dawn, Aštrieji (Sharp), Krėvos | Aušros Vartų g.: the gatehouse stands (OSM way 112746030) [V] | **Standing**, saved by the chapel over it ¹ ⁷ | (170.9, 468.9), exact. Filled |
+| 2 | **Rūdninkų vartai** | Rūdninkų × Pylimo ¹; its lower part survives under the street ¹³ [V] | Pulled down 1800 ¹ ¹³ | (−239.3, 346.7), 10 m |
+| 3 | **Trakų vartai** (the main gate ²) | In the gap still left between Pylimo g. 22 and Trakų g. 2, where the wall ran and the Kačerga stream flowed ⁷ [V]. Near Trakų × Pylimo ¹ | 1803–04: its icon was moved in 1803 ⁷; the tower was pulled down in 1804 ¹ | (−575, −181), 10 m |
+| 4 | **Vilijos (Vilniaus) vartai** | Benediktinių × Šv. Ignoto ¹. The English article ² says "Vilnius and Bernardinai", a street pair that doesn't meet; read as a slip [U]. The wall stretches Totorių–Vilijos and Vilijos–Trakų are registered ⁷ | Pulled down 24 Nov 1802 ¹; its icon went to the Subačius g. orphanage chapel ⁷ | (−381, −462), 15 m |
+| 5 | **Totorių vartai** (Tatar) | East side of the Benediktinių × Totorių crossing ¹ ⁷ [V]. ² says Liejyklos × Totorių, 30 m away | Ordered down 1802 ¹ | (−284, −513), 10 m |
+| 6 | **Šv. Marijos Magdalenos (Šlapieji) vartai**: the Wet Gate | L. Stuokos-Gucevičiaus × Universiteto ¹, by Cathedral Square ²; **never located on the ground** ⁷ [U]. Small, one storey, hipped roof; served Lukiškės and Puškarnė and the bridge over the Kačerga ⁷ | **Walled up 1677** ¹ ⁷; gone with the wall | (−87, −714), 40 m ring. The register's strip along the wall ends here |
+| 7 | **Pilies vartai** (Castle) | The head of Pilies g., where the city wall met the Lower Castle's; four granite blocks at the edge of Cathedral Square mark it ⁸ [V] | Early 19th c. ¹; 1837 ⁸. Sources differ [U] | (144, −692), 10 m |
+| 8 | **Bernardinų vartai** | South of the Bernardine church, by the bridge over the Vilnia, where Mickiewicz's monument stands ¹⁰ (after Drėma); **exact site never established** ⁷. In 2004 a tower that guarded its east side was dug up in the SW part of the church's outbuilding ⁷. The register's strip ends some 60 m east of the monument [U] | Early 19th c. ¹; 1869, for Maironio g. ¹⁰. Sources differ [U] | (425, −463), 40 m ring, taking in both |
+| 9 | **Išganytojo (Spaso) vartai**: Saviour's | By the Užupis bridge, beside a small church of the Saviour near the Orthodox cathedral, on the road to Polotsk ¹¹; at the end of Išganytojo g. Wikidata's point ¹² (no source given) is 24 m from the bridge. **Not investigated** ⁷ [U] | 1801 ¹; its round tower c. 1806 ⁷ | (320.8, −228.8), 30 m ring |
+| 10 | **Subačiaus vartai** | Bokšto × Subačiaus × Strazdelio ¹ [V] | Pulled down from **27 May 1801** ³ | (328, 239.5). **Built, standing, at the end of the walk (§8)**: drawn as its plan |
 
-**The sources disagree** on three locations. The English article ² puts the Tatar Gate at
-Liejyklos × Totorių, the Vilija Gate at Vilniaus × Bernardinų, and the Subačius Gate at "the end of
-what is now Holy Spirit street". The Lithuanian article's Subačius corner matches the gate's own
-article ³. Check the Tatar and Vilija gates against pre-1799 plans before building. [U]
-The Subačius corner is settled: the two surviving stretches of wall in OpenStreetMap (ways 194601579 and
-1386286057) end either side of Subačiaus g. at the Bokšto corner, 12 m apart, and the gate's remains lie under
-the street there ¹ ⁵. [V]
+**A check:** the register protects a strip of ground along the whole wall (KVR 39 ⁷, its polygon is in the seed).
+Drawn on the map, it runs through the Trakai, Vilija, Tatar, Rūdninkai, Dawn, Subačius and Saviour's sites as
+placed above from street corners and articles, and ends at the Wet Gate and by the Bernardine site. The map shows it
+as the line of the wall [V for the strip; that it is the wall's exact width is not claimed]. The register says the
+wall can be traced almost all the way round, except from O. Šimaitės g. to the Bernardine Gate ⁷.
+
+**The sources disagree** on the Tatar and Vilija gates (above); the Lithuanian article and the register agree on
+the Tatar Gate, so that one is settled. The Subačius corner is settled too: the two surviving stretches of wall in
+OpenStreetMap (ways 194601579 and 1386286057) end either side of Subačiaus g. at the Bokšto corner, 12 m apart, and
+the gate's remains lie under the street there ¹ ⁵. [V]
+The register counts the gates of the early 17th c. as ten: Pilies, Marijos Magdalietės, Totorių, Vilijos, Trakų,
+Rūdninkų, Medininkų (Aušros), Subačiaus, Išganytojo, Bernardinų ⁷ ⁹. Five were built first (1503–22) ⁷. [V]
 
 ## 3. The problem with 1900
 
@@ -83,7 +89,7 @@ longer draw distances. The gates are the smaller part of that job.
 
 ## 6. The knygnešys and the gates
 
-**The gates and the book ban never overlapped.** The last gate came down in 1804 and the ban began in
+**The gates and the book ban never overlapped.** The last gate came down in 1804 (by most sources, §1) and the ban began in
 1864. [V] ¹ ⁴ In 1902 the only gate the courier can walk under is the Gate of Dawn. But the roads into
 the Old Town still run through the old gate sites, so the story is **which gate road he comes in by**.
 [U, design]
@@ -95,7 +101,7 @@ Measured on the game's street graph to the St Nicholas attic (see `docs/characte
 
 | Gate road | To the attic | Through the square | Character |
 |---|---|---|---|
-| **Trakai** (the main gate ²) | ~249 m, 3.5 min | 0 m | Shortest, and it comes from the west, the direction the books travel from. So it's the obvious way in, and the one worth watching. [U] The site is approximate because Trakų g. is clipped in the map data |
+| **Trakai** (the main gate ²) | ~249 m, 3.5 min | 0 m | Shortest, and it comes from the west, the direction the books travel from. So it's the obvious way in, and the one worth watching. [U] Measured before the site was placed (§2: the gap between Pylimo g. 22 and Trakų g. 2); recheck |
 | **Rūdninkai** | 383 m, 5.3 min | 0 m | The quiet one, along the edge of the Jewish quarter |
 | **Subačius** | 810 m, 11.3 min | 170 m | The budelis's gate, gone since 1801 but remembered. Crosses the square |
 | **Gate of Dawn** | 841 m, 11.7 min | 170 m | The long way, and the only gate still standing: he passes under the chapel, among pilgrims. Crosses the square |
@@ -105,8 +111,9 @@ came 60 years later. The two versions of the city tell separate stories.
 
 ## 7. Open questions
 
-1. Settle the two disputed locations still open (Tatar, Vilija) against old plans. (Subačius: settled, §2.)
-2. Locate the Bernardine and Saviour's gates on the map.
+1. Settle the Vilija Gate against old plans (the 1648 Getkant plan, the 1808 plan). (Tatar and Subačius: settled, §2.)
+2. Narrow the Wet, Bernardine and Saviour's sites, which the register says were never found on the ground. The
+   Getkant and Fürstenhoff plans it cites are the place to start.
 3. What did each gate look like? Tower gate or plain passage, roofs, heraldry?
 4. Ghost gates, the pre-1799 era, or gates standing out of their time? The Subačius Gate stands, with the wall,
    by the owner's choice (§3, §8); `?gate=ghost` shows the ghost. Whether the other gates follow is open.
@@ -169,5 +176,12 @@ through it ran straight east, as Subačiaus g. does now; the 1900 name of the st
 4. [Lithuanian press ban (en.wikipedia)](https://en.wikipedia.org/wiki/Lithuanian_press_ban)
 5. [Subačiaus vartai (VSAA, vsaa.lt; the source the English article cites)](https://vsaa.lt/sena/subac_v.html)
 6. [P. Smuglevičius, the Subačius Gate, 1785–86 (Wikimedia Commons, public domain)](https://commons.wikimedia.org/wiki/File:Suba%C4%8Dius_gate.Vilnius.Lithuania.jpg)
+7. [Vilniaus miesto gynybinių įtvirtinimų liekanų kompleksas, KVR 39 (Kultūros vertybių registras, Kultūros paveldo departamentas; record in `shadows-of-vilnius-seed/kvr/`, harvested 2026-09-26)](https://kvr.kpd.lt/#/static-heritage-detail/332c215a-030d-4760-b867-1c46276a0e80)
+8. [The beginning of Pilies Street (Nacionalinis muziejus – Lietuvos Didžiosios Kunigaikštystės valdovų rūmai)](https://www.lndm.lt/en/pilies-street/the-beginning-of-pilies-street)
+9. [Vilniaus miesto siena (Visuotinė lietuvių enciklopedija)](https://www.vle.lt/straipsnis/vilniaus-miesto-siena/)
+10. [Bernardinų vartai (lt.wikipedia), after V. Drėma, *Dingęs Vilnius*, 2013](https://lt.wikipedia.org/wiki/Bernardin%C5%B3_vartai)
+11. [Išganytojo (Spaso) vartai (lt.wikipedia)](https://lt.wikipedia.org/wiki/I%C5%A1ganytojo_(Spaso)_vartai)
+12. [Wikidata Q97215086](https://www.wikidata.org/wiki/Q97215086)
+13. [Rūdninkų vartai (VSAA)](https://vsaa.lt/sena/rudninku_v.html)
 
 Map data: streets © OpenStreetMap contributors (ODbL).

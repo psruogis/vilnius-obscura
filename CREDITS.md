@@ -3,8 +3,8 @@
 | What | Source | Licence |
 |---|---|---|
 | Building footprints | GRPK PASTAT © Nacionalinė žemės tarnyba prie Aplinkos ministerijos | CC BY 4.0 |
-| Old Town boundary, heritage records | Kultūros vertybių registras (KVR), Kultūros paveldo departamentas | CC BY 4.0 (register data) |
-| Street layout; some building height and level tags; the lines of the surviving city wall | © OpenStreetMap contributors | ODbL 1.0. The derived height table will be published with the site (M4). |
+| Old Town boundary, heritage records; the city wall's protected strip and the gate sites drawn on the map (KVR 39, 2026-10-02) | Kultūros vertybių registras (KVR), Kultūros paveldo departamentas | CC BY 4.0 (register data) |
+| Street layout; some building height and level tags; the lines of the surviving city wall; the map's outlines of the rest of the Old Town (`public/data/oldtown.json`) | © OpenStreetMap contributors | ODbL 1.0. The derived height table will be published with the site (M4). |
 | Building heights and terrain | National LiDAR survey 2025 © Nacionalinė žemės tarnyba prie Aplinkos ministerijos (via the Vilnius University Potree mirror; extended east to the Subačius Gate site 2026-09-30, see `tools/lidar/README.md`) | CC BY 4.0 |
 | Historic street and plot layout | Plans of Vilnius, 1842 and 1866, National Library of Poland (Polona) | Public domain |
 | Textures (cobblestone_floor_08, clay_roof_tiles, plastered_wall_04, weathered_planks) | Poly Haven | CC0 |

@@ -1,6 +1,7 @@
 import type { AreaData, XZ } from '../world/area';
 import { WalkZone } from '../world/zone';
 import { SUBACIUS_GATE, type GateLook } from '../world/subacius';
+import { CITY_GATES, type CityGate } from '../world/citygates';
 import { loadFonts } from './fonts';
 
 /**
@@ -41,6 +42,7 @@ interface Theme {
   todayFill: string; todayHat: string; todayLine: string; todayInk: string; // today's houses
   planFill: string; planHat: string; planLine: string; planInk: string;     // the 1842 plan
   hall: string; hallLine: string;                    // Town Hall and St Casimir's
+  wall: string;                                      // the line of the city wall
   edge: string;                                      // the edge of the walk
   veil: string;                                      // rgb of the vellum, for what lies beyond the walk
   vignette: string; vignetteAlpha: number;           // the aged edge of the full map (rgb)
@@ -57,6 +59,7 @@ const DARK: Theme = {
   todayFill: 'rgba(179, 144, 79, 0.09)', todayHat: 'rgba(179, 144, 79, 0.26)', todayLine: 'rgba(179, 144, 79, 0.78)', todayInk: '#b3904f', // gold ink
   planFill: 'rgba(70, 88, 82, 0.34)', planHat: 'rgba(150, 170, 160, 0.3)', planLine: 'rgba(150, 170, 160, 0.62)', planInk: '#96aaa0',       // cool grey-green
   hall: '#7b2a1b', hallLine: '#c9a45f',              // vermilion, gold-edged
+  wall: 'rgba(170, 72, 44, 0.2)',
   edge: 'rgba(201, 164, 95, 0.85)',
   veil: '30, 23, 16',
   vignette: '13, 10, 7', vignetteAlpha: 0.55,
@@ -78,6 +81,7 @@ const THEMES: Record<Look, Theme> = {
     todayFill: 'rgba(214, 196, 158, 0.09)', todayHat: 'rgba(214, 196, 158, 0.15)', todayLine: 'rgba(214, 196, 158, 0.38)', todayInk: '#cdbb94', // sand
     planFill: 'rgba(120, 148, 148, 0.2)', planHat: 'rgba(170, 192, 190, 0.16)', planLine: 'rgba(170, 192, 190, 0.38)', planInk: '#a9bfbc',       // powder blue-green
     hall: 'rgba(176, 118, 106, 0.72)', hallLine: 'rgba(232, 214, 180, 0.7)', // dusty rose, cream-edged
+    wall: 'rgba(176, 118, 106, 0.16)',
     edge: 'rgba(214, 196, 158, 0.5)',
     veil: '38, 34, 31',
     vignette: '14, 12, 11', vignetteAlpha: 0.45,
@@ -90,6 +94,7 @@ const F_STREET = 'italic 400 15px Almendra, Georgia, serif';
 const F_MAIN = 'italic 700 18px Almendra, Georgia, serif';
 const F_PLACE = '600 19px Cinzel, Georgia, serif';
 const F_NOTE = 'italic 400 14px Almendra, Georgia, serif';
+const F_GATE = '600 13px Cinzel, Georgia, serif';
 
 const MINI_SPAN = 170;       // metres across the corner map
 const S_MAX = 9;             // closest zoom of the full map, CSS px per metre
@@ -118,6 +123,12 @@ interface Layers {
   /** The Subačius Gate (world/subacius.ts): standing, as in the walk by default, or gone, where it stood. */
   gate: Plot[];
   gateLook: GateLook;
+  /** The ten gates of the city wall (world/citygates.ts). */
+  gates: CityGate[];
+  /** The rest of the Old Town out to the gates, and the wall's line (data/oldtown.json), once the full map has it. */
+  old: { today: Plot[]; areas: Plot[]; wall: Plot | null } | null;
+  /** How far the full map pans: the town round the walk, and the gates. x0, z0, x1, z1. */
+  reach: [number, number, number, number];
   centre: XZ;
   radius: number;
   /** The walk's bounding box: x0, z0, x1, z1. */
@@ -275,9 +286,32 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
     areas: data.areas.map(a => plotOf([a.ring], false)),
     foot, today, plan, hall, todayRings, planRings, labels, landmarks, veil, edge,
     gate: SUBACIUS_GATE.plan.map(r => plotOf([r], false)), gateLook,
+    gates: CITY_GATES, old: null, reach: reachOf(data, CITY_GATES),
     square: named ? { text: named.name!, x: centroid(named.ring)[0], z: centroid(named.ring)[1] } : null,
     centre: [thx, thz], radius, walkBox: zone.box, hats: {},
   };
+}
+
+/** The town the walk loads (contextRadius round the Town Hall) and the ring of gates, with room round them. */
+function reachOf(data: AreaData, gates: CityGate[]): Layers['reach'] {
+  const [cx, cz] = data.meta.townHall, r = data.meta.contextRadius + 60, m = 120;
+  return [
+    Math.min(cx - r, ...gates.map(g => g.x - m)), Math.min(cz - r, ...gates.map(g => g.z - m)),
+    Math.max(cx + r, ...gates.map(g => g.x + m)), Math.max(cz + r, ...gates.map(g => g.z + m)),
+  ];
+}
+
+/** The rest of the Old Town out to the gates, and the line of the wall (tools/build-oldtown.mjs), for the full map. */
+async function loadOldTown(L: Layers): Promise<void> {
+  const res = await fetch('data/oldtown.json');
+  if (!res.ok) return;
+  const o: { buildings: XZ[][]; areas: { ring: XZ[] }[]; roads: { kind: string; name: string; line: XZ[] }[]; wall: XZ[] | null } = await res.json();
+  L.old = { today: o.buildings.map(r => plotOf([r], true)), areas: o.areas.map(a => plotOf([a.ring], false)), wall: o.wall ? plotOf([o.wall], false) : null };
+  for (const r of o.roads) {
+    const m = midpoint(r.line);
+    if (m.len >= 30) L.labels.push({ text: r.name, x: m.x, z: m.z, ang: m.ang, len: m.len, main: r.kind === 'primary' || r.kind === 'secondary' });
+  }
+  L.labels.sort((a, b) => b.len - a.len);
 }
 
 /** A tile of vellum: the look's ground, grain, a few fibres. One tile pixel is one device pixel. */
@@ -338,6 +372,16 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   g.strokeStyle = T.todayLine;
   g.lineWidth = px * (full ? 1.2 : 1);
   outlines(g, L.today, seen);
+  // the rest of the Old Town, out to the gates: today's outlines, unhatched
+  if (L.old) {
+    g.fillStyle = T.square;
+    fills(g, L.old.areas, seen);
+    g.fillStyle = T.todayFill;
+    fills(g, L.old.today, seen);
+    g.strokeStyle = T.todayLine;
+    g.lineWidth = px * (full ? 1.1 : 0.9);
+    outlines(g, L.old.today, seen);
+  }
 
   // the 1842 plan: cross-hatched in grey-green
   g.fillStyle = T.planFill;
@@ -418,6 +462,23 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
   g.setLineDash([]);
   g.globalAlpha = 1;
 
+  // The city wall and its gates belong to the whole town, so they lie over the veil: the wall's line (the strip the
+  // heritage register protects along it), and a dotted ring round each gate whose site was never found.
+  if (L.old?.wall && seen(L.old.wall)) {
+    g.fillStyle = T.wall;
+    g.fill(L.old.wall.path, 'evenodd');
+  }
+  g.strokeStyle = T.note;
+  g.lineWidth = px * 1.3;
+  g.setLineDash([px * 1.5, px * 4.5]);
+  for (const gt of L.gates) {
+    if (gt.within < 25 || !seen({ x0: gt.x - gt.within, x1: gt.x + gt.within, z0: gt.z - gt.within, z1: gt.z + gt.within })) continue;
+    g.beginPath();
+    g.arc(gt.x, gt.z, gt.within, 0, Math.PI * 2);
+    g.stroke();
+  }
+  g.setLineDash([]);
+
   // Screen space from here: light, names, the walker.
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const sx = (x: number) => W / 2 + (x - v.cx) * s, sy = (z: number) => H / 2 + (z - v.cz) * s;
@@ -433,6 +494,7 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
     g.fillRect(0, 0, W, H);
     g.restore();
   }
+  drawGates(g, W, H, L, T, sx, sy, full);
   if (full) {
     // an aged edge, darker towards the corners
     const vig = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.hypot(W, H) * 0.62);
@@ -489,6 +551,23 @@ function veilBeyond(g: CanvasRenderingContext2D, W: number, H: number, dpr: numb
   g.restore();
 }
 
+/** Each gate as a ring of ink: filled where it stood in 1900, open where it was gone. The Subačius Gate is drawn as its plan. */
+function drawGates(g: CanvasRenderingContext2D, W: number, H: number, L: Layers, T: Theme, sx: (x: number) => number, sy: (z: number) => number, full: boolean): void {
+  const r = full ? 5.5 : 4;
+  g.lineWidth = full ? 1.8 : 1.4;
+  for (const gt of L.gates) {
+    if (gt.state === 'built') continue;
+    const x = sx(gt.x), y = sy(gt.z);
+    if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fillStyle = gt.state === 'standing' ? T.hall : T.halo;
+    g.fill();
+    g.strokeStyle = gt.state === 'standing' ? T.hallLine : T.note;
+    g.stroke();
+  }
+}
+
 function halo(g: CanvasRenderingContext2D, text: string, x: number, y: number, colour: string): void {
   g.lineWidth = 4;
   g.lineJoin = 'round';
@@ -519,6 +598,15 @@ function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, 
     g.fillStyle = T.text;
     halo(g, m.text, x, y + 5, T.halo);
     placed.push({ x, y, r: g.measureText(m.text).width / 2 + 6, name: m.text });
+  }
+  g.font = F_GATE;
+  for (const gt of L.gates) {
+    if (gt.state === 'built') continue;              // named with the landmarks
+    const x = sx(gt.x), y = sy(gt.z) + 21;
+    if (x < -80 || y < -20 || x > W + 80 || y > H + 20) continue;
+    g.fillStyle = gt.state === 'standing' ? T.text : T.note;
+    halo(g, gt.name, x, y, T.halo);
+    placed.push({ x, y: y - 5, r: g.measureText(gt.name).width / 2 + 4, name: gt.name });
   }
   if (s > 0.7) {
     g.font = F_NOTE;
@@ -617,6 +705,8 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
     <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', Subačius Gate' : ''}</li>
     <li><i class="sw you"></i>You</li>
     ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>Subačius Gate, gone</li>'}
+    <li><i class="sw gate"></i>City gates: open if gone by 1900</li>
+    <li><i class="sw wall"></i>Line of the city wall</li>
     <li><i class="sw walk"></i>Edge of the walk</li>
   </ul>
   <h3>Where it comes from</h3>
@@ -628,10 +718,12 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
     <li><b>Subačius Gate:</b> the city wall's east gate, after P. Smuglevičius's drawing of 1785–86. ${gate === 'solid'
       ? 'It was pulled down in 1801–02, with the wall; here it stands, with the wall either side, a century out of its time, on purpose.'
       : 'It was pulled down in 1801–02; in the street it is a ghost, where it stood.'}</li>
+    <li><b>City gates and wall:</b> the wall of 1503–22 and its ten gates, pulled down from 1799, all but the Gate of Dawn (here filled). Sites from the heritage register (KVR), Wikipedia and V. Drėma's <i>Dingęs Vilnius</i>; a dotted ring where the site was never found. The wall's line is the strip the register protects along it.</li>
+    <li><b>The rest of the Old Town:</b> OpenStreetMap outlines, 2026, unhatched, out to the gates.</li>
     <li><b>Edge of the walk:</b> the square, ${walk} m round the Town Hall, and the road out to the gate. Beyond it the town is only to be seen.</li>
   </ul>
   <p class="dim">This is not a copy of one old map: no plan from about 1900 is used yet, and the 1866 plan is not drawn.</p>
-  <p class="dim">GRPK © Nacionalinė žemės tarnyba prie Aplinkos ministerijos, CC BY 4.0 · © OpenStreetMap contributors, ODbL · 1842 plan: public domain.</p>`;
+  <p class="dim">GRPK © Nacionalinė žemės tarnyba prie Aplinkos ministerijos, CC BY 4.0 · © OpenStreetMap contributors, ODbL · KVR © Kultūros paveldo departamentas, CC BY 4.0 · 1842 plan: public domain.</p>`;
 
 const ICON = {
   plus: '<svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 3V15M3 9H15"/></svg>',
@@ -719,7 +811,8 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
   loadFonts().then(() => { dirty = true; last.x = NaN; });
   setTimeout(() => hatsFor(L, 'coarse'), 400);
 
-  const sMin = () => Math.min(W, H) / 1000;
+  // far enough out to take in the whole ring of gates
+  const sMin = () => Math.min(Math.min(W, H) / 1000, W / (L.reach[2] - L.reach[0]), H / (L.reach[3] - L.reach[1]));
   const narrow = () => window.matchMedia('(max-width: 760px)').matches;
   /** Screen the walk wants: the whole walkable circle, clear of the note on the right. */
   const inset = () => (!narrow() && !full.classList.contains('about-closed') ? 372 : 0);
@@ -732,9 +825,9 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
   };
   const clamp = () => {
     view.s = Math.min(S_MAX, Math.max(sMin(), view.s));
-    const reach = data.meta.contextRadius + 60;
-    view.cx = Math.min(L.centre[0] + reach, Math.max(L.centre[0] - reach, view.cx));
-    view.cz = Math.min(L.centre[1] + reach, Math.max(L.centre[1] - reach, view.cz));
+    const [rx0, rz0, rx1, rz1] = L.reach;
+    view.cx = Math.min(rx1, Math.max(rx0, view.cx));
+    view.cz = Math.min(rz1, Math.max(rz0, view.cz));
     dirty = true;
   };
   const zoomAt = (px: number, py: number, k: number) => {
@@ -782,9 +875,11 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
     aboutHead.setAttribute('aria-expanded', String(openIt));
     dirty = true;
   };
+  let oldTown: Promise<void> | null = null;
   const open = () => {
     if (isOpen || !walking) return;
     isOpen = true;
+    oldTown ??= loadOldTown(L).then(() => { dirty = true; }, () => {});
     full.hidden = false;
     setAbout(!narrow());
     sizeFull();

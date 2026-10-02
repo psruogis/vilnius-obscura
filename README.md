@@ -12,6 +12,7 @@ and `CLAUDE.md` holds the working context.
 ```bash
 node tools/vendor.mjs      # once: fetch three.js and suncalc from jsDelivr into public/vendor/
 node tools/build-area.mjs  # rebuild public/data/area.json from the seed data
+node tools/build-oldtown.mjs  # then the map's Old Town out to the city gates (public/data/oldtown.json)
 node tools/dev-server.mjs  # http://localhost:5173
 ```
 
@@ -54,7 +55,8 @@ then `npm run dev`.
 
 - `shadows-of-vilnius-seed/`: pinned inputs (see its README): GRPK footprints,
   the heritage register extract, and an OpenStreetMap snapshot.
-- The in-game map draws `area.json`; where each layer of it comes from is in `docs/map-sources.md`.
+- The in-game map draws `area.json`, and, once opened, `oldtown.json`: the rest of the Old Town, the city wall's
+  line and its ten gates (`src/world/citygates.ts`). Where each layer comes from is in `docs/map-sources.md`.
 - `tools/build-area.mjs` turns them into `public/data/area.json` in a local frame:
   X = E − 583000, Z = −(N − 6061000), metres, Y up (EPSG:3346 / LKS94).
 - Heights: national LiDAR if `tools/lidar/heights.json` exists, else OSM
