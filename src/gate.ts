@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { buildSubaciusGate, SUBACIUS_GATE } from './world/subacius';
 import { buildRudninkaiGate, RUDNINKAI_GATE } from './world/rudninkai';
+import { LOST_GATES, buildLostGate, lostGatePlan } from './world/lostgates';
+import type { GateSpec } from './world/towergate';
 import { createGateMaterials, worldTex } from './world/materials';
 import { age } from './world/ageing';
 import { createSky } from './world/sky';
@@ -64,10 +66,13 @@ scene.add(ground);
 
 // The gates and the wall beside them, exactly as in the walk (the same code and materials), on level ground
 const flat = { heightAt: () => 0 } as unknown as Terrain;
-const mats = createGateMaterials(aniso, 0);
-for (const m of [mats.render, mats.trim, mats.wall]) age(m, { ground: 0, strength: 1, seed: 5 });
-age(mats.roof, { roof: true, strength: 0.8 });
-const opts = { data: {} as AreaData, terrain: flat, look: 'solid' as const, mats, fog: { near: 120, far: 600 } };
+const matsFor = (cover?: number) => {
+  const mats = createGateMaterials(aniso, 0, cover);
+  for (const m of [mats.render, mats.trim, mats.wall]) age(m, { ground: 0, strength: 1, seed: 5 });
+  age(mats.roof, { roof: true, strength: 0.8 });
+  return mats;
+};
+const opts = { data: {} as AreaData, terrain: flat, look: 'solid' as const, mats: matsFor(), fog: { near: 120, far: 600 } };
 
 // A view in the gate's own terms: the camera's bearing as a direction in (out, along) — out along the road, away from
 // the town; along the wall — its pitch and distance, and what it looks at, offset from the gate's centre the same way
@@ -101,6 +106,30 @@ const GATES: Record<string, GateDef> = {
     labels: { drawing: 'The 1785 view', field: 'Field side', city: 'Town side', passage: 'Passage', above: 'From above' },
   },
 };
+// The lost gates, which no drawing shows: the same five views, framed from each gate's size
+const framed = (spec: GateSpec): GateDef['views'] => {
+  const t = spec.tower, H = t.eave + t.roof.rise + (t.roof.kind === 'saddle' && t.roof.gable === 'baroque' ? 1.6 : 0);
+  const f = spec.flank, len = (spec.barbican?.length ?? 0) + t.depth, c = ((spec.barbican?.length ?? 0) - t.depth) / 2;
+  const span = Math.max(2 * t.hw + 10, len, f ? 2 * Math.max(-f.z0, f.z1) + 4 : 0);
+  const d = Math.max(30, 1.5 * H + 1.1 * span), y = H * 0.48, side = f && f.z0 + f.z1 < 0 ? 1 : -1;   // from the side away from a flanking tower
+  return {
+    drawing: { dir: [0.72, 0.7 * side], pitch: 0.1, dist: d * 1.05, at: [0, y, 0] },
+    field: { dir: [1, 0.05], pitch: 0.07, dist: d * 0.9, at: [-c, y, 0] },
+    city: { dir: [-1, -0.05], pitch: 0.1, dist: d * 0.9, at: [-c - t.depth / 2, y, 0] },
+    ...(spec.passage.walled ? {} : { passage: { dir: [-1, 0] as XZ, pitch: 0.05, dist: 18 + t.depth, at: [-c + 1, spec.passage.spring, 0] as [number, number, number] } }),
+    above: { dir: [0.55, -0.85], pitch: 0.7, dist: d * 1.5, at: [0, 3, 0] },
+  };
+};
+for (const g of LOST_GATES) {
+  const plan = lostGatePlan(g), views = framed(g.spec);
+  GATES[g.key] = {
+    name: g.spec.name, sub: g.sub, note: g.note, centre: [plan.x, plan.z], out: plan.out,
+    group: buildLostGate(g, { ...opts, mats: matsFor(g.cover) }).solid, views,
+    labels: { drawing: 'Corner view', field: 'Field side', city: 'Town side', ...(views.passage ? { passage: 'Passage' } : {}), above: 'From above' },
+  };
+}
+// the switch runs round the wall: east, north, west
+const ORDER = ['subacius', 'saviour', 'bernardine', 'castle', 'wet', 'tatar', 'vilija', 'trakai', 'rudninkai'];
 for (const d of Object.values(GATES)) { d.group.visible = false; scene.add(d.group); }
 
 // ---- turning it round: yaw and pitch about a target, at a distance; eased toward the goal ----
@@ -156,7 +185,7 @@ const ui = document.createElement('div');
 ui.className = 'gv';
 ui.innerHTML = `
   <header class="gv-card">
-    <nav class="gv-gates" aria-label="Gates">${Object.entries(GATES).map(([k, d]) => `<button data-gate="${k}">${d.name.replace(' Gate', '')}</button>`).join('')}</nav>
+    <nav class="gv-gates" aria-label="Gates">${ORDER.map(k => `<button data-gate="${k}">${GATES[k].name.replace(' Gate', '')}</button>`).join('')}</nav>
     <h1></h1>
     <p class="gv-sub"></p>
     <p class="gv-note"></p>

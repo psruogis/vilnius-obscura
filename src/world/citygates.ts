@@ -9,7 +9,7 @@ export interface CityGate {
   /** English name, as the map labels it. */ name: string;
   /** Lithuanian name. */ lt: string;
   x: number; z: number;
-  /** standing in 1900; gone; or gone, but built standing in the walk (world/subacius.ts, world/rudninkai.ts) */
+  /** standing in 1900; gone; or gone, but built standing in the walk (world/subacius.ts, rudninkai.ts, lostgates.ts) */
   state: 'standing' | 'gone' | 'built';
   within: number;
 }
@@ -35,8 +35,8 @@ export const CITY_GATES: CityGate[] = [
   // a tower that guarded its east side was dug up in 2004 (KVR 39). The ring takes in both [U]
   { name: 'Bernardine Gate', lt: 'Bernardinų vartai', x: 425, z: -463, state: 'gone', within: 40 },
   // by the Užupis bridge, at the end of Išganytojo g. (lt.wikipedia; Wikidata Q97215086, unsourced); not
-  // investigated (KVR 39) [U]
-  { name: "Saviour's Gate", lt: 'Išganytojo (Spaso) vartai', x: 320.8, z: -228.8, state: 'gone', within: 30 },
+  // investigated (KVR 39) [U]. Modelled, standing at the world's edge (world/lostgates.ts)
+  { name: "Saviour's Gate", lt: 'Išganytojo (Spaso) vartai', x: 320.8, z: -228.8, state: 'built', within: 30 },
   // modelled and standing in the walk, as before 1801 (docs/gates.md §8)
   { name: 'Subačius Gate', lt: 'Subačiaus vartai', x: 328, z: 239.5, state: 'built', within: 0 },
 ];

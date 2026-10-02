@@ -1,4 +1,4 @@
-/* The Subačius Gate on its own (gate.html, src/gate.ts): the game's iron-and-oxblood menu look, kept small so the
+/* The city gates on their own (gate.html, src/gate.ts): the game's iron-and-oxblood menu look, kept small so the
    model has the screen. One dark look; the page paints its own ground. */
 :root {
   color-scheme: dark;
@@ -20,12 +20,15 @@ body { font: 16px/1.4 'Cormorant Garamond', Georgia, 'Times New Roman', serif; f
   max-width: min(27rem, calc(100vw - 32px)); box-sizing: border-box; padding: 14px 18px 16px;
   background: var(--panel); border: 1px solid var(--edge); border-radius: 4px; pointer-events: auto;
 }
-.gv-gates { display: flex; gap: 0; margin: 0 0 12px; border: 1px solid var(--edge); border-radius: 3px; overflow: hidden; width: max-content; }
+/* nine gates, three to a row, ruled like a plan */
+.gv-gates {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 0 0 12px;
+  border: 1px solid var(--edge); border-radius: 3px; overflow: hidden; background: var(--edge);
+}
 .gv-gates button {
   font: 600 0.72rem/1 Cinzel, Georgia, serif; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);
-  padding: 9px 13px; border: 0; background: transparent; cursor: pointer;
+  padding: 9px 10px; border: 0; background: #1d1917; cursor: pointer; white-space: nowrap;
 }
-.gv-gates button + button { border-left: 1px solid var(--edge); }
 .gv-gates button:hover { color: var(--cream); }
 .gv-gates button[aria-pressed="true"] { background: var(--oxblood); color: var(--cream); }
 .gv-gates button:focus-visible { outline: 2px solid var(--cream); outline-offset: -2px; }
@@ -54,4 +57,5 @@ body { font: 16px/1.4 'Cormorant Garamond', Georgia, 'Times New Roman', serif; f
   .gv-note { display: none; }
   .gv-card h1 { font-size: 1.35rem; }
   .gv-views button { padding: 10px 12px; font-size: 0.72rem; }
+  .gv-gates button { padding: 8px 4px; font-size: 0.64rem; letter-spacing: 0.05em; }
 }

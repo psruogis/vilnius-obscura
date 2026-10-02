@@ -26,6 +26,11 @@ reorder freely.
   tall tower, the two-storey barbican of 1675–79 with its gateway, round cannon ports, the guard's niche, the wall
   along Pylimo g. to the houses on its line (`src/world/rudninkai.ts`, `docs/gates.md` §9). It stands at its site, at
   the end of Rūdninkų g., outside the walk for now; `gate.html#rudninkai` shows it on its own. Next: a road to it.
+- **The seven other lost gates:** the Trakai, Vilija, Tatar, Wet, Castle, Bernardine and Saviour's gates, built on one
+  tower-gate kit from what the sources say of each (`src/world/towergate.ts`, `src/world/lostgates.ts`,
+  `docs/gates.md` §10); the Rūdninkai Gate now runs on the same kit. Much is conjecture: no picture survives of any
+  but the Wet Gate's north side. All nine lost gates are at `vilnius.gg/gates`; the Saviour's Gate also stands in the
+  walk's world, at its far edge by the Užupis bridge, and on the map. The rest wait for the world to reach them.
 - **The city gates on the map:** all ten gates of the city wall are drawn where they stood, from the heritage
   register (KVR 39), Wikipedia, the LNDM and V. Drėma; a dotted ring where the site was never found
   (`src/world/citygates.ts`, `docs/gates.md` §2). The register's strip along the wall is drawn as the wall's line,
@@ -58,9 +63,10 @@ reorder freely.
    scripted route-follower NPC; St Nicholas' Church modelled (or the walk extended west); and,
    optionally, a November-dusk light preset.
 3. **More characters.** The roster is in `docs/characters/README.md`.
-4. **The other gates.** `docs/gates.md`. The Subačius Gate is done (§8), standing as before 1801; the ghost is
-   kept as an option (`?gate=ghost`). Next nearest: Rūdninkai (372 m), then the Gate of Dawn road (the one gate still standing). Research
-   each gate's pre-1799 appearance first; each is a new road in `WALK_SHAPES` plus a model.
+4. **The other gates.** `docs/gates.md`. All nine lost gates are modelled (§8–10); the Subačius, Rūdninkai and
+   Saviour's gates stand in the world. Next: roads to the Rūdninkai and Saviour's gates in `WALK_SHAPES`, the Gate of
+   Dawn (the one gate still standing, a careful pass of its own), and the world grown to reach the northern gates.
+   The 1648 Getkant and 1740 Fürstenhoff plans would firm up the lost gates' footprints.
 5. **The Great Synagogue and the Shulhoyf.** No model exists to import; it would be built from
    archives (`docs/research/city-1900.md` §6). It sits inside the existing map frame.
 6. **The crowd, balanced to the 1897 census.** Mix in `docs/research/city-1900.md` §2.
@@ -96,7 +102,8 @@ reorder freely.
 4. What were the 1902 (Russian imperial) names of the streets on the courier's routes?
 5. Where exactly were the Tatar, Vilija and Subačius gates? The English and Lithuanian sources
    disagree.
-6. What did the lost gates look like?
+6. What did the lost gates look like? Modelled from the descriptions (`docs/gates.md` §10); pictures, if any survive
+   (the Getkant and Fürstenhoff plans, Smuglevičius's panorama), would replace the guesswork.
 7. Where did ordinary Lithuanian-speaking servants and workers live? Nothing found so far.
 
 ## Superseded

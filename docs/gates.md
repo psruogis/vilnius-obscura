@@ -1,6 +1,6 @@
 # The Vilnius city gates — research brief
 
-Version 0.5 · 2026-10-02 · status: **research brief; all ten gates are on the map (§2); the Subačius (§8) and Rūdninkai (§9) gates are built**
+Version 0.6 · 2026-10-02 · status: **research brief; all ten gates are on the map (§2); all nine lost gates are modelled (§8–10), three of them standing in the walk's world**
 
 The old city wall and its gates, meant to be rebuilt in the game. Tags follow `docs/REFERENCES.md`:
 **[V]** verified against a cited source, **[U]** unverified or a design choice.
@@ -29,13 +29,13 @@ never been found ⁷, the map draws a dotted ring of that size round it, not a p
 |---|---|---|---|---|
 | 1 | **Aušros (Medininkų) vartai**: Gate of Dawn, Aštrieji (Sharp), Krėvos | Aušros Vartų g.: the gatehouse stands (OSM way 112746030) [V] | **Standing**, saved by the chapel over it ¹ ⁷ | (170.9, 468.9), exact. Filled |
 | 2 | **Rūdninkų vartai** | Rūdninkų × Pylimo ¹; its lower part survives under the street ¹³ [V] | Pulled down 1800 ¹ ¹³ | (−239.3, 346.7), 10 m. **Built, standing (§9)**: drawn as its plan |
-| 3 | **Trakų vartai** (the main gate ²) | In the gap still left between Pylimo g. 22 and Trakų g. 2, where the wall ran and the Kačerga stream flowed ⁷ [V]. Near Trakų × Pylimo ¹ | 1803–04: its icon was moved in 1803 ⁷; the tower was pulled down in 1804 ¹ | (−575, −181), 10 m |
-| 4 | **Vilijos (Vilniaus) vartai** | Benediktinių × Šv. Ignoto ¹. The English article ² says "Vilnius and Bernardinai", a street pair that doesn't meet; read as a slip [U]. The wall stretches Totorių–Vilijos and Vilijos–Trakų are registered ⁷ | Pulled down 24 Nov 1802 ¹; its icon went to the Subačius g. orphanage chapel ⁷ | (−381, −462), 15 m |
-| 5 | **Totorių vartai** (Tatar) | East side of the Benediktinių × Totorių crossing ¹ ⁷ [V]. ² says Liejyklos × Totorių, 30 m away | Ordered down 1802 ¹ | (−284, −513), 10 m |
-| 6 | **Šv. Marijos Magdalenos (Šlapieji) vartai**: the Wet Gate | L. Stuokos-Gucevičiaus × Universiteto ¹, by Cathedral Square ²; **never located on the ground** ⁷ [U]. Small, one storey, hipped roof; served Lukiškės and Puškarnė and the bridge over the Kačerga ⁷ | **Walled up 1677** ¹ ⁷; gone with the wall | (−87, −714), 40 m ring. The register's strip along the wall ends here |
-| 7 | **Pilies vartai** (Castle) | The head of Pilies g., at the bridge over the Vilnia's channel (now Šventaragio g.), where the city wall met the Lower Castle's; granite blocks at the edge of Cathedral Square mark it ⁸ ¹⁴ [V] | **c. 1837** ⁸, with the courts building beside it ¹⁴, when the castle site was cleared for the fortress (1831–37) ¹⁴ [V]; "early 19th c." ¹ | (144, −692), 10 m. On the castle site's south edge (below) |
-| 8 | **Bernardinų vartai** | South of the Bernardine church, by the bridge over the Vilnia, where Mickiewicz's monument stands ¹⁰ (after Drėma); **exact site never established** ⁷. In 2004 a tower that guarded its east side was dug up in the SW part of the church's outbuilding ⁷. The register's strip ends some 60 m east of the monument [U] | Early 19th c. ¹; 1869, for Maironio g. ¹⁰. Sources differ [U] | (425, −463), 40 m ring, taking in both |
-| 9 | **Išganytojo (Spaso) vartai**: Saviour's | By the Užupis bridge, beside a small church of the Saviour near the Orthodox cathedral, on the road to Polotsk ¹¹; at the end of Išganytojo g. Wikidata's point ¹² (no source given) is 24 m from the bridge. **Not investigated** ⁷ [U] | 1801 ¹; its round tower c. 1806 ⁷ | (320.8, −228.8), 30 m ring |
+| 3 | **Trakų vartai** (the main gate ²) | In the gap still left between Pylimo g. 22 and Trakų g. 2, where the wall ran and the Kačerga stream flowed ⁷ [V]. Near Trakų × Pylimo ¹ | 1803–04: its icon was moved in 1803 ⁷; the tower was pulled down in 1804 ¹ | (−575, −181), 10 m. Modelled (§10) |
+| 4 | **Vilijos (Vilniaus) vartai** | Benediktinių × Šv. Ignoto ¹. The English article ² says "Vilnius and Bernardinai", a street pair that doesn't meet; read as a slip [U]. The wall stretches Totorių–Vilijos and Vilijos–Trakų are registered ⁷ | Pulled down 24 Nov 1802 ¹; its icon went to the Subačius g. orphanage chapel ⁷ | (−381, −462), 15 m. Modelled (§10) |
+| 5 | **Totorių vartai** (Tatar) | East side of the Benediktinių × Totorių crossing ¹ ⁷ [V]. ² says Liejyklos × Totorių, 30 m away | Ordered down 1802 ¹ | (−284, −513), 10 m. Modelled (§10) |
+| 6 | **Šv. Marijos Magdalenos (Šlapieji) vartai**: the Wet Gate | L. Stuokos-Gucevičiaus × Universiteto ¹, by Cathedral Square ²; **never located on the ground** ⁷ [U]. Small, one storey, hipped roof; served Lukiškės and Puškarnė and the bridge over the Kačerga ⁷ | **Walled up 1677** ¹ ⁷; gone with the wall | (−87, −714), 40 m ring. The register's strip along the wall ends here. Modelled (§10) |
+| 7 | **Pilies vartai** (Castle) | The head of Pilies g., at the bridge over the Vilnia's channel (now Šventaragio g.), where the city wall met the Lower Castle's; granite blocks at the edge of Cathedral Square mark it ⁸ ¹⁴ [V] | **c. 1837** ⁸, with the courts building beside it ¹⁴, when the castle site was cleared for the fortress (1831–37) ¹⁴ [V]; "early 19th c." ¹ | (144, −692), 10 m. On the castle site's south edge (below). Modelled (§10) |
+| 8 | **Bernardinų vartai** | South of the Bernardine church, by the bridge over the Vilnia, where Mickiewicz's monument stands ¹⁰ (after Drėma); **exact site never established** ⁷. In 2004 a tower that guarded its east side was dug up in the SW part of the church's outbuilding ⁷. The register's strip ends some 60 m east of the monument [U] | Early 19th c. ¹; 1869, for Maironio g. ¹⁰. Sources differ [U] | (425, −463), 40 m ring, taking in both. Modelled (§10) |
+| 9 | **Išganytojo (Spaso) vartai**: Saviour's | By the Užupis bridge, beside a small church of the Saviour near the Orthodox cathedral, on the road to Polotsk ¹¹; at the end of Išganytojo g. Wikidata's point ¹² (no source given) is 24 m from the bridge. **Not investigated** ⁷ [U] | 1801 ¹; its round tower c. 1806 ⁷ | (320.8, −228.8), 30 m. **Built, standing at the world's edge (§10)**: drawn as its plan |
 | 10 | **Subačiaus vartai** | Bokšto × Subačiaus × Strazdelio ¹ [V] | Pulled down from **27 May 1801** ³ | (328, 239.5). **Built, standing, at the end of the walk (§8)**: drawn as its plan |
 
 **A check:** the register protects a strip of ground along the whole wall (KVR 39 ⁷, its polygon is in the seed).
@@ -221,6 +221,65 @@ now: it is seen from the town round about, and in `gate.html#rudninkai`.
 
 **Still open:** the barbican's length and width (the drawing shows one side, at an angle); whether its gateway was
 on the road's line or turned, as barbicans often were; what the tower's town front looked like (not drawn).
+
+## 10. The seven other lost gates as built (2026-10-02)
+
+The Trakai, Vilija, Tatar, Wet, Castle, Bernardine and Saviour's gates, built on one kit: `src/world/towergate.ts`
+(a gate block with its passage, a hipped or saddle roof with plain or Baroque gables, string courses, a footing,
+ports, windows and icon niches, an optional barbican or flanking tower, a walled-up passage, and the wall either side
+with its gallery, as in §8–9) and one specification each in `src/world/lostgates.ts`. The Rūdninkai Gate (§9) is now
+a specification on the same kit and looks as before. All are at `vilnius.gg/gates` (`#trakai`, `#vilija`, `#tatar`,
+`#wet`, `#castle`, `#bernardine`, `#saviour`). Only the Saviour's Gate stands in the walk: the world loads houses
+450 m round the Town Hall, and the others lie beyond that. The map draws it as its plan; the rest keep their open
+markers. No picture survives of any of the seven except the Wet Gate's north side in Smuglevičius's panorama, so
+far more here is a design choice than at the Subačius and Rūdninkai gates.
+
+**What the sources say** [V]:
+- **Trakai:** in the gap still left between Pylimo g. 22 and Trakų g. 2, where the Kačerga ran along the wall; adorned,
+  like the Gate of Dawn, with saints' images; the Virgin's hung on the town side and went to the Franciscans in 1803 ⁷.
+  Two storeys, Baroque, a saddle roof, few gun ports, rich window surrounds ².
+- **Vilija:** named from 1555; led to the Neris and on to Ukmergė; an image of the Virgin, moved in 1802 to the
+  orphanage chapel on Subačiaus g. ⁷. Pulled down 24 Nov 1802 ¹.
+- **Tatar:** east of the Benediktinių × Totorių crossing; at the end of the 18th c. a tower of three storeys under a
+  tiled roof ⁷.
+- **Wet:** small, one storey, a hipped roof, an arched gateway with two gun ports either side; served the Lukiškės
+  and Puškarnė suburbs and the bridge over the Kačerga; walled up in 1677; its north side is in Smuglevičius's 1785
+  panorama; its site never found ⁷ ¹.
+- **Castle:** the Lower Castle's south gate tower; given to the district's nobles in 1611, repaired and enlarged for
+  the land and castle courts; pulled down in 1837 with the court house built beside it in 1786–1812; granite blocks
+  in the paving mark it ¹⁴ ⁸.
+- **Bernardine:** first named in 1593; its site never established; in 2004 the footings of a square tower, 6.5 × 8.8 m
+  outside, walls 1.7–2 m thick, laid north-east to south-west, were found in the south-west part of the Bernardine
+  church's outbuilding: it guarded the gate's east side ⁷.
+- **Saviour's:** built in the first stage (1503–22), rebuilt by the burgomaster Jokūbas Gibelis in 1624 ⁷ and again in
+  1799; said to be ornate; no picture survives ¹¹.
+
+**What is a design choice** [U]:
+- **Sites.** Each stands at its point in §2, square to the register's strip along the wall where that runs straight
+  there (Vilija, Tatar), or to the street through it (Trakai, Wet, Castle, Saviour's), and moved where a house stands
+  on the point today: the Trakai Gate 13 m east and 4 m south, into the gap between the two houses; the Vilija Gate
+  5.5 m along the wall, off the house south-east of Šv. Ignoto g.; the Bernardine Gate onto Šv. Brunono Bonifaco g.,
+  some 20 m from its map point, so that its tower falls on the south-west corner of the building at the register
+  strip's end, read as the outbuilding where the tower was found. Which building that is, and so where the gate was,
+  is a guess.
+- **Forms.** Trakai: a two-storey block 15 × 7 m, a steep saddle roof along the wall with plain gables, pilasters,
+  rich surrounds, the Virgin's niche on the town front and a saint's on the field front, a cross on the ridge for
+  the chapel ². Vilija: a tower 11 × 8.5 m, 14 m to the eaves, the Virgin's niche over the arch on the town side.
+  Tatar: a narrower tower, 13 m to the eaves, three storeys between string courses, slits on the field side, a
+  steeper tiled hip. Wet: 9 × 6 m, 9.4 m to the eaves, a tall arch walled up in bare brick, two ports either side.
+  Castle: a broad block of three floors, 18 × 11 m, rows of windows, a court house more than a tower. Bernardine: a
+  small gate block with the found tower beside it on the field side, 12 m to its eaves. Saviour's: a block 12 × 9 m
+  under a saddle roof along the road, with Baroque gables front and back (volutes, finials, an oculus), pilasters,
+  rich surrounds and an image of the Saviour in a niche over each arch, a design in the manner of 1624, not a record.
+- The images in the niches are plain gilt panels: what they showed is known only for Trakai and Vilija (the Virgin).
+- The finish is §8's: lime render over brick, worn more or less by gate; the wall either side as in §9, to a house or
+  24 m (12 m at the Castle Gate) and broken off.
+- **1900:** the Saviour's Gate stands, like the Subačius and Rūdninkai gates (§3); `?gate=ghost` draws all three as
+  ghosts.
+
+**Still open:** the 1648 Getkant and 1740 Fürstenhoff plans would give footprints for all seven; the Bernardine
+Gate's road (east over the Vilnia, as here, or north to the monastery); whether the Castle Gate's tower kept a roof
+of its own or sat under the court house's.
 
 ## Sources
 

@@ -9,6 +9,7 @@ import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
 import { buildSubaciusGate, SUBACIUS_GATE } from './world/subacius';
 import { buildRudninkaiGate, RUDNINKAI_GATE } from './world/rudninkai';
+import { LOST_GATES, buildLostGate, lostGatePlan } from './world/lostgates';
 import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
 import { buildFacades } from './world/facades';
@@ -178,11 +179,18 @@ async function main(force = false): Promise<void> {
     scene.add(buildStCasimir(stCasimirData, m, churchForm));
   }
   const walls = new WallGrid(data);
-  // The city gates the walk shows (docs/gates.md §8, §9): the Subačius Gate at the end of the road and the Rūdninkai
-  // Gate at the end of Rūdninkų g., each standing as it stood before it came down, with the wall either side: a
-  // deliberate anachronism in 1900. ?gate=ghost (or #ghost) shows them as ghosts over the street instead.
+  // The city gates the walk shows (docs/gates.md §8-10): the Subačius Gate at the end of the road, the Rūdninkai Gate
+  // at the end of Rūdninkų g. and, at the world's edge, the Saviour's Gate by the Užupis bridge, each standing as it
+  // stood before it came down, with the wall either side: a deliberate anachronism in 1900. ?gate=ghost (or #ghost)
+  // shows them as ghosts over the street instead. The other lost gates lie beyond the world (vilnius.gg/gates).
   const ghostGate = new URLSearchParams(location.search).get('gate') === 'ghost' || location.hash === '#ghost';
-  const gates = ([[buildSubaciusGate, SUBACIUS_GATE, 0.97], [buildRudninkaiGate, RUDNINKAI_GATE, 0.92]] as const).map(([build, at, cover]) => {
+  const saviour = LOST_GATES.find(g => g.key === 'saviour')!;
+  type GateBuild = (o: Parameters<typeof buildSubaciusGate>[0]) => ReturnType<typeof buildSubaciusGate>;
+  const gateList: [GateBuild, { x: number; z: number }, number][] = [
+    [buildSubaciusGate, SUBACIUS_GATE, 0.97], [buildRudninkaiGate, RUDNINKAI_GATE, 0.92],
+    [o => buildLostGate(saviour, o), lostGatePlan(saviour), saviour.cover],
+  ];
+  const gates = gateList.map(([build, at, cover]) => {
     const mats = createGateMaterials(aniso, terrain.heightAt(at.x, at.z), cover);
     const gate = build({ data, terrain, mats, look: ghostGate ? 'ghost' : 'solid', fog: RAIN ? { density: 0.0072 } : { near: 70, far: 800 } });
     for (const m of [mats.render, mats.trim, mats.wall]) age(m, { ground: gate.floor, strength: 1, seed: 5 });

@@ -17,7 +17,7 @@ looks bad. Their design hours are the scarce resource.
 
 ```bash
 node tools/dev-server.mjs      # http://localhost:5173 ; ?weather=clear for the dry morning, ?gate=ghost
-                               # /gates (or /gate.html): the gate models on their own (#rudninkai); vilnius.gg/gates
+                               # /gates (or /gate.html): the nine lost gates' models on their own (#rudninkai, #trakai, ...); vilnius.gg/gates
 node tools/build-static.mjs    # dist/ (about 41 MB, 8 of it music)
 ```
 
@@ -52,7 +52,7 @@ the same hotspot.
 |---|---|
 | `docs/ROADMAP.md` | What's done, what's next, open questions. **Start here.** |
 | `docs/characters/` | Character roster (`README.md`) and briefs (`knygnesys.md`, with route data) |
-| `docs/gates.md` | The ten city gates, ghost gates, the courier's ways in; the Subačius (§8) and Rūdninkai (§9) gates as built |
+| `docs/gates.md` | The ten city gates, ghost gates, the courier's ways in; the Subačius (§8), Rūdninkai (§9) and seven other lost gates (§10) as built |
 | `docs/research/city-1900.md` | Researched facts: population, city limits, the Lithuanian community, landmarks |
 | `docs/REFERENCES.md` | Visual and architectural references for the square |
 | `docs/FIDELITY-PLAN.md` | The seven-stream visual fidelity pass. **Complete**, all merged |

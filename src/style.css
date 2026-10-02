@@ -321,6 +321,7 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 .mv-legend li { display: flex; align-items: center; gap: 12px; }
 .mv-src + p { margin-top: 12px; }
 .mv-src { display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
+.mv-src a { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
 .mv-legend .sw { flex: none; width: 22px; height: 22px; border-radius: 50%; box-sizing: border-box; border: 1px solid var(--mv-line); }
 .sw.today { background: repeating-linear-gradient(50deg, var(--sw-today) 0 1px, var(--sw-ground) 1px 4px); }
 .sw.plan { background: repeating-linear-gradient(50deg, var(--sw-plan) 0 1px, transparent 1px 4px), repeating-linear-gradient(-40deg, var(--sw-plan) 0 1px, var(--sw-ground) 1px 4px); }
