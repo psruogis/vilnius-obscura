@@ -52,9 +52,12 @@ on its south-west corner, where the city wall's strip ends, and the Castle Gate 
 that site's edge as the castles' line [V for the site; the walls themselves ran inside it, U], and what stands of
 the Upper Castle's walls (OpenStreetMap barrier=city_wall) firmer. The Bernardine monastery, in the Vilnia's loop,
 was fortified and built into the city's and the castles' defences ¹⁴: it closed the ring between the Bernardine
-Gate and the castles. The register's strip along the city wall ends at the Bernardine Gate ⁷, and the monastery's
-own line of defence is not recorded, so the map draws this link dotted, from the gate through the monastery to the
-castle site's nearest corner [U]. (The stretch the register says it cannot locate is a different one, from O.
+Gate and the castles. Its church was built into the city wall in the early 16th century and has gun-ports in its
+walls ¹⁶ [V]. The register's strip along the city wall ends at the Bernardine Gate, against the south-east corner of
+the Bernardine ensemble's territory ⁷ ¹⁷; the map carries the line on along that territory's east side, the side
+facing the Vilnia, to its northern tip, and from there along a wall that still stands (OpenStreetMap way
+111764028) to the castle site's edge (`tools/build-oldtown.mjs`). That the monastery's defence ran on its river side
+and along that wall is [U]: the line follows today's enclosure, not a survey of the 16th-century one. (The stretch the register says it cannot locate is a different one, from O.
 Šimaitės g. to the Bernardine Gate; its strip there follows the route schemes of Katilius, Klimavičienė and
 Bitovtas, 1998 and 2006 ⁷.)
 
@@ -199,5 +202,7 @@ through it ran straight east, as Subačiaus g. does now; the 1900 name of the st
 13. [Rūdninkų vartai (VSAA)](https://vsaa.lt/sena/rudninku_v.html)
 14. Arkikatedros bazilikos, Žemutinės ir Aukštutinės pilių pastatų, jų liekanų ir kitų statinių kompleksas, KVR 642 (Kultūros vertybių registras; record in `shadows-of-vilnius-seed/kvr/`)
 15. Vilniaus piliavietė, vad. Gedimino kalnu, Pilies kalnu, Aukštutine ir Žemutine pilimi, KVR 141 (Kultūros vertybių registras; polygon in `shadows-of-vilnius-seed/kvr/`)
+16. [Church of St. Francis and St. Bernard, Vilnius (en.wikipedia)](https://en.wikipedia.org/wiki/Church_of_St._Francis_and_St._Bernard,_Vilnius)
+17. Vilniaus Šventųjų Pranciškaus Asyžiečio, Bernardino Sieniečio bei Šv. Onos bažnyčių ir bernardinų vienuolyno statinių ansamblis, KVR 766 (Kultūros vertybių registras; polygon in `shadows-of-vilnius-seed/kvr/`)
 
 Map data: streets © OpenStreetMap contributors (ODbL).
