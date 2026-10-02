@@ -52,7 +52,11 @@ on its south-west corner, where the city wall's strip ends, and the Castle Gate 
 that site's edge as the castles' line [V for the site; the walls themselves ran inside it, U], and what stands of
 the Upper Castle's walls (OpenStreetMap barrier=city_wall) firmer. The Bernardine monastery, in the Vilnia's loop,
 was fortified and built into the city's and the castles' defences ¹⁴: it closed the ring between the Bernardine
-Gate and the castles, a stretch the register says cannot be traced ⁷ and the map leaves open.
+Gate and the castles. The register's strip along the city wall ends at the Bernardine Gate ⁷, and the monastery's
+own line of defence is not recorded, so the map draws this link dotted, from the gate through the monastery to the
+castle site's nearest corner [U]. (The stretch the register says it cannot locate is a different one, from O.
+Šimaitės g. to the Bernardine Gate; its strip there follows the route schemes of Katilius, Klimavičienė and
+Bitovtas, 1998 and 2006 ⁷.)
 
 **The sources disagree** on the Tatar and Vilija gates (above); the Lithuanian article and the register agree on
 the Tatar Gate, so that one is settled. The Subačius corner is settled too: the two surviving stretches of wall in

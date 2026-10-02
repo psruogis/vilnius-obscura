@@ -129,7 +129,7 @@ interface Layers {
   /** The ten gates of the city wall (world/citygates.ts). */
   gates: CityGate[];
   /** The rest of the Old Town out to the gates, and the wall's line (data/oldtown.json), once the full map has it. */
-  old: { today: Plot[]; areas: Plot[]; wall: Plot | null; castle: Plot | null; castleWalls: Plot[] } | null;
+  old: { today: Plot[]; areas: Plot[]; wall: Plot | null; castle: Plot | null; castleWalls: Plot[]; link: Plot | null } | null;
   /** How far the full map pans: the town round the walk, and the gates. x0, z0, x1, z1. */
   reach: [number, number, number, number];
   centre: XZ;
@@ -297,6 +297,8 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
 
 /** The castles the city wall met at the Castle Gate (OSM), named with the gates. */
 const CASTLES = [{ name: 'Upper Castle', x: 241, z: -926 }, { name: 'Lower Castle', x: 110, z: -800 }];
+/** The Bernardine monastery (KVR 766), fortified and built into the city's and the castles' defences (KVR 642). */
+const BERNARDINES: XZ = [435, -569];
 
 /** The town the walk loads (contextRadius round the Town Hall), the ring of gates and the castles, with room round them. */
 function reachOf(data: AreaData, gates: CityGate[]): Layers['reach'] {
@@ -320,7 +322,15 @@ async function loadOldTown(L: Layers): Promise<void> {
     today: o.buildings.map(r => plotOf([r], true)), areas: o.areas.map(a => plotOf([a.ring], false)),
     wall: o.wall ? plotOf([o.wall], false) : null,
     castle: o.castle ? plotOf([o.castle], false) : null, castleWalls: (o.castleWalls ?? []).map(l => plotOf([l], false, false)),
+    link: null,
   };
+  // From the Bernardine Gate the ring was closed by the fortified Bernardine monastery, up to the castles (KVR 642);
+  // its line is not known, so it is drawn dotted: from the gate through the monastery to the castles' nearest corner
+  const gate = L.gates.find(g => g.name === 'Bernardine Gate');
+  if (gate && o.castle) {
+    const near = o.castle.reduce((b, p) => (Math.hypot(p[0] - BERNARDINES[0], p[1] - BERNARDINES[1]) < Math.hypot(b[0] - BERNARDINES[0], b[1] - BERNARDINES[1]) ? p : b));
+    L.old.link = plotOf([[[gate.x, gate.z], BERNARDINES, near]], false, false);
+  }
   for (const r of o.roads) {
     const m = midpoint(r.line);
     if (m.len >= 30) L.labels.push({ text: r.name, x: m.x, z: m.z, ang: m.ang, len: m.len, main: r.kind === 'primary' || r.kind === 'secondary' });
@@ -490,6 +500,13 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
     g.strokeStyle = T.hallLine;
     g.lineWidth = Math.max(2.5, px * 1.6);
     outlines(g, L.old.castleWalls, seen);
+  }
+  if (L.old?.link && seen(L.old.link)) {
+    g.strokeStyle = T.castle;
+    g.lineWidth = Math.max(3, px * 2);
+    g.setLineDash([Math.max(4, px * 3), Math.max(9, px * 7)]);
+    g.stroke(L.old.link.path);
+    g.setLineDash([]);
   }
   g.strokeStyle = T.note;
   g.lineWidth = px * 1.3;
@@ -749,7 +766,7 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
     <li><b>Subačius Gate:</b> the city wall's east gate, after P. Smuglevičius's drawing of 1785–86. ${gate === 'solid'
       ? 'It was pulled down in 1801–02, with the wall; here it stands, with the wall either side, a century out of its time, on purpose.'
       : 'It was pulled down in 1801–02; in the street it is a ghost, where it stood.'}</li>
-    <li><b>City gates and wall:</b> the wall of 1503–22 and its ten gates, pulled down from 1799, all but the Gate of Dawn (here filled). Sites from the heritage register (KVR), Wikipedia and V. Drėma's <i>Dingęs Vilnius</i>; a dotted ring where the site was never found. The wall's line is the strip the register protects along it. At the Castle Gate the wall met the castles: the edge of their precinct is the register's (KVR 141), along the Vilnia's old channel (now Šventaragio g.); the firmer line is what stands of the Upper Castle's walls (OpenStreetMap).</li>
+    <li><b>City gates and wall:</b> the wall of 1503–22 and its ten gates, pulled down from 1799, all but the Gate of Dawn (here filled). Sites from the heritage register (KVR), Wikipedia and V. Drėma's <i>Dingęs Vilnius</i>; a dotted ring where the site was never found. The wall's line is the strip the register protects along it. At the Castle Gate the wall met the castles: the edge of their precinct is the register's (KVR 141), along the Vilnia's old channel (now Šventaragio g.); the firmer line is what stands of the Upper Castle's walls (OpenStreetMap). From the Bernardine Gate the fortified Bernardine monastery closed the ring up to the castles; its line is not known, so it is dotted.</li>
     <li><b>The rest of the Old Town:</b> OpenStreetMap outlines, 2026, unhatched, out to the gates.</li>
     <li><b>Edge of the walk:</b> the square, ${walk} m round the Town Hall, and the road out to the gate. Beyond it the town is only to be seen.</li>
   </ul>
