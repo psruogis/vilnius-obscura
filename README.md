@@ -24,8 +24,8 @@ zoom the camera in and out, Tab opens the full-screen map (Tab or Esc closes it)
 backtick (`` ` ``) toggles the stats overlay. On a phone, tap the round map in the corner. The full map has a
 Pastel / Dark / Glow switch (pastel is the default; or `?map=dark`, `?map=glow`).
 `?weather=clear` for the dry morning, `?gate=ghost` for the Subačius Gate as a ghost where it stood; `#gate` starts
-the walk on Subačiaus g. by the gate (`#ghost`: the same, with the ghost). `gate.html` shows the gates on their own,
-in clear daylight, to be turned round with the mouse or a finger: the Subačius Gate, or `#rudninkai` the Rūdninkai
+the walk on Subačiaus g. by the gate (`#ghost`: the same, with the ghost). `gate.html` (on the site: **vilnius.gg/gates**) shows the gates
+on their own, in clear daylight, to be turned round with the mouse or a finger: the Subačius Gate, or `#rudninkai` the Rūdninkai
 Gate (`#field`, `#city`, `#passage`, `#above` pick a view; `#rudninkai-field` and so on).
 
 Music: none, except klezmer that drifts in as you walk west towards the Jewish quarter (`docs/music.md`; the Music

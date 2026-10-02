@@ -66,11 +66,12 @@ const server = http.createServer((req, res) => {
   let p = decodeURIComponent(url.pathname);
   if (req.method === 'POST' && p === '/__snapshot') return saveSnapshot(req, res, url.searchParams.get('name'));
   try {
-    // the pages: the walk, and the Subačius Gate on its own (gate.html)
-    if (p === '/' || p === '/index.html' || p === '/gate.html') {
-      const html = fs.readFileSync(path.join(ROOT, p === '/' ? 'index.html' : p.slice(1)), 'utf8').replace(
+    // the pages: the walk, and the gates on their own (gate.html; /gates and /gates/ as on vilnius.gg)
+    if (p === '/' || p === '/index.html' || p === '/gate.html' || p === '/gates' || p === '/gates/') {
+      const file = p === '/' ? 'index.html' : p.startsWith('/gates') ? 'gate.html' : p.slice(1);
+      const html = fs.readFileSync(path.join(ROOT, file), 'utf8').replace(
         '<head>',
-        `<head>\n    <script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>`,
+        `<head>${p.startsWith('/gates') ? '\n    <base href="/" />' : ''}\n    <script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>`,
       );
       return send(res, 200, MIME['.html'], html);
     }

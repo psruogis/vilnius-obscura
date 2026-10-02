@@ -17,7 +17,7 @@ looks bad. Their design hours are the scarce resource.
 
 ```bash
 node tools/dev-server.mjs      # http://localhost:5173 ; ?weather=clear for the dry morning, ?gate=ghost
-                               # /gate.html: the gate models on their own (#rudninkai)
+                               # /gates (or /gate.html): the gate models on their own (#rudninkai); vilnius.gg/gates
 node tools/build-static.mjs    # dist/ (about 41 MB, 8 of it music)
 ```
 
