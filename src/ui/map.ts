@@ -492,12 +492,17 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
     g.lineWidth = Math.max(2.5, px * 1.6);
     outlines(g, L.old.castleWalls, seen);
   }
-  // From the Bernardine Gate to the castles the ring was closed by the Bernardine monastery: its enclosure on the side
-  // facing the Vilnia, the church built into it, and a wall that still stands to the castle site (tools/build-oldtown.mjs)
+  // From the Bernardine Gate to the castles the ring was closed by the Bernardine monastery (KVR 642), the church built
+  // into the wall; where its line ran is not known. Dashed: about here, along today's enclosure on the side facing the
+  // Vilnia and a wall that still stands to the castle site (tools/build-oldtown.mjs)
   if (L.old?.monastery && seen(L.old.monastery)) {
     g.strokeStyle = T.castle;
     g.lineWidth = Math.max(3.5, px * 2);
+    g.lineCap = 'butt';
+    g.setLineDash([px * 8, px * 5]);
     g.stroke(L.old.monastery.path);
+    g.setLineDash([]);
+    g.lineCap = 'round';
   }
   g.strokeStyle = T.note;
   g.lineWidth = px * 1.3;
@@ -745,7 +750,7 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
     ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>Subačius Gate, gone</li>'}
     <li><i class="sw gate"></i>City gates: open if gone by 1900</li>
     <li><i class="sw wall"></i>Line of the city wall</li>
-    <li><i class="sw castle"></i>Castles and the Bernardines</li>
+    <li><i class="sw castle"></i>Castles; dashed, the Bernardines</li>
     <li><i class="sw walk"></i>Edge of the walk</li>
   </ul>
   <h3>Where it comes from</h3>
@@ -757,7 +762,7 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
     <li><b>Subačius Gate:</b> the city wall's east gate, after P. Smuglevičius's drawing of 1785–86. ${gate === 'solid'
       ? 'It was pulled down in 1801–02, with the wall; here it stands, with the wall either side, a century out of its time, on purpose.'
       : 'It was pulled down in 1801–02; in the street it is a ghost, where it stood.'}</li>
-    <li><b>City gates and wall:</b> the wall of 1503–22 and its ten gates, pulled down from 1799, all but the Gate of Dawn (here filled). Sites from the heritage register (KVR), Wikipedia and V. Drėma's <i>Dingęs Vilnius</i>; a dotted ring where the site was never found. The wall's line is the strip the register protects along it. At the Castle Gate the wall met the castles: the edge of their precinct is the register's (KVR 141), along the Vilnia's old channel (now Šventaragio g.); the firmer line is what stands of the Upper Castle's walls (OpenStreetMap). From the Bernardine Gate the Bernardine monastery closed the ring up to the castles: its church was built into the wall in the early 16th century, with gun-ports. The line is the monastery's enclosure on the side facing the Vilnia (the register's, KVR 766) and a wall that still stands from it to the castles (OpenStreetMap).</li>
+    <li><b>City gates and wall:</b> the wall of 1503–22 and its ten gates, pulled down from 1799, all but the Gate of Dawn (here filled). Sites from the heritage register (KVR), Wikipedia and V. Drėma's <i>Dingęs Vilnius</i>; a dotted ring where the site was never found. The wall's line is the strip the register protects along it. At the Castle Gate the wall met the castles: the edge of their precinct is the register's (KVR 141), along the Vilnia's old channel (now Šventaragio g.); the firmer line is what stands of the Upper Castle's walls (OpenStreetMap). From the Bernardine Gate the Bernardine monastery closed the ring up to the castles: its church was built into the wall in the early 16th century, with gun-ports. Where its line ran is not known, so it is dashed: about here, along today's enclosure on the side facing the Vilnia (the register's, KVR 766) and a wall that still stands from it to the castles (OpenStreetMap).</li>
     <li><b>The rest of the Old Town:</b> OpenStreetMap outlines, 2026, unhatched, out to the gates.</li>
     <li><b>Edge of the walk:</b> the square, ${walk} m round the Town Hall, and the road out to the gate. Beyond it the town is only to be seen.</li>
   </ul>

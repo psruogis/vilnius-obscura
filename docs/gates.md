@@ -57,7 +57,9 @@ walls ¹⁶ [V]. The register's strip along the city wall ends at the Bernardine
 the Bernardine ensemble's territory ⁷ ¹⁷; the map carries the line on along that territory's east side, the side
 facing the Vilnia, to its northern tip, and from there along a wall that still stands (OpenStreetMap way
 111764028) to the castle site's edge (`tools/build-oldtown.mjs`). That the monastery's defence ran on its river side
-and along that wall is [U]: the line follows today's enclosure, not a survey of the 16th-century one. (The stretch the register says it cannot locate is a different one, from O.
+and along that wall is [U], about 25–30% likely as drawn: the line follows today's enclosure (a modern protection
+boundary) and a wall OpenStreetMap tags only as barrier=wall, undated, not a survey of the 16th-century defence. So
+the map draws this stretch dashed, "about here". The 1648 Getkant and 1740 Fürstenhoff plans would settle it. (The stretch the register says it cannot locate is a different one, from O.
 Šimaitės g. to the Bernardine Gate; its strip there follows the route schemes of Katilius, Klimavičienė and
 Bitovtas, 1998 and 2006 ⁷.)
 
