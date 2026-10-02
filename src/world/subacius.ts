@@ -64,7 +64,7 @@ export interface Gate {
   floor: number;
 }
 
-function circle(cx: number, cz: number, r: number, n: number): XZ[] {
+export function circle(cx: number, cz: number, r: number, n: number): XZ[] {
   const out: XZ[] = [];
   for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; out.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r]); }
   return out;
@@ -84,7 +84,7 @@ function lathe(profile: [number, number][], segs: number, cx: number, cz: number
 }
 
 /** A box w (along the face) x h x d (out of it), its back on a face at (x, y, z) with outward normal (nx, nz). */
-function faceBox(w: number, h: number, d: number, x: number, y: number, z: number, nx: number, nz: number): THREE.BufferGeometry {
+export function faceBox(w: number, h: number, d: number, x: number, y: number, z: number, nx: number, nz: number): THREE.BufferGeometry {
   return new THREE.BoxGeometry(w, h, d).rotateY(Math.atan2(nx, nz)).translate(x + nx * d / 2, y, z + nz * d / 2);
 }
 
@@ -409,7 +409,7 @@ export function buildSubaciusGate(o: {
 }
 
 /** UVs in metres for the plaster and tile textures: projected on the face's own plane. */
-function uvMetres(g: THREE.BufferGeometry): THREE.BufferGeometry {
+export function uvMetres(g: THREE.BufferGeometry): THREE.BufferGeometry {
   const geo = g.index ? g.toNonIndexed() : g;
   if (g.userData.metres) return geo;                   // already in metres (lathe)
   if (!geo.getAttribute('normal')) geo.computeVertexNormals();
@@ -427,7 +427,7 @@ function uvMetres(g: THREE.BufferGeometry): THREE.BufferGeometry {
 }
 
 /** The ground under each vertex, for the ghost's fade at its foot. */
-function setGround(geo: THREE.BufferGeometry, terrain: Terrain): void {
+export function setGround(geo: THREE.BufferGeometry, terrain: Terrain): void {
   const p = geo.getAttribute('position') as THREE.BufferAttribute, gr = new Float32Array(p.count);
   for (let i = 0; i < p.count; i++) gr[i] = terrain.heightAt(p.getX(i), p.getZ(i));
   geo.setAttribute('aGround', new THREE.BufferAttribute(gr, 1));
@@ -436,7 +436,7 @@ function setGround(geo: THREE.BufferGeometry, terrain: Terrain): void {
 // The ghost is drawn after tone mapping (post.ts overlay), so its colours are the picture's own: old paper and ink.
 const WASH = new THREE.Color('#d8cdb6'), INK = new THREE.Color('#f1e8d4');
 
-function ghostMaterial(u: { uTime: { value: number }; uFog: { value: THREE.Vector3 }; uGate: { value: THREE.Vector2 } }, pass: 'depth' | 'wash' | 'lines'): THREE.ShaderMaterial {
+export function ghostMaterial(u: { uTime: { value: number }; uFog: { value: THREE.Vector3 }; uGate: { value: THREE.Vector2 } }, pass: 'depth' | 'wash' | 'lines'): THREE.ShaderMaterial {
   const lines = pass === 'lines';
   return new THREE.ShaderMaterial({
     uniforms: { ...u, uColor: { value: lines ? INK : WASH }, uAlpha: { value: lines ? 0.62 : 0.13 } },

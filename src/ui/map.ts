@@ -1,6 +1,7 @@
 import type { AreaData, XZ } from '../world/area';
 import { WalkZone } from '../world/zone';
 import { SUBACIUS_GATE, type GateLook } from '../world/subacius';
+import { RUDNINKAI_GATE } from '../world/rudninkai';
 import { CITY_GATES, type CityGate } from '../world/citygates';
 import { loadFonts } from './fonts';
 
@@ -276,7 +277,7 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
       landmarks.push({ text: b.role === 'townhall' ? 'Town Hall' : "St Casimir's", x, z });
     } else { today.push(s); todayRings.push(b.rings); }
   }
-  landmarks.push({ text: gateLook === 'solid' ? 'Subačius Gate' : 'Subačius Gate site', x: SUBACIUS_GATE.x, z: SUBACIUS_GATE.z + 16 });
+  for (const [g, dz] of [[SUBACIUS_GATE, 16], [RUDNINKAI_GATE, 18]] as const) landmarks.push({ text: gateLook === 'solid' ? g.name : `${g.name} site`, x: g.x, z: g.z + dz });
   // the walk's edge: the square and the road out to the gate (world/zone.ts)
   const zone = new WalkZone(data);
   const veil = new Path2D();
@@ -288,7 +289,7 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
   return {
     areas: data.areas.map(a => plotOf([a.ring], false)),
     foot, today, plan, hall, todayRings, planRings, labels, landmarks, veil, edge,
-    gate: SUBACIUS_GATE.plan.map(r => plotOf([r], false)), gateLook,
+    gate: [...SUBACIUS_GATE.plan, ...RUDNINKAI_GATE.plan].map(r => plotOf([r], false)), gateLook,
     gates: CITY_GATES, old: null, reach: reachOf(data, CITY_GATES),
     square: named ? { text: named.name!, x: centroid(named.ring)[0], z: centroid(named.ring)[1] } : null,
     centre: [thx, thz], radius, walkBox: zone.box, hats: {},
@@ -745,9 +746,9 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
   <ul class="mv-legend">
     <li><i class="sw today"></i>Today's houses</li>
     <li><i class="sw plan"></i>1842 plan houses</li>
-    <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', Subačius Gate' : ''}</li>
+    <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', the Subačius and Rūdninkai gates' : ''}</li>
     <li><i class="sw you"></i>You</li>
-    ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>Subačius Gate, gone</li>'}
+    ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>Subačius and Rūdninkai gates, gone</li>'}
     <li><i class="sw gate"></i>City gates: open if gone by 1900</li>
     <li><i class="sw wall"></i>Line of the city wall</li>
     <li><i class="sw castle"></i>Castles; dashed, the Bernardines</li>
@@ -762,6 +763,9 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
     <li><b>Subačius Gate:</b> the city wall's east gate, after P. Smuglevičius's drawing of 1785–86. ${gate === 'solid'
       ? 'It was pulled down in 1801–02, with the wall; here it stands, with the wall either side, a century out of its time, on purpose.'
       : 'It was pulled down in 1801–02; in the street it is a ghost, where it stood.'}</li>
+    <li><b>Rūdninkai Gate:</b> the west gate, on the road to Grodno and Poland, after P. Smuglevičius's drawing of 1785: the tower, and the barbican of 1675–79 on its outer side. ${gate === 'solid'
+      ? 'It was pulled down in 1800; here it stands, like the Subačius Gate, out of its time, on purpose.'
+      : 'It was pulled down in 1800; it is a ghost, where it stood.'}</li>
     <li><b>City gates and wall:</b> the wall of 1503–22 and its ten gates, pulled down from 1799, all but the Gate of Dawn (here filled). Sites from the heritage register (KVR), Wikipedia and V. Drėma's <i>Dingęs Vilnius</i>; a dotted ring where the site was never found. The wall's line is the strip the register protects along it. At the Castle Gate the wall met the castles: the edge of their precinct is the register's (KVR 141), along the Vilnia's old channel (now Šventaragio g.); the firmer line is what stands of the Upper Castle's walls (OpenStreetMap). From the Bernardine Gate the Bernardine monastery closed the ring up to the castles: its church was built into the wall in the early 16th century, with gun-ports. Where its line ran is not known, so it is dashed: about here, along today's enclosure on the side facing the Vilnia (the register's, KVR 766) and a wall that still stands from it to the castles (OpenStreetMap).</li>
     <li><b>The rest of the Old Town:</b> OpenStreetMap outlines, 2026, unhatched, out to the gates.</li>
     <li><b>Edge of the walk:</b> the square, ${walk} m round the Town Hall, and the road out to the gate. Beyond it the town is only to be seen.</li>

@@ -22,6 +22,10 @@ reorder freely.
   attics with cartouches and urns under bell domes and open lanterns, bells in the belfries, painted icons in the niches,
   the 1864–68 turret with its scrolls and dormered dome, the porch with its broken pediment and clock, rustication below
   (`src/world/stcasimir.ts`, `docs/REFERENCES.md` §5.3).
+- **The Rūdninkai Gate:** the west gate modelled after P. Smuglevičius's drawing of 1785 and the descriptions: the
+  tall tower, the two-storey barbican of 1675–79 with its gateway, round cannon ports, the guard's niche, the wall
+  along Pylimo g. to the houses on its line (`src/world/rudninkai.ts`, `docs/gates.md` §9). It stands at its site, at
+  the end of Rūdninkų g., outside the walk for now; `gate.html#rudninkai` shows it on its own. Next: a road to it.
 - **The city gates on the map:** all ten gates of the city wall are drawn where they stood, from the heritage
   register (KVR 39), Wikipedia, the LNDM and V. Drėma; a dotted ring where the site was never found
   (`src/world/citygates.ts`, `docs/gates.md` §2). The register's strip along the wall is drawn as the wall's line,

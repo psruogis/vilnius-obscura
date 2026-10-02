@@ -20,6 +20,15 @@ body { font: 16px/1.4 'Cormorant Garamond', Georgia, 'Times New Roman', serif; f
   max-width: min(27rem, calc(100vw - 32px)); box-sizing: border-box; padding: 14px 18px 16px;
   background: var(--panel); border: 1px solid var(--edge); border-radius: 4px; pointer-events: auto;
 }
+.gv-gates { display: flex; gap: 0; margin: 0 0 12px; border: 1px solid var(--edge); border-radius: 3px; overflow: hidden; width: max-content; }
+.gv-gates button {
+  font: 600 0.72rem/1 Cinzel, Georgia, serif; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim);
+  padding: 9px 13px; border: 0; background: transparent; cursor: pointer;
+}
+.gv-gates button + button { border-left: 1px solid var(--edge); }
+.gv-gates button:hover { color: var(--cream); }
+.gv-gates button[aria-pressed="true"] { background: var(--oxblood); color: var(--cream); }
+.gv-gates button:focus-visible { outline: 2px solid var(--cream); outline-offset: -2px; }
 .gv-card h1 { margin: 0; font: 700 1.7rem/1.1 Cinzel, Georgia, serif; letter-spacing: 0.06em; text-wrap: balance; }
 .gv-sub { margin: 0.35rem 0 0; font-style: italic; font-size: 1.1rem; color: var(--dim); }
 .gv-note { margin: 0.7rem 0 0; font-size: 1rem; line-height: 1.45; color: var(--cream); }

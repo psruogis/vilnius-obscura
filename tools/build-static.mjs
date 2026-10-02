@@ -60,7 +60,7 @@ fs.writeFileSync(path.join(DIST, 'gate.html'), fs.readFileSync(path.join(ROOT, '
   .replace('<head>', `<head>\n    <script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>${ANALYTICS}`)
   .replace('href="/src/gate.css"', 'href="src/gate.css"')
   .replace('src="/src/gate.ts"', 'src="src/gate.js"'));
-fs.writeFileSync(path.join(DIST, 'gate-artifact.html'), `<title>Subačius Gate Model</title>
+fs.writeFileSync(path.join(DIST, 'gate-artifact.html'), `<title>Vilnius Gates Model</title>
 <style>
 ${gateCss}</style>
 <script type="importmap">${JSON.stringify(IMPORT_MAP)}</script>

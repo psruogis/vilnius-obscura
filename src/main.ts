@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { loadArea } from './world/area';
 import { buildWalls, buildRoofs, buildSoffits, hasTileRoof } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, plasterMaterial, oldBrickMaterial, masonryMaterial, fieldstoneMaterial, worldTex } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, createGateMaterials } from './world/materials';
 import { buildBarriers } from './world/props';
 import { buildStreetProps, createStreetPropMaterials } from './world/streetprops';
 import { buildTownHall } from './world/townhall';
 import { buildStCasimir } from './world/stcasimir';
 import { buildSubaciusGate, SUBACIUS_GATE } from './world/subacius';
+import { buildRudninkaiGate, RUDNINKAI_GATE } from './world/rudninkai';
 import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
 import { buildFacades } from './world/facades';
@@ -177,34 +178,24 @@ async function main(force = false): Promise<void> {
     scene.add(buildStCasimir(stCasimirData, m, churchForm));
   }
   const walls = new WallGrid(data);
-  // The Subačius Gate at the end of the road (docs/gates.md §8), standing as it stood before 1801, with the wall
-  // either side: a deliberate anachronism in 1900. ?gate=ghost (or #ghost) shows it as a ghost over the street instead.
-  const gateFloor = terrain.heightAt(SUBACIUS_GATE.x, SUBACIUS_GATE.z);
-  const gateMats = {
-    render: masonryMaterial(aniso, { brick: '#5e4034', plaster: [0.55, 0.52, 0.45], cover: 0.97, grime: 0.2, ground: gateFloor }),
-    trim: plasterMaterial('#b3ab9b', aniso),
-    stone: fieldstoneMaterial(aniso),
-    roof: new THREE.MeshStandardMaterial({ map: worldTex('clay_roof_tiles', 'diff', true, aniso, 1.6), normalMap: worldTex('clay_roof_tiles', 'nor', false, aniso, 1.6), color: '#7d6258', roughness: 0.95, side: THREE.DoubleSide }),
-    dark: new THREE.MeshStandardMaterial({ color: '#1c1815', roughness: 1 }),
-    wood: createWoodMaterial(aniso),
-    iron: new THREE.MeshStandardMaterial({ color: '#2b2a28', roughness: 0.55, metalness: 0.5 }),
-    wall: masonryMaterial(aniso, { brick: '#5e4034', plaster: [0.5, 0.47, 0.41], cover: 0.88, grime: 0.24, ground: gateFloor }),
-    remnant: oldBrickMaterial(aniso),
-  };
+  // The city gates the walk shows (docs/gates.md §8, §9): the Subačius Gate at the end of the road and the Rūdninkai
+  // Gate at the end of Rūdninkų g., each standing as it stood before it came down, with the wall either side: a
+  // deliberate anachronism in 1900. ?gate=ghost (or #ghost) shows them as ghosts over the street instead.
   const ghostGate = new URLSearchParams(location.search).get('gate') === 'ghost' || location.hash === '#ghost';
-  const gate = buildSubaciusGate({
-    data, terrain, mats: gateMats, look: ghostGate ? 'ghost' : 'solid',
-    fog: RAIN ? { density: 0.0072 } : { near: 70, far: 800 },
+  const gates = ([[buildSubaciusGate, SUBACIUS_GATE, 0.97], [buildRudninkaiGate, RUDNINKAI_GATE, 0.92]] as const).map(([build, at, cover]) => {
+    const mats = createGateMaterials(aniso, terrain.heightAt(at.x, at.z), cover);
+    const gate = build({ data, terrain, mats, look: ghostGate ? 'ghost' : 'solid', fog: RAIN ? { density: 0.0072 } : { near: 70, far: 800 } });
+    for (const m of [mats.render, mats.trim, mats.wall]) age(m, { ground: gate.floor, strength: 1, seed: 5 });
+    age(mats.roof, { roof: true, strength: 0.8 });
+    if (RAIN) {
+      for (const m of [mats.render, mats.trim, mats.stone, mats.wall, mats.remnant]) wet(m, 'wall', gate.floor);
+      for (const m of [mats.roof, mats.wood]) wet(m, 'roof');
+    }
+    scene.add(gate.solid);
+    rainScene.add(gate.ghost);
+    for (const [ax, az, bx, bz] of gate.segments) walls.addSegment(ax, az, bx, bz);
+    return gate;
   });
-  for (const m of [gateMats.render, gateMats.trim, gateMats.wall]) age(m, { ground: gate.floor, strength: 1, seed: 5 });
-  age(gateMats.roof, { roof: true, strength: 0.8 });
-  if (RAIN) {
-    for (const m of [gateMats.render, gateMats.trim, gateMats.stone, gateMats.wall, gateMats.remnant]) wet(m, 'wall', gate.floor);
-    for (const m of [gateMats.roof, gateMats.wood]) wet(m, 'roof');
-  }
-  scene.add(gate.solid);
-  rainScene.add(gate.ghost);
-  for (const [ax, az, bx, bz] of gate.segments) walls.addSegment(ax, az, bx, bz);
   let promenadeRef: { update(dt: number): void } | null = null;
   // gas lamps: the garden's lamp posts and the lanterns on the house fronts
   const lampSpots: LampSpot[] = [...facades.lamps];
@@ -367,7 +358,7 @@ async function main(force = false): Promise<void> {
     crowd?.update(dt, walker.position);
     traffic?.update(dt, walker.position);
     promenadeRef?.update(dt);
-    gate.update(dt);
+    for (const g of gates) g.update(dt);
     lamps.update(dt, camera.position);
     shadows.update();
     post.render(dt);

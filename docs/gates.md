@@ -1,6 +1,6 @@
 # The Vilnius city gates — research brief
 
-Version 0.4 · 2026-10-02 · status: **research brief; all ten gates are on the map (§2); the Subačius Gate is built (§8)**
+Version 0.5 · 2026-10-02 · status: **research brief; all ten gates are on the map (§2); the Subačius (§8) and Rūdninkai (§9) gates are built**
 
 The old city wall and its gates, meant to be rebuilt in the game. Tags follow `docs/REFERENCES.md`:
 **[V]** verified against a cited source, **[U]** unverified or a design choice.
@@ -28,7 +28,7 @@ never been found ⁷, the map draws a dotted ring of that size round it, not a p
 | # | Gate | Where it stood | Fate | On the map (x, z), within |
 |---|---|---|---|---|
 | 1 | **Aušros (Medininkų) vartai**: Gate of Dawn, Aštrieji (Sharp), Krėvos | Aušros Vartų g.: the gatehouse stands (OSM way 112746030) [V] | **Standing**, saved by the chapel over it ¹ ⁷ | (170.9, 468.9), exact. Filled |
-| 2 | **Rūdninkų vartai** | Rūdninkų × Pylimo ¹; its lower part survives under the street ¹³ [V] | Pulled down 1800 ¹ ¹³ | (−239.3, 346.7), 10 m |
+| 2 | **Rūdninkų vartai** | Rūdninkų × Pylimo ¹; its lower part survives under the street ¹³ [V] | Pulled down 1800 ¹ ¹³ | (−239.3, 346.7), 10 m. **Built, standing (§9)**: drawn as its plan |
 | 3 | **Trakų vartai** (the main gate ²) | In the gap still left between Pylimo g. 22 and Trakų g. 2, where the wall ran and the Kačerga stream flowed ⁷ [V]. Near Trakų × Pylimo ¹ | 1803–04: its icon was moved in 1803 ⁷; the tower was pulled down in 1804 ¹ | (−575, −181), 10 m |
 | 4 | **Vilijos (Vilniaus) vartai** | Benediktinių × Šv. Ignoto ¹. The English article ² says "Vilnius and Bernardinai", a street pair that doesn't meet; read as a slip [U]. The wall stretches Totorių–Vilijos and Vilijos–Trakų are registered ⁷ | Pulled down 24 Nov 1802 ¹; its icon went to the Subačius g. orphanage chapel ⁷ | (−381, −462), 15 m |
 | 5 | **Totorių vartai** (Tatar) | East side of the Benediktinių × Totorių crossing ¹ ⁷ [V]. ² says Liejyklos × Totorių, 30 m away | Ordered down 1802 ¹ | (−284, −513), 10 m |
@@ -187,6 +187,41 @@ is `WALK_SHAPES` in `tools/build-area.mjs`.
 **Still open:** what the gate's field front looked like in detail (the drawing is small); whether the road
 through it ran straight east, as Subačiaus g. does now; the 1900 name of the street (ROADMAP open question 4).
 
+## 9. The Rūdninkai Gate as built (2026-10-02)
+
+At the end of Rūdninkų g., where it meets Pylimo g. ("Rampart Street"); the road through the gate runs on as Šv.
+Stepono g. towards the cattle market and the Grodno road. The code is `src/world/rudninkai.ts`. Outside the walk for
+now: it is seen from the town round about, and in `gate.html#rudninkai`.
+
+**What the sources say** [V]:
+- Built with the wall in 1503–22, first named in 1557; the representative gate of the 16th–18th c., on the road
+  from Poland, the rulers' way in along Rūdninkų, Didžioji and Pilies streets ¹³ ⁷ ⁸.
+- First like the Gate of Dawn: one block, about three storeys and a roof, the passage on the ground floor; a niche
+  for the guard in the passage's south wall (archaeology) ¹³. The tower was three and a half storeys ⁷.
+- In 1675–79 a long barbican was built onto its west front, on the rampart of 1648 ⁷; two storeys ⁷ ¹³.
+- P. Smuglevičius drew it in 1785 ¹⁸: a massive two-part building, the barbican of two storeys and the tower much
+  taller; cornices in rhythm; round cannon ports on the barbican's second floor and the tower's fourth ¹³.
+  Loopholes for hand weapons are not drawn: perhaps walled up, as at the Gate of Dawn ¹³.
+- Pulled down illegally in 1800, its bricks sold off; the lower part survives under the street ¹³ ¹.
+
+**What is a design choice** [U]:
+- Place: the tower at the end of Rūdninkų g., 1 m out from the crossing and 1.5 m south-east of the street's line,
+  to clear the house at Pylimo g. 46; the barbican across Pylimo g. into the mouth of Šv. Stepono g., where nothing
+  stands today. The road's line is Rūdninkų g.'s last stretch; the wall's, Pylimo g., nearly square to it.
+- Sizes read off the drawing: the tower 12 m along the wall and 9.5 m deep, 18.5 m to its eaves, a low hipped roof
+  rising 2.4 m; the barbican 15 m long and 10 m wide, 7.2 m to its eaves, hipped at its outer end and running into
+  the tower; a passage 3.6 m wide. String courses at 9.5 m and 14.1 m on the tower and 3.6 m on the barbican;
+  four round ports a face under the tower's cornice (three on the sides); three a side on the barbican and one over
+  its gateway; small windows. Nothing measured.
+- The finish is the Subačius Gate's (§8), the render a little more worn (the drawing shows cracks and patches).
+- The wall either side runs along Pylimo g. until it meets a house that stands on its line today, as the surviving
+  stretches do, or for 24 m and broken off; about 8 m to its parapet (the register gives about 6.5 m ⁷), with the
+  gallery roof of §8.
+- **1900:** it stands, like the Subačius Gate (§3, §8); `?gate=ghost` draws both as ghosts.
+
+**Still open:** the barbican's length and width (the drawing shows one side, at an angle); whether its gateway was
+on the road's line or turned, as barbicans often were; what the tower's town front looked like (not drawn).
+
 ## Sources
 
 1. [Vilniaus gynybinė siena (lt.wikipedia)](https://lt.wikipedia.org/wiki/Vilniaus_gynybin%C4%97_siena)
@@ -206,5 +241,6 @@ through it ran straight east, as Subačiaus g. does now; the 1900 name of the st
 15. Vilniaus piliavietė, vad. Gedimino kalnu, Pilies kalnu, Aukštutine ir Žemutine pilimi, KVR 141 (Kultūros vertybių registras; polygon in `shadows-of-vilnius-seed/kvr/`)
 16. [Church of St. Francis and St. Bernard, Vilnius (en.wikipedia)](https://en.wikipedia.org/wiki/Church_of_St._Francis_and_St._Bernard,_Vilnius)
 17. Vilniaus Šventųjų Pranciškaus Asyžiečio, Bernardino Sieniečio bei Šv. Onos bažnyčių ir bernardinų vienuolyno statinių ansamblis, KVR 766 (Kultūros vertybių registras; polygon in `shadows-of-vilnius-seed/kvr/`)
+18. [P. Smuglevičius, the Rūdninkai Gate, 1785 (reproduced by VSAA, vsaa.lt/sena/vaizdai/foto_html/1_rudininku_v.jpg; also Wikimedia Commons, File:Rūdininkai gate.Vilnius.Lithuania.jpg)](https://vsaa.lt/sena/rudninku_v.html)
 
 Map data: streets © OpenStreetMap contributors (ODbL).

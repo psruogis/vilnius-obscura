@@ -9,7 +9,7 @@ export interface CityGate {
   /** English name, as the map labels it. */ name: string;
   /** Lithuanian name. */ lt: string;
   x: number; z: number;
-  /** standing in 1900; gone; or gone, but built standing in the walk (the Subačius Gate, world/subacius.ts) */
+  /** standing in 1900; gone; or gone, but built standing in the walk (world/subacius.ts, world/rudninkai.ts) */
   state: 'standing' | 'gone' | 'built';
   within: number;
 }
@@ -17,8 +17,8 @@ export interface CityGate {
 export const CITY_GATES: CityGate[] = [
   // the gatehouse itself (OSM way 112746030); the chapel over it saved it [V]
   { name: 'Gate of Dawn', lt: 'Aušros (Medininkų) vartai', x: 170.9, z: 468.9, state: 'standing', within: 0 },
-  // Rūdninkų x Pylimo; the gate's lower part lies under the street (VSAA) [V]
-  { name: 'Rūdninkai Gate', lt: 'Rūdninkų vartai', x: -239.3, z: 346.7, state: 'gone', within: 10 },
+  // Rūdninkų x Pylimo; the gate's lower part lies under the street (VSAA) [V]. Modelled, standing (world/rudninkai.ts)
+  { name: 'Rūdninkai Gate', lt: 'Rūdninkų vartai', x: -239.3, z: 346.7, state: 'built', within: 10 },
   // in the gap still left between Pylimo g. 22 and Trakų g. 2 (KVR 39) [V]
   { name: 'Trakai Gate', lt: 'Trakų vartai', x: -575, z: -181, state: 'gone', within: 10 },
   // Benediktinių x Šv. Ignoto (lt.wikipedia); the English article has it elsewhere [U]

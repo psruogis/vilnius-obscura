@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { age } from './ageing';
 import { parallax } from '../render/pom';
 import { createTreeMaterials } from './trees';
+import type { GateMaterials } from './subacius';
 
 const loader = new THREE.TextureLoader();
 
@@ -194,6 +195,25 @@ export function fieldstoneMaterial(anisotropy: number): THREE.MeshStandardMateri
     map: worldTex('cobblestone_floor_08', 'diff', true, anisotropy, 1.1),
     normalMap: worldTex('cobblestone_floor_08', 'nor', false, anisotropy, 1.1),
   });
+}
+
+/**
+ * The city gates' materials (world/subacius.ts, world/rudninkai.ts), UVs in metres: lime render over brick, worn
+ * through more at the foot from `ground` (the passage floor), trim, a fieldstone footing, clay tile, plank leaves,
+ * iron, and the wall either side. `cover` is how much of the gate's render is left.
+ */
+export function createGateMaterials(anisotropy: number, ground: number, cover = 0.97): GateMaterials {
+  return {
+    render: masonryMaterial(anisotropy, { brick: '#5e4034', plaster: [0.55, 0.52, 0.45], cover, grime: 0.2, ground }),
+    trim: plasterMaterial('#b3ab9b', anisotropy),
+    stone: fieldstoneMaterial(anisotropy),
+    roof: new THREE.MeshStandardMaterial({ map: worldTex('clay_roof_tiles', 'diff', true, anisotropy, 1.6), normalMap: worldTex('clay_roof_tiles', 'nor', false, anisotropy, 1.6), color: '#7d6258', roughness: 0.95, side: THREE.DoubleSide }),
+    dark: new THREE.MeshStandardMaterial({ color: '#1c1815', roughness: 1 }),
+    wood: createWoodMaterial(anisotropy),
+    iron: new THREE.MeshStandardMaterial({ color: '#2b2a28', roughness: 0.55, metalness: 0.5 }),
+    wall: masonryMaterial(anisotropy, { brick: '#5e4034', plaster: [0.5, 0.47, 0.41], cover: 0.88, grime: 0.24, ground }),
+    remnant: oldBrickMaterial(anisotropy),
+  };
 }
 
 /** Materials for the Town Hall model (UVs in metres). */
