@@ -11,8 +11,8 @@ The old city wall and its gates, meant to be rebuilt in the game. Tags follow `d
 - Almost **2.5 km** long ("beveik pustrečio kilometro"), **up to 10–12 m** high, with **five towers**
   at first. [V] ¹
 - Russian-appointed city administrators demolished it bit by bit from **1799**. The last gate on
-  the list below came down in **1804**. [V] ¹ Two sources put the Castle Gate (1837 ⁸) and the Bernardine Gate
-  (1869 ¹⁰) later; either way, all but the Gate of Dawn were gone by 1900 (§2).
+  the list below came down in **1804**. [V] ¹ The Castle Gate came down later, c. 1837 (⁸ ¹⁴, §2), and one source
+  puts the Bernardine Gate at 1869 ¹⁰; either way, all but the Gate of Dawn were gone by 1900 (§2).
 - **Only the Gate of Dawn survives**, together with the 17th-century **artillery bastion** (Bastėja)
   by the Subačius Gate, restored 1966 and a museum since 1987. [V] ¹ ²
 - Number of gates: the Lithuanian article gives **ten** ¹, the English one **nine** ². The difference
@@ -33,7 +33,7 @@ never been found ⁷, the map draws a dotted ring of that size round it, not a p
 | 4 | **Vilijos (Vilniaus) vartai** | Benediktinių × Šv. Ignoto ¹. The English article ² says "Vilnius and Bernardinai", a street pair that doesn't meet; read as a slip [U]. The wall stretches Totorių–Vilijos and Vilijos–Trakų are registered ⁷ | Pulled down 24 Nov 1802 ¹; its icon went to the Subačius g. orphanage chapel ⁷ | (−381, −462), 15 m |
 | 5 | **Totorių vartai** (Tatar) | East side of the Benediktinių × Totorių crossing ¹ ⁷ [V]. ² says Liejyklos × Totorių, 30 m away | Ordered down 1802 ¹ | (−284, −513), 10 m |
 | 6 | **Šv. Marijos Magdalenos (Šlapieji) vartai**: the Wet Gate | L. Stuokos-Gucevičiaus × Universiteto ¹, by Cathedral Square ²; **never located on the ground** ⁷ [U]. Small, one storey, hipped roof; served Lukiškės and Puškarnė and the bridge over the Kačerga ⁷ | **Walled up 1677** ¹ ⁷; gone with the wall | (−87, −714), 40 m ring. The register's strip along the wall ends here |
-| 7 | **Pilies vartai** (Castle) | The head of Pilies g., where the city wall met the Lower Castle's; four granite blocks at the edge of Cathedral Square mark it ⁸ [V] | Early 19th c. ¹; 1837 ⁸. Sources differ [U] | (144, −692), 10 m |
+| 7 | **Pilies vartai** (Castle) | The head of Pilies g., at the bridge over the Vilnia's channel (now Šventaragio g.), where the city wall met the Lower Castle's; granite blocks at the edge of Cathedral Square mark it ⁸ ¹⁴ [V] | **c. 1837** ⁸, with the courts building beside it ¹⁴, when the castle site was cleared for the fortress (1831–37) ¹⁴ [V]; "early 19th c." ¹ | (144, −692), 10 m. On the castle site's south edge (below) |
 | 8 | **Bernardinų vartai** | South of the Bernardine church, by the bridge over the Vilnia, where Mickiewicz's monument stands ¹⁰ (after Drėma); **exact site never established** ⁷. In 2004 a tower that guarded its east side was dug up in the SW part of the church's outbuilding ⁷. The register's strip ends some 60 m east of the monument [U] | Early 19th c. ¹; 1869, for Maironio g. ¹⁰. Sources differ [U] | (425, −463), 40 m ring, taking in both |
 | 9 | **Išganytojo (Spaso) vartai**: Saviour's | By the Užupis bridge, beside a small church of the Saviour near the Orthodox cathedral, on the road to Polotsk ¹¹; at the end of Išganytojo g. Wikidata's point ¹² (no source given) is 24 m from the bridge. **Not investigated** ⁷ [U] | 1801 ¹; its round tower c. 1806 ⁷ | (320.8, −228.8), 30 m ring |
 | 10 | **Subačiaus vartai** | Bokšto × Subačiaus × Strazdelio ¹ [V] | Pulled down from **27 May 1801** ³ | (328, 239.5). **Built, standing, at the end of the walk (§8)**: drawn as its plan |
@@ -43,6 +43,16 @@ Drawn on the map, it runs through the Trakai, Vilija, Tatar, Rūdninkai, Dawn, S
 placed above from street corners and articles, and ends at the Wet Gate and by the Bernardine site. The map shows it
 as the line of the wall [V for the strip; that it is the wall's exact width is not claimed]. The register says the
 wall can be traced almost all the way round, except from O. Šimaitės g. to the Bernardine Gate ⁷.
+
+**The castles.** The city wall closed on the castles. The Lower Castle and the Upper Castle on the hill stood on
+their own ground beyond the Vilnia's left channel (filled in in the 19th c.; now Šventaragio g.) ⁸, the Lower Castle
+"at least in part" walled with towers, in a large and a small enclosure, from the 14th c.; its outline is marked
+in Cathedral Square's paving with reddish granite ¹⁴. [V] The register's castle site (KVR 141 ¹⁵) has the Wet Gate
+on its south-west corner, where the city wall's strip ends, and the Castle Gate on its south edge. The map draws
+that site's edge as the castles' line [V for the site; the walls themselves ran inside it, U], and what stands of
+the Upper Castle's walls (OpenStreetMap barrier=city_wall) firmer. The Bernardine monastery, in the Vilnia's loop,
+was fortified and built into the city's and the castles' defences ¹⁴: it closed the ring between the Bernardine
+Gate and the castles, a stretch the register says cannot be traced ⁷ and the map leaves open.
 
 **The sources disagree** on the Tatar and Vilija gates (above); the Lithuanian article and the register agree on
 the Tatar Gate, so that one is settled. The Subačius corner is settled too: the two surviving stretches of wall in
@@ -183,5 +193,7 @@ through it ran straight east, as Subačiaus g. does now; the 1900 name of the st
 11. [Išganytojo (Spaso) vartai (lt.wikipedia)](https://lt.wikipedia.org/wiki/I%C5%A1ganytojo_(Spaso)_vartai)
 12. [Wikidata Q97215086](https://www.wikidata.org/wiki/Q97215086)
 13. [Rūdninkų vartai (VSAA)](https://vsaa.lt/sena/rudninku_v.html)
+14. Arkikatedros bazilikos, Žemutinės ir Aukštutinės pilių pastatų, jų liekanų ir kitų statinių kompleksas, KVR 642 (Kultūros vertybių registras; record in `shadows-of-vilnius-seed/kvr/`)
+15. Vilniaus piliavietė, vad. Gedimino kalnu, Pilies kalnu, Aukštutine ir Žemutine pilimi, KVR 141 (Kultūros vertybių registras; polygon in `shadows-of-vilnius-seed/kvr/`)
 
 Map data: streets © OpenStreetMap contributors (ODbL).

@@ -330,6 +330,7 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 .sw.gone { background: color-mix(in srgb, var(--sw-hall) 30%, transparent); border: 2px dashed var(--sw-hall-line); }
 .sw.gate { width: 14px; height: 14px; margin: 4px; background: var(--sw-ground); border: 2px solid var(--sw-edge); }
 .sw.wall { height: 10px; border-radius: 2px; border: 0; background: color-mix(in srgb, var(--sw-hall) 40%, transparent); }
+.sw.castle { height: 0; border-radius: 0; border: 0; border-top: 3px solid color-mix(in srgb, var(--sw-hall) 85%, var(--sw-hall-line)); }
 .mapview.look-glow .sw.hall { box-shadow: 0 0 10px rgba(226, 120, 62, 0.7); }
 .mapview.look-glow .sw.walk { box-shadow: 0 0 8px rgba(201, 164, 95, 0.5); }
 .mv-looks { display: flex; border-radius: 17px; overflow: hidden; border: 1px solid var(--mv-line); background: var(--mv-btn); }

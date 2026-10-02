@@ -2,7 +2,9 @@
 // (area.json), out to the city gates: OpenStreetMap building outlines, squares and named streets (ODbL), inside
 // the protected Old Town boundary (KVR 16073) and the box round the gates, wherever area.json has no house; and
 // the strip the heritage register protects along the city wall (KVR 39, "Vilniaus miesto gynybinių įtvirtinimų
-// liekanų kompleksas"), which follows the wall's course from the Wet Gate round to the Bernardine Gate.
+// liekanų kompleksas"), which follows the wall's course from the Wet Gate round to the Bernardine Gate; and the
+// castles the wall met at the Castle Gate: the edge of the castle site (KVR 141, "Vilniaus piliavietė"), and the
+// Upper Castle's surviving walls (OSM barrier=city_wall inside it).
 // The walk never loads it; the map fetches it when it is first opened.
 //
 // Local frame: X = E - 583000, Z = -(N - 6061000), 1 unit = 1 m.
@@ -16,8 +18,8 @@ const SEED = path.join(ROOT, 'shadows-of-vilnius-seed');
 const OUT = path.join(ROOT, 'public', 'data', 'oldtown.json');
 const E0 = 583000, N0 = 6061000;
 
-// The gates' box (src/world/citygates.ts), with room round it
-const [BX0, BZ0, BX1, BZ1] = [-576 - 150, -714 - 150, 391 + 150, 469 + 150];
+// The gates' box (src/world/citygates.ts) and the castle site north of it (KVR 141, to z -1130), with room round them
+const [BX0, BZ0, BX1, BZ1] = [-576 - 150, -1130 - 60, 425 + 150, 469 + 150];
 const CELL = 8;              // m: the grid that tells where area.json already has houses
 
 const area = JSON.parse(fs.readFileSync(path.join(ROOT, 'public', 'data', 'area.json'), 'utf8'));
@@ -75,8 +77,14 @@ for (const el of osm.elements) {
   }
 }
 
-const k39 = Object.values(kvr).find(o => o.attr.Code === '39');
-const wall = k39 ? open(k39.geom.rings[0].map(([lon, lat]) => { const [e, n] = toLks94(lon, lat); return [round(e - E0), round(-(n - N0))]; })) : null;
+const kvrRing = code => {
+  const o = Object.values(kvr).find(v => v.attr.Code === code);
+  return o ? open(o.geom.rings[0].map(([lon, lat]) => { const [e, n] = toLks94(lon, lat); return [round(e - E0), round(-(n - N0))]; })) : null;
+};
+const wall = kvrRing('39'), castle = kvrRing('141');
+// what stands of the castles' own walls: OSM city_wall lines inside the castle site
+const castleWalls = castle ? osm.elements.filter(el => el.type === 'way' && el.tags?.barrier === 'city_wall')
+  .map(line).filter(l => l.length >= 2 && l.every(p => inside(p, castle))) : [];
 
 const out = {
   meta: {
@@ -85,10 +93,10 @@ const out = {
     box: [BX0, BZ0, BX1, BZ1],
     sources: [
       'Building outlines, squares and streets © OpenStreetMap contributors (ODbL)',
-      'Old Town boundary (KVR 16073) and the city wall\'s protected strip (KVR 39): Kultūros vertybių registras, Kultūros paveldo departamentas (CC BY 4.0)',
+      'Old Town boundary (KVR 16073), the city wall\'s protected strip (KVR 39) and the castle site (KVR 141): Kultūros vertybių registras, Kultūros paveldo departamentas (CC BY 4.0)',
     ],
   },
-  buildings, areas, roads, wall,
+  buildings, areas, roads, wall, castle, castleWalls,
 };
 fs.writeFileSync(OUT, JSON.stringify(out));
-console.log(`oldtown.json: ${buildings.length} buildings, ${areas.length} squares, ${roads.length} named streets, wall strip ${wall ? wall.length + ' points' : 'MISSING'}; ${(fs.statSync(OUT).size / 1024).toFixed(0)} KB`);
+console.log(`oldtown.json: ${buildings.length} buildings, ${areas.length} squares, ${roads.length} named streets, wall strip ${wall ? wall.length + ' points' : 'MISSING'}, castle site ${castle ? castle.length + ' points' : 'MISSING'}, ${castleWalls.length} castle walls; ${(fs.statSync(OUT).size / 1024).toFixed(0)} KB`);

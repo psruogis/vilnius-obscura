@@ -27,7 +27,8 @@ export const CITY_GATES: CityGate[] = [
   { name: 'Tatar Gate', lt: 'Totorių vartai', x: -284, z: -513, state: 'gone', within: 10 },
   // by L. Stuokos-Gucevičiaus x Universiteto (lt.wikipedia); never found on the ground (KVR 39). Walled up 1677
   { name: 'Wet Gate', lt: 'Šv. Marijos Magdalenos (Šlapieji) vartai', x: -87, z: -714, state: 'gone', within: 40 },
-  // the head of Pilies g., where the wall met the Lower Castle's; four granite blocks mark it (LNDM) [V]
+  // the head of Pilies g., at the bridge over the Vilnia's channel, where the wall met the Lower Castle's; granite
+  // blocks mark it (LNDM, KVR 642) [V]. Pulled down c. 1837, with the courts building beside it (KVR 642, LNDM)
   { name: 'Castle Gate', lt: 'Pilies vartai', x: 144, z: -692, state: 'gone', within: 10 },
   // by the bridge over the Vilnia south of the Bernardine church: where Mickiewicz's monument is now (Drėma, via
   // lt.wikipedia), or some 60 m east, where the register's strip along the wall ends (KVR 39); never found, though

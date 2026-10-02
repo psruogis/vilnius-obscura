@@ -43,6 +43,7 @@ interface Theme {
   planFill: string; planHat: string; planLine: string; planInk: string;     // the 1842 plan
   hall: string; hallLine: string;                    // Town Hall and St Casimir's
   wall: string;                                      // the line of the city wall
+  castle: string;                                    // the edge of the castles' precinct
   edge: string;                                      // the edge of the walk
   veil: string;                                      // rgb of the vellum, for what lies beyond the walk
   vignette: string; vignetteAlpha: number;           // the aged edge of the full map (rgb)
@@ -60,6 +61,7 @@ const DARK: Theme = {
   planFill: 'rgba(70, 88, 82, 0.34)', planHat: 'rgba(150, 170, 160, 0.3)', planLine: 'rgba(150, 170, 160, 0.62)', planInk: '#96aaa0',       // cool grey-green
   hall: '#7b2a1b', hallLine: '#c9a45f',              // vermilion, gold-edged
   wall: 'rgba(170, 72, 44, 0.2)',
+  castle: 'rgba(190, 92, 62, 0.62)',
   edge: 'rgba(201, 164, 95, 0.85)',
   veil: '30, 23, 16',
   vignette: '13, 10, 7', vignetteAlpha: 0.55,
@@ -82,6 +84,7 @@ const THEMES: Record<Look, Theme> = {
     planFill: 'rgba(120, 148, 148, 0.2)', planHat: 'rgba(170, 192, 190, 0.16)', planLine: 'rgba(170, 192, 190, 0.38)', planInk: '#a9bfbc',       // powder blue-green
     hall: 'rgba(176, 118, 106, 0.72)', hallLine: 'rgba(232, 214, 180, 0.7)', // dusty rose, cream-edged
     wall: 'rgba(176, 118, 106, 0.16)',
+    castle: 'rgba(200, 146, 132, 0.5)',
     edge: 'rgba(214, 196, 158, 0.5)',
     veil: '38, 34, 31',
     vignette: '14, 12, 11', vignetteAlpha: 0.45,
@@ -126,7 +129,7 @@ interface Layers {
   /** The ten gates of the city wall (world/citygates.ts). */
   gates: CityGate[];
   /** The rest of the Old Town out to the gates, and the wall's line (data/oldtown.json), once the full map has it. */
-  old: { today: Plot[]; areas: Plot[]; wall: Plot | null } | null;
+  old: { today: Plot[]; areas: Plot[]; wall: Plot | null; castle: Plot | null; castleWalls: Plot[] } | null;
   /** How far the full map pans: the town round the walk, and the gates. x0, z0, x1, z1. */
   reach: [number, number, number, number];
   centre: XZ;
@@ -292,12 +295,16 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
   };
 }
 
-/** The town the walk loads (contextRadius round the Town Hall) and the ring of gates, with room round them. */
+/** The castles the city wall met at the Castle Gate (OSM), named with the gates. */
+const CASTLES = [{ name: 'Upper Castle', x: 241, z: -926 }, { name: 'Lower Castle', x: 110, z: -800 }];
+
+/** The town the walk loads (contextRadius round the Town Hall), the ring of gates and the castles, with room round them. */
 function reachOf(data: AreaData, gates: CityGate[]): Layers['reach'] {
-  const [cx, cz] = data.meta.townHall, r = data.meta.contextRadius + 60, m = 120;
+  const [cx, cz] = data.meta.townHall, r = data.meta.contextRadius + 60;
+  const pts = [...gates.map(g => ({ x: g.x, z: g.z, m: 120 })), ...CASTLES.map(c => ({ ...c, m: 200 }))];
   return [
-    Math.min(cx - r, ...gates.map(g => g.x - m)), Math.min(cz - r, ...gates.map(g => g.z - m)),
-    Math.max(cx + r, ...gates.map(g => g.x + m)), Math.max(cz + r, ...gates.map(g => g.z + m)),
+    Math.min(cx - r, ...pts.map(p => p.x - p.m)), Math.min(cz - r, ...pts.map(p => p.z - p.m)),
+    Math.max(cx + r, ...pts.map(p => p.x + p.m)), Math.max(cz + r, ...pts.map(p => p.z + p.m)),
   ];
 }
 
@@ -305,8 +312,15 @@ function reachOf(data: AreaData, gates: CityGate[]): Layers['reach'] {
 async function loadOldTown(L: Layers): Promise<void> {
   const res = await fetch('data/oldtown.json');
   if (!res.ok) return;
-  const o: { buildings: XZ[][]; areas: { ring: XZ[] }[]; roads: { kind: string; name: string; line: XZ[] }[]; wall: XZ[] | null } = await res.json();
-  L.old = { today: o.buildings.map(r => plotOf([r], true)), areas: o.areas.map(a => plotOf([a.ring], false)), wall: o.wall ? plotOf([o.wall], false) : null };
+  const o: {
+    buildings: XZ[][]; areas: { ring: XZ[] }[]; roads: { kind: string; name: string; line: XZ[] }[];
+    wall: XZ[] | null; castle?: XZ[] | null; castleWalls?: XZ[][];
+  } = await res.json();
+  L.old = {
+    today: o.buildings.map(r => plotOf([r], true)), areas: o.areas.map(a => plotOf([a.ring], false)),
+    wall: o.wall ? plotOf([o.wall], false) : null,
+    castle: o.castle ? plotOf([o.castle], false) : null, castleWalls: (o.castleWalls ?? []).map(l => plotOf([l], false, false)),
+  };
   for (const r of o.roads) {
     const m = midpoint(r.line);
     if (m.len >= 30) L.labels.push({ text: r.name, x: m.x, z: m.z, ang: m.ang, len: m.len, main: r.kind === 'primary' || r.kind === 'secondary' });
@@ -468,6 +482,15 @@ function drawMap(g: CanvasRenderingContext2D, W: number, H: number, dpr: number,
     g.fillStyle = T.wall;
     g.fill(L.old.wall.path, 'evenodd');
   }
+  // The castles the wall met at the Castle Gate: the edge of their precinct, and what stands of the Upper Castle's walls
+  if (L.old?.castle && seen(L.old.castle)) {
+    g.strokeStyle = T.castle;
+    g.lineWidth = Math.max(3.5, px * 2);
+    g.stroke(L.old.castle.path);
+    g.strokeStyle = T.hallLine;
+    g.lineWidth = Math.max(2.5, px * 1.6);
+    outlines(g, L.old.castleWalls, seen);
+  }
   g.strokeStyle = T.note;
   g.lineWidth = px * 1.3;
   g.setLineDash([px * 1.5, px * 4.5]);
@@ -608,6 +631,13 @@ function drawLabels(g: CanvasRenderingContext2D, W: number, H: number, v: View, 
     halo(g, gt.name, x, y, T.halo);
     placed.push({ x, y: y - 5, r: g.measureText(gt.name).width / 2 + 4, name: gt.name });
   }
+  if (L.old?.castle) for (const c of CASTLES) {
+    const x = sx(c.x), y = sy(c.z);
+    if (x < -80 || y < -20 || x > W + 80 || y > H + 20) continue;
+    g.fillStyle = T.note;
+    halo(g, c.name, x, y, T.halo);
+    placed.push({ x, y: y - 5, r: g.measureText(c.name).width / 2 + 4, name: c.name });
+  }
   if (s > 0.7) {
     g.font = F_NOTE;
     g.fillStyle = T.note;
@@ -707,6 +737,7 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
     ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>Subačius Gate, gone</li>'}
     <li><i class="sw gate"></i>City gates: open if gone by 1900</li>
     <li><i class="sw wall"></i>Line of the city wall</li>
+    <li><i class="sw castle"></i>Edge of the castles</li>
     <li><i class="sw walk"></i>Edge of the walk</li>
   </ul>
   <h3>Where it comes from</h3>
@@ -718,7 +749,7 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
     <li><b>Subačius Gate:</b> the city wall's east gate, after P. Smuglevičius's drawing of 1785–86. ${gate === 'solid'
       ? 'It was pulled down in 1801–02, with the wall; here it stands, with the wall either side, a century out of its time, on purpose.'
       : 'It was pulled down in 1801–02; in the street it is a ghost, where it stood.'}</li>
-    <li><b>City gates and wall:</b> the wall of 1503–22 and its ten gates, pulled down from 1799, all but the Gate of Dawn (here filled). Sites from the heritage register (KVR), Wikipedia and V. Drėma's <i>Dingęs Vilnius</i>; a dotted ring where the site was never found. The wall's line is the strip the register protects along it.</li>
+    <li><b>City gates and wall:</b> the wall of 1503–22 and its ten gates, pulled down from 1799, all but the Gate of Dawn (here filled). Sites from the heritage register (KVR), Wikipedia and V. Drėma's <i>Dingęs Vilnius</i>; a dotted ring where the site was never found. The wall's line is the strip the register protects along it. At the Castle Gate the wall met the castles: the edge of their precinct is the register's (KVR 141), along the Vilnia's old channel (now Šventaragio g.); the firmer line is what stands of the Upper Castle's walls (OpenStreetMap).</li>
     <li><b>The rest of the Old Town:</b> OpenStreetMap outlines, 2026, unhatched, out to the gates.</li>
     <li><b>Edge of the walk:</b> the square, ${walk} m round the Town Hall, and the road out to the gate. Beyond it the town is only to be seen.</li>
   </ul>
