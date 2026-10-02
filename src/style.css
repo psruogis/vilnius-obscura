@@ -150,6 +150,10 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 .credits p, .credits li { font: 500 1.19em/1.45 'Cormorant Garamond', Georgia, serif; font-variant-numeric: lining-nums; color: #b9ad9c; -webkit-user-select: text; user-select: text; }
 .credits ul { padding-left: 1.2em; }
 .credits .dim { font-size: 1em; color: var(--dimmer); }
+.credits .by { margin: 0 0 1.1em; color: var(--cream); }
+.credits a { color: #d6b375; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+.credits a:hover { color: #ecd09a; }
+.credits a:focus-visible { outline: 2px solid var(--cream); outline-offset: 2px; border-radius: 2px; }
 
 /* the card shown when the browser cannot run the walk */
 .overlay.plain { display: grid; place-items: center; background: radial-gradient(90% 80% at 50% 40%, #2c2321 0%, #1a1514 55%, #0d0b0a 100%); }

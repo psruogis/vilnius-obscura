@@ -3,8 +3,12 @@ import { loadFonts } from './fonts';
 import { createOptions } from './options';
 import type { SettingsStore } from './settings';
 
+// The address is put together here so it never sits whole in the page's source, out of reach of the simplest harvesters
+const EMAIL = ['paulius.sruogis', 'gmail.com'].join('@');
+
 const CREDITS_HTML = `
   <h2>Credits</h2>
+  <p class="by">Made by Paulius Sruogis · <a href="mailto:${EMAIL}">${EMAIL}</a></p>
   <p>Town Hall Square around 1900, rebuilt from real map data and period photographs. Ordinary houses follow their real footprints
   and heights with a generated late-19th-century look; historic layouts come from public-domain city plans.</p>
   <ul>
