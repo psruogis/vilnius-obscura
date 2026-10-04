@@ -300,8 +300,9 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
   half that, its roof rising about 0.37 of the wall: 14.5 m along the wall, 8 m deep, 14 m to the eaves, a saddle roof
   along the wall rising 5.1 m, red tiles. The end walls and Gothic gables in bare brick with a raised coping and three
   rows of blind niches, as in 1894: one tall niche at the apex, a row of five across the gable's foot, the outer two
-  cut down to its slopes, and a row of five on the end wall just under the eaves, all in columns mirrored about the
-  one under the apex; each niche set back between brick jambs, a small round hole in the middle of its plastered back. A crescent vane on the near gable, a small finial on the far one. On the field front
+  cut short by its slopes, and a row of five on the end wall just under the eaves, all in five columns mirrored about
+  the one under the apex; each niche set back between brick jambs, its back limewashed white, and a small round hole
+  in the middle of each niche the slopes leave whole (one, three, five), none in the two cut short [U]. A crescent vane on the near gable, a small finial on the far one. On the field front
   a brick frame 9 × 11.5 m (62% of the front's width, 82% of its height) with broad piers round a plastered panel; in
   it two arches, one inside the other (1894): an outer one 3.6 m wide, its crown at 7 m, recessed 0.7 m, and set back
   inside it the gateway's own, 2.3 m wide, its crown at 5.7 m, in a darker stone moulding; three round openings over

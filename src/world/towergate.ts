@@ -65,6 +65,7 @@ export interface GateSpec {
 const WALL_T = 1.8;
 // the image in an icon's niche, darkened gilt (one material for every gate)
 const GILT = new THREE.MeshStandardMaterial({ color: '#8a6d3b', roughness: 0.45, metalness: 0.55 });
+const LIME = new THREE.MeshStandardMaterial({ color: '#ece7db', roughness: 0.92 });   // limewash, the backs of a Gothic gable's niches
 
 /** A gate's frame: from local (x along the road, z along the wall) to the world, and its rotation. */
 export function gateFrame(spec: GateSpec) {
@@ -157,7 +158,7 @@ export function buildTowerGate(spec: GateSpec, o: {
   const P = { render: [] as THREE.BufferGeometry[], band: [] as THREE.BufferGeometry[], trim: [] as THREE.BufferGeometry[], stone: [] as THREE.BufferGeometry[],
     roof: [] as THREE.BufferGeometry[], dark: [] as THREE.BufferGeometry[], wood: [] as THREE.BufferGeometry[], iron: [] as THREE.BufferGeometry[],
     wall: [] as THREE.BufferGeometry[], wallRoof: [] as THREE.BufferGeometry[], infill: [] as THREE.BufferGeometry[], icon: [] as THREE.BufferGeometry[],
-    brick: [] as THREE.BufferGeometry[] };
+    brick: [] as THREE.BufferGeometry[], lime: [] as THREE.BufferGeometry[] };
   const ink: number[] = [];
   const loop = (pts: THREE.Vector3[]) => pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; ink.push(p.x, p.y, p.z, q.x, q.y, q.z); });
   // a section in the (z, y) plane, extruded along x from x0
@@ -228,16 +229,16 @@ export function buildTowerGate(spec: GateSpec, o: {
           P.brick.push(new THREE.BoxGeometry(L, 0.42, 0.96).applyMatrix4(new THREE.Matrix4().makeBasis(xAxis, yAxis, n3).setPosition(mid)));
         }
         run(on(-hw), on(hw), [nX, nZ], yT - 0.34, 0.36, 0.18, P.brick);
-        // three rows of blind niches, as Kamarauskas painted them in 1894: one tall niche at the apex, a row across the
-        // gable's foot cut down to its slopes, and a row on the end wall just under the eaves, all in columns mirrored
-        // about the one under the apex; each niche's plastered back, a small round hole in its middle, set into the
-        // brick, which stands out round it in jambs, sill and head
-        const pitch = 1.45, nw = 0.8, drop = T.gableDrop ?? 0, deep = 0.26, rib = (pitch - nw) / 2 + 0.02;
+        // blind niches as Kamarauskas painted them in 1894: five columns, mirrored about the one under the apex, in three
+        // rows (one on the end wall just under the eaves), the rows in the gable cut off by its slopes; each niche
+        // limewashed white and set into the brick, which stands out round it in jambs, sill and head, and only the
+        // niches the slopes leave whole have a small round hole in the middle
+        const pitch = 1.25, nw = 0.95, drop = T.gableDrop ?? 0, deep = 0.26, rib = (pitch - nw) / 2 + 0.02;
         const tx = -nZ, tz = nX;                                     // along the face
-        const niche = (s: number, y0: number, y1: number, face: number) => {   // from y0 to y1 above the eaves
+        const niche = (s: number, y0: number, y1: number, face: number, hole = true) => {   // from y0 to y1 above the eaves
           const [px, pz] = on(s), h = y1 - y0, yc = yT + (y0 + y1) / 2;
-          P.trim.push(faceBox(nw, h, face + 0.01, px, yc, pz, nX, nZ));
-          port(px + nX * (face + 0.012), yc, pz + nZ * (face + 0.012), nX, nZ, 0.13);
+          P.lime.push(faceBox(nw, h, face + 0.01, px, yc, pz, nX, nZ));
+          if (hole) port(px + nX * (face + 0.012), yc, pz + nZ * (face + 0.012), nX, nZ, 0.13);
           for (const k of [-1, 1]) {
             const ox = px + tx * k * (nw / 2 + rib / 2), oz = pz + tz * k * (nw / 2 + rib / 2);
             P.brick.push(faceBox(rib, h + 0.36, face + deep, ox, yc, oz, nX, nZ));                        // jambs
@@ -246,10 +247,9 @@ export function buildTowerGate(spec: GateSpec, o: {
         };
         // an odd number of columns, one on the centre line, as many either side as the end wall holds
         const side = Math.floor((hw - nw / 2 - 0.3) / pitch), slots = Array.from({ length: 2 * side + 1 }, (_, j) => (j - side) * pitch);
-        niche(0, 0.52 * gH, 0.84 * gH, 0);
-        for (const sv of slots) {
-          const top = Math.min(0.47 * gH, gH * (1 - (Math.abs(sv) + nw / 2) / hw) - 0.25);
-          if (top >= 0.47 * gH) niche(sv, 0.15, top, 0);
+        for (const [y0, y1] of [[0.15, 0.47 * gH], [0.52 * gH, 0.84 * gH]]) for (const sv of slots) {
+          const top = Math.min(y1, gH * (1 - (Math.abs(sv) + nw / 2) / hw) - 0.2);
+          if (top - y0 >= 0.5) niche(sv, y0, top, 0, top === y1);
         }
         if (drop > 0) {
           // the end wall under the gable faced in bare brick, with the third row
@@ -562,7 +562,7 @@ export function buildTowerGate(spec: GateSpec, o: {
     const Mt = o.mats;
     mesh(P.render, Mt.render); mesh([...P.band, ...P.trim], Mt.trim); mesh(P.stone, Mt.stone);
     mesh([...P.roof, ...P.wallRoof], Mt.roof); mesh(P.dark, Mt.dark, false); mesh(P.wood, Mt.wood); mesh(P.iron, Mt.iron);
-    mesh(P.wall, Mt.wall); mesh([...P.infill, ...P.brick], Mt.remnant); mesh(P.icon, GILT, false);
+    mesh(P.wall, Mt.wall); mesh([...P.infill, ...P.brick], Mt.remnant); mesh(P.icon, GILT, false); mesh(P.lime, LIME);
     // the gate stops the walker: its block either side of the passage (all of it, if walled up), the barbican, the
     // flanking tower and the wall
     if (spec.passage.walled) rect(TX0, -THW, TX1, THW);
