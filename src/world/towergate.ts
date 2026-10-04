@@ -249,7 +249,7 @@ export function buildTowerGate(spec: GateSpec, o: {
         niche(0, 0.52 * gH, 0.84 * gH, 0);
         for (const sv of slots) {
           const top = Math.min(0.47 * gH, gH * (1 - (Math.abs(sv) + nw / 2) / hw) - 0.25);
-          if (top - 0.15 > 0.5) niche(sv, 0.15, top, 0);
+          if (top >= 0.47 * gH) niche(sv, 0.15, top, 0);
         }
         if (drop > 0) {
           // the end wall under the gable faced in bare brick, with the third row
