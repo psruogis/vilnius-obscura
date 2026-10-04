@@ -107,12 +107,13 @@ export const LOST_GATES: LostGate[] = [
       // measured off Kamarauskas's 1894 and 1897 paintings, which agree: the front with the gateway about as wide as
       // the walls are tall, the gable ends a little over half that, the roof rising about 0.4 of the wall; the ridge
       // along the wall, the Gothic gables at the wall's ends, their niches running on down the end walls
-      tower: { depth: 8, hw: 7.25, eave: 14, roof: { kind: 'saddle', rise: 6, ridge: 'wall', gable: 'gothic' }, chimney: true, vane: 'crescent', gableDrop: 4.4 },
-      // the gateway 3 m wide, its crown at about half the wall's height, in a brick frame 62% of the front's width and
-      // 82% of its height round a plastered panel (1894)
-      passage: { aw: 1.5, spring: 4.8, bay: { w: 9, h: 11.5, pier: 1.9 } },
+      tower: { depth: 8, hw: 7.25, eave: 14, roof: { kind: 'saddle', rise: 5.1, ridge: 'wall', gable: 'gothic' }, chimney: true, vane: 'crescent', gableDrop: 3.2 },
+      // in a brick frame 62% of the front's width and 82% of its height round a plastered panel (1894)
+      // two arches, measured off the 1894 painting: an outer one 3.6 m wide, its crown at 7 m, recessed into the plastered
+      // panel, and inside it the gateway's own, 2.3 m wide, its crown at 5.7 m
+      passage: { aw: 1.15, spring: 4.55, outer: { aw: 1.8, spring: 5.2, depth: 0.7 }, bay: { w: 9, h: 11.5, pier: 1.9 } },
       holes: [
-        { on: 'field', kind: 'port', y: 10.0, at: [-1.5, 0, 1.5], r: 0.5 },            // three round openings over the arch (1894)
+        { on: 'field', kind: 'port', y: 8.8, at: [-1.55, 0, 1.55], r: 0.4 },           // three round openings over the arch (1894)
         { on: 'sides', kind: 'window', y: 6.0, at: [2.0], w: 0.5, h: 1.0 },              // a small window low on the end wall (1894)
         { on: 'town', kind: 'window', y: 7.0, at: [-4.5, -1.5, 1.5, 4.5], w: 0.6, h: 0.95 },
         { on: 'town', kind: 'window', y: 10.5, at: [-4.5, -1.5, 1.5, 4.5], w: 0.6, h: 0.95 },

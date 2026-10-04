@@ -297,17 +297,20 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
   the two painters stood. Vilija: a tower 11 × 8.5 m, 14 m to the eaves, the Virgin's niche over the arch on the town side.
   Tatar (rebuilt 2026-10-04 to the proportions measured off Kamarauskas's 1894 and 1897 paintings, which agree):
   a tall gatehouse whose front, with the gateway, is about as wide as its walls are tall, its gable ends a little over
-  half that, its roof rising about 0.4 of the wall: 14.5 m along the wall, 8 m deep, 14 m to the eaves, a saddle roof
-  along the wall rising 6 m, red tiles. The end walls and Gothic gables in bare brick, a raised coping, tiers of
-  plastered blind niches with small round holes running from the apex down to about 0.7 of the wall's height (1894);
-  a crescent vane on the near gable, a small finial on the far one. On the field front a brick frame 9 × 11.5 m (62%
-  of the front's width, 82% of its height) with broad piers round a plastered panel, the arch 3 m wide with its crown
-  at about half the wall's height, three large round openings over it (1894); a small window low on the end wall;
-  the render a warm ochre, 55% left. The viewer's first view stands where he stood in 1894: low, about 37° off the
-  front. His 1895 sketch shows another design, the gable over the gateway; the excavated 24 × 12 m (above) is about
-  the same 2 : 1 as the paintings' plan but would make the building twice their scale, so the model keeps their
-  proportions at a believable height for three storeys [U]. Old plans (Fürstenhoff, 1808) would settle the footprint;
-  their scans are in the Lithuanian archives' system, not reachable from here.
+  half that, its roof rising about 0.37 of the wall: 14.5 m along the wall, 8 m deep, 14 m to the eaves, a saddle roof
+  along the wall rising 5.1 m, red tiles. The end walls and Gothic gables in bare brick with a raised coping and three
+  rows of blind niches, as in 1894: one tall niche at the apex, a row of five across the gable's foot, the outer two
+  cut down to its slopes, and a row of five on the end wall just under the eaves, all in columns mirrored about the
+  one under the apex; each niche set back between brick jambs, a small round hole in the middle of its plastered back. A crescent vane on the near gable, a small finial on the far one. On the field front
+  a brick frame 9 × 11.5 m (62% of the front's width, 82% of its height) with broad piers round a plastered panel; in
+  it two arches, one inside the other (1894): an outer one 3.6 m wide, its crown at 7 m, recessed 0.7 m, and set back
+  inside it the gateway's own, 2.3 m wide, its crown at 5.7 m, in a darker stone moulding; three round openings over
+  them at 8.8 m. A small window low on the end wall; the render a warm ochre, 55% left. The viewer's first view stands
+  where he stood in 1894: low, about 37° off the front. His 1895 sketch shows another design, the gable over the
+  gateway; the excavated 24 × 12 m (above) is about the same 2 : 1 as the paintings' plan but would make the building
+  twice their scale, so the model keeps their proportions at a believable height for three storeys [U]. Old plans
+  (Fürstenhoff, 1808) would settle the footprint; their scans are in the Lithuanian archives' system, not reachable
+  from here.
   Wet: 9 × 6 m, 9.4 m to the eaves, a tall arch walled up in bare brick, two ports either side.
   Castle: a broad block of three floors, 18 × 11 m, rows of windows, a court house more than a tower. Bernardine: a
   small gate block with the found tower beside it on the field side, 12 m to its eaves. Saviour's: a block 12 × 9 m

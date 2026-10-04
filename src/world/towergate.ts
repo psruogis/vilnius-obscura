@@ -49,6 +49,9 @@ export interface GateSpec {
     aw: number; spring: number; walled?: boolean; leaves?: boolean;
     /** a tall brick frame round the gateway on the field front, `w` wide and `h` high */
     bay?: { w: number; h: number; pier?: number };
+    /** a larger arch round the field gateway, recessed `depth` into the front, the gateway's own smaller arch set back
+     *  inside it (the Tatar Gate in Kamarauskas's 1894 painting) */
+    outer?: { aw: number; spring: number; depth: number };
   };
   /** A barbican on the field side, from x = 0 to `length`. */
   barbican?: { length: number; hw: number; eave: number; rise: number; bands?: number[]; pilasters?: boolean };
@@ -159,11 +162,11 @@ export function buildTowerGate(spec: GateSpec, o: {
   const loop = (pts: THREE.Vector3[]) => pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; ink.push(p.x, p.y, p.z, q.x, q.y, q.z); });
   // a section in the (z, y) plane, extruded along x from x0
   const alongX = (g: THREE.BufferGeometry, x0: number) => g.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, x0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1));
-  const body = (hw: number, y0: number, yTop: number, spring: number, x0: number, depth: number) => {
+  const body = (hw: number, y0: number, yTop: number, spring: number, x0: number, depth: number, aw = AW) => {
     const sec = new THREE.Shape();
-    sec.moveTo(-hw, y0); sec.lineTo(-AW, y0); sec.lineTo(-AW, spring);
-    sec.absarc(0, spring, AW, Math.PI, 0, true);
-    sec.lineTo(AW, y0); sec.lineTo(hw, y0); sec.lineTo(hw, yTop); sec.lineTo(-hw, yTop); sec.closePath();
+    sec.moveTo(-hw, y0); sec.lineTo(-aw, y0); sec.lineTo(-aw, spring);
+    sec.absarc(0, spring, aw, Math.PI, 0, true);
+    sec.lineTo(aw, y0); sec.lineTo(hw, y0); sec.lineTo(hw, yTop); sec.lineTo(-hw, yTop); sec.closePath();
     return alongX(new THREE.ExtrudeGeometry(sec, { depth, bevelEnabled: false, curveSegments: 14 }), x0);
   };
   const box = (x0: number, x1: number, z0: number, z1: number, y0: number, y1: number) =>
@@ -175,7 +178,11 @@ export function buildTowerGate(spec: GateSpec, o: {
 
   // ---- the gate block and the barbican, the passage through both; a flanking tower ----
   const yT = g0 + T.eave, yB = B ? gB + B.eave : g0, yF = F ? gF + F.eave : g0;
-  P.render.push(body(THW, base, yT, g0 + spec.passage.spring, TX0, TX1 - TX0));
+  const O = B ? undefined : spec.passage.outer;                       // the recessed outer arch, on a tower-only gate
+  if (O) {
+    P.render.push(body(THW, base, yT, g0 + spec.passage.spring, TX0, TX1 - O.depth - TX0));
+    P.render.push(body(THW, base, yT, g0 + O.spring, TX1 - O.depth, O.depth, O.aw));
+  } else P.render.push(body(THW, base, yT, g0 + spec.passage.spring, TX0, TX1 - TX0));
   if (B) P.render.push(body(B.hw, base, yB, gB + spec.passage.spring - 0.2, -0.3, B.length + 0.3));
   if (F) P.render.push(box(F.x0, F.x1, F.z0, F.z1, base, yF));
 
@@ -212,7 +219,7 @@ export function buildTowerGate(spec: GateSpec, o: {
       const sg = i === 0 ? -1 : 1, face = i === 0 ? e : e + 0.6, nX = alongX ? sg : 0, nZ = alongX ? 0 : sg;
       const on = (s: number): XZ => (alongX ? [face, s] : [(TX0 + TX1) / 2 + s, face]);
       if (gothic) {
-        // bare brick, a raised coping up both rakes, and tiers of plastered blind niches, each with a small round hole
+        // bare brick and a raised coping up both rakes
         const n3 = new THREE.Vector3(nX, 0, nZ), apex = on(0);
         for (const k of [-1, 1]) {
           const foot = on(k * (hw + 0.1)), a = new THREE.Vector3(foot[0], yT - 0.1, foot[1]), b = new THREE.Vector3(apex[0], yT + gH + 0.15, apex[1]);
@@ -221,21 +228,34 @@ export function buildTowerGate(spec: GateSpec, o: {
           P.brick.push(new THREE.BoxGeometry(L, 0.42, 0.96).applyMatrix4(new THREE.Matrix4().makeBasis(xAxis, yAxis, n3).setPosition(mid)));
         }
         run(on(-hw), on(hw), [nX, nZ], yT - 0.34, 0.36, 0.18, P.brick);
-        const tier = gH * 0.22, gap = gH * 0.05, pitch = 1.25, drop = T.gableDrop ?? 0;
-        const niches = (y0: number, room: number) => {            // a row of niches, y0 above the eaves, across `room`
-          const n = room >= 0.45 ? Math.max(1, Math.floor((room + 0.45) / pitch)) : 0, w = Math.min(0.7, room);
-          for (let j = 0; j < n; j++) {
-            const s = (j - (n - 1) / 2) * pitch, [px, pz] = on(s), yc = yT + y0 + tier / 2;
-            P.trim.push(faceBox(w, tier, 0.04 + (y0 < 0 ? 0.06 : 0), px, yc, pz, nX, nZ));
-            port(px + nX * (y0 < 0 ? 0.1 : 0.04), yc + tier * 0.22, pz + nZ * (y0 < 0 ? 0.1 : 0.04), nX, nZ, 0.12);
+        // three rows of blind niches, as Kamarauskas painted them in 1894: one tall niche at the apex, a row across the
+        // gable's foot cut down to its slopes, and a row on the end wall just under the eaves, all in columns mirrored
+        // about the one under the apex; each niche's plastered back, a small round hole in its middle, set into the
+        // brick, which stands out round it in jambs, sill and head
+        const pitch = 1.45, nw = 0.8, drop = T.gableDrop ?? 0, deep = 0.26, rib = (pitch - nw) / 2 + 0.02;
+        const tx = -nZ, tz = nX;                                     // along the face
+        const niche = (s: number, y0: number, y1: number, face: number) => {   // from y0 to y1 above the eaves
+          const [px, pz] = on(s), h = y1 - y0, yc = yT + (y0 + y1) / 2;
+          P.trim.push(faceBox(nw, h, face + 0.01, px, yc, pz, nX, nZ));
+          port(px + nX * (face + 0.012), yc, pz + nZ * (face + 0.012), nX, nZ, 0.13);
+          for (const k of [-1, 1]) {
+            const ox = px + tx * k * (nw / 2 + rib / 2), oz = pz + tz * k * (nw / 2 + rib / 2);
+            P.brick.push(faceBox(rib, h + 0.36, face + deep, ox, yc, oz, nX, nZ));                        // jambs
+            P.brick.push(faceBox(nw + 2 * rib, 0.18, face + deep, px, yc + k * (h / 2 + 0.09), pz, nX, nZ));   // sill, head
           }
         };
-        for (let y0 = gap; y0 + tier < gH * 0.86; y0 += tier + gap) niches(y0, 2 * hw * (1 - (y0 + tier) / gH) - 0.9);
+        // an odd number of columns, one on the centre line, as many either side as the end wall holds
+        const side = Math.floor((hw - nw / 2 - 0.3) / pitch), slots = Array.from({ length: 2 * side + 1 }, (_, j) => (j - side) * pitch);
+        niche(0, 0.52 * gH, 0.84 * gH, 0);
+        for (const sv of slots) {
+          const top = Math.min(0.47 * gH, gH * (1 - (Math.abs(sv) + nw / 2) / hw) - 0.25);
+          if (top - 0.15 > 0.5) niche(sv, 0.15, top, 0);
+        }
         if (drop > 0) {
-          // the end wall under the gable faced in bare brick, and its niches carried on down it
+          // the end wall under the gable faced in bare brick, with the third row
           const [ox, oz] = on(0);
           P.brick.push(faceBox(2 * hw, drop, 0.06, ox, yT - drop / 2, oz, nX, nZ));
-          for (let y0 = -0.34 - gap - tier; y0 > -drop + 0.1; y0 -= tier + gap) niches(y0, 2 * hw - 1.1);
+          for (const sv of slots) niche(sv, -drop + 0.3, -0.35, 0.06);
         }
       }
       if (T.vane) {                                                  // an iron rod, a ball, and a crescent, horns up
@@ -322,7 +342,8 @@ export function buildTowerGate(spec: GateSpec, o: {
     run(a, b, n, yF - 0.38, 0.38, 0.26, P.trim);
   }
   const footing = (a: XZ, b: XZ, n: [number, number], g: number, cut: boolean) => {
-    if (cut) { run(a, [a[0], -AW - 0.4], n, base, g + 1.0 - base, 0.3, P.stone); run([a[0], AW + 0.4], b, n, base, g + 1.0 - base, 0.3, P.stone); }
+    const aw = O && n[0] === 1 ? O.aw : AW;
+    if (cut) { run(a, [a[0], -aw - 0.4], n, base, g + 1.0 - base, 0.3, P.stone); run([a[0], aw + 0.4], b, n, base, g + 1.0 - base, 0.3, P.stone); }
     else run(a, b, n, base, g + 1.0 - base, 0.3, P.stone);
   };
   for (const [a, b, n] of T_FACES) if (!(B && n[0] === 1)) footing(a, b, n, g0, n[0] !== 0);
@@ -390,27 +411,45 @@ export function buildTowerGate(spec: GateSpec, o: {
 
   // ---- the gateways: stone surrounds and keystones, or walled up; pilasters at the barbican's corners; the leaves ----
   const fieldX = B ? B.length : TX1, gField = B ? gB : g0, springField = spec.passage.spring - (B ? 0.2 : 0);
-  for (const [x0, s, g, spring0] of [[fieldX, 1, gField, springField], [TX0 - 0.12, -1, g0, spec.passage.spring]] as const) {
-    const spring = g + spring0;
+  const archRing = (aw: number, spring: number, width: number, depth: number, x0: number) => {
     const ring = new THREE.Shape();
-    ring.absarc(0, spring, AW + 0.38, Math.PI, 0, true);
-    ring.lineTo(AW, spring);
-    ring.absarc(0, spring, AW, 0, Math.PI, false);
+    ring.absarc(0, spring, aw + width, Math.PI, 0, true);
+    ring.lineTo(aw, spring);
+    ring.absarc(0, spring, aw, 0, Math.PI, false);
     ring.closePath();
-    P.trim.push(alongX(new THREE.ExtrudeGeometry(ring, { depth: 0.12, bevelEnabled: false, curveSegments: 16 }), x0));
+    P.trim.push(alongX(new THREE.ExtrudeGeometry(ring, { depth, bevelEnabled: false, curveSegments: 16 }), x0));
+  };
+  for (const [x0, s, g, spring0] of [[fieldX, 1, gField, O ? O.spring : springField], [TX0 - 0.12, -1, g0, spec.passage.spring]] as const) {
+    const spring = g + spring0, aw = s > 0 && O ? O.aw : AW;
+    archRing(aw, spring, 0.38, 0.12, x0);
     const fx = s > 0 ? fieldX : TX0;
-    for (const dz of [-1, 1]) P.trim.push(faceBox(0.38, spring - base, 0.12, fx, base + (spring - base) / 2, dz * (AW + 0.19), s, 0));
-    P.trim.push(faceBox(0.5, 0.7, 0.18, fx, spring + AW + 0.2, 0, s, 0));
+    for (const dz of [-1, 1]) P.trim.push(faceBox(0.38, spring - base, 0.12, fx, base + (spring - base) / 2, dz * (aw + 0.19), s, 0));
+    P.trim.push(faceBox(0.5, 0.7, 0.18, fx, spring + aw + 0.2, 0, s, 0));
     if (spec.passage.walled) {                                       // bricked up in bare brick, a little back from the face
       const sec = new THREE.Shape();
       sec.moveTo(-AW, base); sec.lineTo(-AW, spring); sec.absarc(0, spring, AW, Math.PI, 0, true); sec.lineTo(AW, base); sec.closePath();
       P.infill.push(alongX(new THREE.ExtrudeGeometry(sec, { depth: 0.7, bevelEnabled: false, curveSegments: 14 }), s > 0 ? fx - 0.9 : fx + 0.2));
     }
   }
+  if (O) {
+    // at the back of the recess: plaster between the two arches, and the gateway's own arch in a darker stone moulding
+    const sIn = gField + springField, sOut = gField + O.spring, x = fieldX - O.depth + 0.012;
+    const back = new THREE.Shape();
+    back.moveTo(-O.aw, base); back.lineTo(-O.aw, sOut); back.absarc(0, sOut, O.aw, Math.PI, 0, true); back.lineTo(O.aw, base); back.closePath();
+    const door = new THREE.Path();
+    door.moveTo(-AW - 0.2, base); door.lineTo(-AW - 0.2, sIn); door.absarc(0, sIn, AW + 0.2, Math.PI, 0, true); door.lineTo(AW + 0.2, base); door.closePath();
+    back.holes.push(door);
+    P.trim.push(alongX(new THREE.ShapeGeometry(back, 16), x));
+    const ring = new THREE.Shape();
+    ring.absarc(0, sIn, AW + 0.22, Math.PI, 0, true); ring.lineTo(AW, sIn); ring.absarc(0, sIn, AW, 0, Math.PI, false); ring.closePath();
+    P.stone.push(alongX(new THREE.ExtrudeGeometry(ring, { depth: 0.1, bevelEnabled: false, curveSegments: 16 }), fieldX - O.depth));
+    for (const dz of [-1, 1]) P.stone.push(faceBox(0.22, sIn - base, 0.1, fieldX - O.depth, base + (sIn - base) / 2, dz * (AW + 0.11), 1, 0));
+  }
   if (spec.passage.bay) {
     // a brick frame round the field gateway, two broad piers and a lintel, and inside it a plastered panel round the
     // arch (the round ports and windows drawn on the face lie over it)
-    const { w, h } = spec.passage.bay, top = gField + h, pw = spec.passage.bay.pier ?? 0.9, R0 = AW + 0.38, spring = gField + springField;
+    const { w, h } = spec.passage.bay, top = gField + h, pw = spec.passage.bay.pier ?? 0.9;
+    const R0 = (O ? O.aw : AW) + 0.38, spring = gField + (O ? O.spring : springField);
     for (const dz of [-1, 1]) P.brick.push(faceBox(pw, top - base, 0.3, fieldX, base + (top - base) / 2, dz * (w / 2 - pw / 2), 1, 0));
     P.brick.push(faceBox(w, 0.6, 0.3, fieldX, top - 0.3, 0, 1, 0));
     P.brick.push(faceBox(w + 0.3, 0.16, 0.36, fieldX, top + 0.08, 0, 1, 0));
