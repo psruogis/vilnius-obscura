@@ -39,6 +39,8 @@ export interface GateSpec {
     /** a weathervane on the gables' apexes: a crescent moon (the Tatar Gate, after Kamarauskas) or a flag (the Trakai
      *  Gate, after Smuglevičius) */
     vane?: 'crescent' | 'flag';
+    /** a Gothic gable's niches run on down the end wall, below the eaves, this far */
+    gableDrop?: number;
     /** a heavy entablature across both fronts at this height, splitting them into two tall storeys */
     entablature?: number;
   };
@@ -46,7 +48,7 @@ export interface GateSpec {
   passage: {
     aw: number; spring: number; walled?: boolean; leaves?: boolean;
     /** a tall brick frame round the gateway on the field front, `w` wide and `h` high */
-    bay?: { w: number; h: number };
+    bay?: { w: number; h: number; pier?: number };
   };
   /** A barbican on the field side, from x = 0 to `length`. */
   barbican?: { length: number; hw: number; eave: number; rise: number; bands?: number[]; pilasters?: boolean };
@@ -219,22 +221,30 @@ export function buildTowerGate(spec: GateSpec, o: {
           P.brick.push(new THREE.BoxGeometry(L, 0.42, 0.96).applyMatrix4(new THREE.Matrix4().makeBasis(xAxis, yAxis, n3).setPosition(mid)));
         }
         run(on(-hw), on(hw), [nX, nZ], yT - 0.34, 0.36, 0.18, P.brick);
-        const tier = gH * 0.22, gap = gH * 0.05;
-        for (let y0 = gap; y0 + tier < gH * 0.86; y0 += tier + gap) {
-          const room = 2 * hw * (1 - (y0 + tier) / gH) - 0.9, n = room >= 0.45 ? Math.max(1, Math.floor((room + 0.4) / 1.0)) : 0;
-          const w = Math.min(0.6, room);
+        const tier = gH * 0.22, gap = gH * 0.05, pitch = 1.25, drop = T.gableDrop ?? 0;
+        const niches = (y0: number, room: number) => {            // a row of niches, y0 above the eaves, across `room`
+          const n = room >= 0.45 ? Math.max(1, Math.floor((room + 0.45) / pitch)) : 0, w = Math.min(0.7, room);
           for (let j = 0; j < n; j++) {
-            const s = (j - (n - 1) / 2) * 1.0, [px, pz] = on(s), yc = yT + y0 + tier / 2;
-            P.trim.push(faceBox(w, tier, 0.04, px, yc, pz, nX, nZ));
-            port(px + nX * 0.04, yc + tier * 0.22, pz + nZ * 0.04, nX, nZ, 0.11);
+            const s = (j - (n - 1) / 2) * pitch, [px, pz] = on(s), yc = yT + y0 + tier / 2;
+            P.trim.push(faceBox(w, tier, 0.04 + (y0 < 0 ? 0.06 : 0), px, yc, pz, nX, nZ));
+            port(px + nX * (y0 < 0 ? 0.1 : 0.04), yc + tier * 0.22, pz + nZ * (y0 < 0 ? 0.1 : 0.04), nX, nZ, 0.12);
           }
+        };
+        for (let y0 = gap; y0 + tier < gH * 0.86; y0 += tier + gap) niches(y0, 2 * hw * (1 - (y0 + tier) / gH) - 0.9);
+        if (drop > 0) {
+          // the end wall under the gable faced in bare brick, and its niches carried on down it
+          const [ox, oz] = on(0);
+          P.brick.push(faceBox(2 * hw, drop, 0.06, ox, yT - drop / 2, oz, nX, nZ));
+          for (let y0 = -0.34 - gap - tier; y0 > -drop + 0.1; y0 -= tier + gap) niches(y0, 2 * hw - 1.1);
         }
       }
       if (T.vane) {                                                  // an iron rod, a ball, and a crescent, horns up
         const [vx, vz] = on(0), x = vx - nX * 0.3, z = vz - nZ * 0.3, y = yT + gH + 0.1;
         P.iron.push(new THREE.CylinderGeometry(0.04, 0.05, 2.4, 6).translate(x, y + 1.2, z));
         P.iron.push(new THREE.SphereGeometry(0.16, 10, 8).translate(x, y + 1.1, z));
-        if (T.vane === 'crescent') P.iron.push(new THREE.TorusGeometry(0.34, 0.055, 6, 18, Math.PI * 1.35).rotateZ(Math.PI * 0.825).rotateY(Math.atan2(nX, nZ)).translate(x, y + 2.75, z));
+        // the crescent on the gable at +z, the one Kamarauskas painted; a small finial on the other
+        if (T.vane === 'crescent' && i === 1) P.iron.push(new THREE.TorusGeometry(0.34, 0.055, 6, 18, Math.PI * 1.35).rotateZ(Math.PI * 0.825).rotateY(Math.atan2(nX, nZ)).translate(x, y + 2.75, z));
+        else if (T.vane === 'crescent') P.iron.push(new THREE.ConeGeometry(0.1, 0.5, 6).translate(x, y + 2.6, z));
         else P.iron.push(faceBox(0.62, 0.4, 0.03, x - nZ * 0.33, y + 2.15, z + nX * 0.33, nX, nZ));   // a flag, to one side of the rod
       }
       if (!baroque && !gothic) {
@@ -400,7 +410,7 @@ export function buildTowerGate(spec: GateSpec, o: {
   if (spec.passage.bay) {
     // a brick frame round the field gateway, two broad piers and a lintel, and inside it a plastered panel round the
     // arch (the round ports and windows drawn on the face lie over it)
-    const { w, h } = spec.passage.bay, top = gField + h, pw = 0.9, R0 = AW + 0.38, spring = gField + springField;
+    const { w, h } = spec.passage.bay, top = gField + h, pw = spec.passage.bay.pier ?? 0.9, R0 = AW + 0.38, spring = gField + springField;
     for (const dz of [-1, 1]) P.brick.push(faceBox(pw, top - base, 0.3, fieldX, base + (top - base) / 2, dz * (w / 2 - pw / 2), 1, 0));
     P.brick.push(faceBox(w, 0.6, 0.3, fieldX, top - 0.3, 0, 1, 0));
     P.brick.push(faceBox(w + 0.3, 0.16, 0.36, fieldX, top + 0.08, 0, 1, 0));
