@@ -252,9 +252,11 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
 - **Vilija:** named from 1555; led to the Neris and on to Ukmergė; an image of the Virgin, moved in 1802 to the
   orphanage chapel on Subačiaus g. ⁷. Pulled down 24 Nov 1802 ¹.
 - **Tatar:** east of the Benediktinių × Totorių crossing; at the end of the 18th c. a tower of three storeys under a
-  tiled roof ⁷. First named in 1588. Excavated (Jučienė, Levandauskas 1979): a rectangular building **24 × 12 m**, long
-  in the south-east–north-west direction, so along the road; its gateway 3 m wide, its floor paved and later covered
-  with five courses of split logs (1672); perhaps two gateways at right angles ²¹. Built against the north-east corner
+  tiled roof ⁷. First named in 1588. Excavated (Jučienė, Levandauskas 1979): a rectangular building **24 × 12 m**, said
+  to be long in the south-east–north-west direction (only about a third of it survived); its gateway 3 m wide, its
+  floor paved and later covered with five courses of split logs (1672); perhaps two gateways at right angles ²¹. The
+  wall bends at the site, so which way the long side ran is uncertain; the model lays it along the wall, as
+  Kamarauskas painted it [U]. Built against the north-east corner
   of the Jesuit novitiate; the arch low; a masonry bridge over the Kačerga; in 1794 86 soldiers were quartered on its
   second and third floors ²⁴. One picture from its time: W. Iwaszkiewicz's view of 1791 (private collection, published
   by R. Janonienė): "a ruined city wall with gun-ports and behind it a gate tower of laconic form with a tiled roof" ²⁴;
@@ -293,15 +295,14 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
   the long sides; the Virgin's niche over the town arch (KVR 39); cream render, 88% left. Heights read off the two
   pictures, which disagree (Smuglevičius's tower is taller); the bridge is not built. Two viewer views stand where
   the two painters stood. Vilija: a tower 11 × 8.5 m, 14 m to the eaves, the Virgin's niche over the arch on the town side.
-  Tatar (rebuilt 2026-10-04 after Kamarauskas, then resized the same day to the excavated plan): a long gatehouse
-  24 m along the road and 12 m along the wall, against the novitiate's north-east corner, 12.5 m to the eaves, a
-  saddle roof along the road rising 8 m, red tiles; Gothic gables in bare brick at both ends with a raised coping
-  and three tiers of plastered blind niches, a crescent vane on each; on the field front, under the gable as in
-  Kamarauskas's 1895 sketch, a brick frame round a plastered panel, the arch 3 m wide and low, three round openings
-  over it (1894) and two small windows high up (1897); rows of small windows along the soldiers' floors; the render
-  a warm ochre, 55% left. Kamarauskas's 1894 and 1897 paintings put the gateway in the long side under the eaves, the
-  ridge along the wall; the excavated plan, long along the road, does not allow that, so the model follows the
-  plan, and his 1895 sketch, which has the gable over the gateway. The second gateway is not built.
+  Tatar (rebuilt 2026-10-04 after Kamarauskas, sized to the excavated plan): a broad gatehouse 24 m along the wall
+  and 12 m deep, its south-west end against the Jesuit novitiate, 12.5 m to the eaves, a saddle roof along the wall
+  rising 8 m, red tiles; Gothic gables in bare brick at the wall's ends with a raised coping and three tiers of
+  plastered blind niches, a crescent vane on each; the gateway, 3 m wide, in the long field front, in a brick frame
+  round a plastered panel with three round openings over the arch (1894), and rows of small windows (1897); the
+  render a warm ochre, 55% left. Kamarauskas's paintings and the 24 × 12 m plan agree as laid out here: his views are
+  from different sides, the 1894 and 1897 ones of the long front with a gable end beside it. The viewer's first view
+  stands about where he stood in 1894. The second gateway is not built.
   Wet: 9 × 6 m, 9.4 m to the eaves, a tall arch walled up in bare brick, two ports either side.
   Castle: a broad block of three floors, 18 × 11 m, rows of windows, a court house more than a tower. Bernardine: a
   small gate block with the found tower beside it on the field side, 12 m to its eaves. Saviour's: a block 12 × 9 m

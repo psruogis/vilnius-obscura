@@ -7,7 +7,7 @@ import { buildTowerGate, gatePlan, type GateSpec } from './towergate';
  * Bernardine and Saviour's gates. Where a source gives a form, it is followed and cited in the docs [V]; the
  * measurements, and everything the sources leave open, are conjecture, kept in proportion with the Subačius and
  * Rūdninkai gates [U]. The Trakai Gate follows P. Smuglevičius's drawing of 1785 and the 1802 inventory's size; the
- * Tatar Gate its excavated plan and J. Kamarauskas's paintings of 1894–97, themselves imagined [U].
+ * Tatar Gate its excavated size, 24 x 12 m, laid along the wall, and J. Kamarauskas's paintings of 1894–97 [U].
  * Each stands square to the wall's line in the heritage register (KVR 39) where that line is clear, or to the street
  * that ran through it, and is moved off the houses that stand on its site today. Only the Saviour's Gate lies in the
  * walk's world yet; the others are seen at vilnius.gg/gates and drawn on the map.
@@ -24,7 +24,7 @@ export interface LostGate {
   /** the viewer's caption */ sub: string; note: string;
   /** pictures to stand where the painters stood, the first in place of the plain corner view: the camera's bearing in
    *  the gate's frame (out along the road, along the wall), its pitch, and the button's label */
-  views?: { label: string; dir: XZ; pitch: number; far?: number }[];
+  views?: { label: string; dir: XZ; pitch: number; far?: number; lift?: number }[];
 }
 
 export const LOST_GATES: LostGate[] = [
@@ -99,23 +99,24 @@ export const LOST_GATES: LostGate[] = [
   },
   {
     key: 'tatar', cover: 0.55, plaster: [0.76, 0.6, 0.36], roof: '#a65c48',   // Kamarauskas's flaking ochre, red tiles
-    sub: 'Totorių vartai, Vilnius · after the excavation and Juozapas Kamarauskas, 1894–97',
-    note: 'The north gate east of where Benediktinių g. meets Totorių g., first named in 1588, built against the Jesuit novitiate. Dug up in 1979: a long building, 24 by 12 m, its gateway 3 m wide and low; three storeys under a tiled roof at the end of the 18th century, when 86 soldiers were quartered on its upper floors. No picture of it survives but a small one of 1791 in a private collection. Its look follows Juozapas Kamarauskas, who imagined it in 1894–97: Gothic brick gables full of blind niches under a crescent vane, the gateway in a tall brick frame with three round openings over it.',
-    views: [{ label: 'The 1894 view', dir: [1, 0.9], pitch: 0.03, far: 1.1 }],
+    sub: 'Totorių vartai, Vilnius · after Juozapas Kamarauskas, 1894–97',
+    note: 'The north gate east of where Benediktinių g. meets Totorių g., first named in 1588, built against the Jesuit novitiate. Dug up in 1979: a long building, 24 by 12 m, its gateway 3 m wide; three storeys under a tiled roof at the end of the 18th century, when 86 soldiers were quartered on its upper floors. No picture from its time is to be seen. In 1894–97 Juozapas Kamarauskas painted it as he imagined it, and it is built after him: a broad Gothic gatehouse with a steep roof along the wall, brick gables full of blind niches under a crescent vane, and the gateway in a tall brick frame with three round openings over the arch.',
+    views: [{ label: 'The 1894 view', dir: [1, 0.9], pitch: 0.03, lift: 1.05 }],
     spec: {
       name: 'Tatar Gate', site: [-284, -513], out: norm(-0.698, -0.716),
-      shift: [2, -4],                                     // against the Jesuit novitiate's north-east corner
-      // 24 x 12 m, long along the road (excavation, 1979); the gable over the gateway (Kamarauskas, 1895)
-      tower: { depth: 24, hw: 6, eave: 12.5, roof: { kind: 'saddle', rise: 8, ridge: 'road', gable: 'gothic' }, chimney: true, vane: 'crescent' },
-      passage: { aw: 1.5, spring: 2.7, bay: { w: 5.6, h: 8.4 } },   // 3 m wide and low
+      // 24 m along the wall and 12 m deep (excavation, 1979), its ridge along the wall and its Gothic gables at the
+      // wall's ends, the gateway in the long field front (Kamarauskas 1894, 1897); its south-west end against the novitiate
+      tower: { depth: 12, hw: 12, eave: 12.5, roof: { kind: 'saddle', rise: 8, ridge: 'wall', gable: 'gothic' }, chimney: true, vane: 'crescent' },
+      passage: { aw: 1.5, spring: 3.3, bay: { w: 5.8, h: 9.3 } },                   // the gateway 3 m wide
       holes: [
-        { on: 'field', kind: 'port', y: 5.8, at: [-1.0, 0, 1.0], r: 0.34 },            // three round openings over the arch (1894)
-        { on: 'field', kind: 'window', y: 10.4, at: [-3.6, 3.6], w: 0.55, h: 0.85 },    // small windows high up (1897)
-        { on: 'sides', kind: 'window', y: 6.6, at: [-8, -4, 0, 4, 8], w: 0.6, h: 0.9 }, // the soldiers' floors
-        { on: 'sides', kind: 'window', y: 10.2, at: [-8, -4, 0, 4, 8], w: 0.6, h: 0.9 },
-        { on: 'town', kind: 'window', y: 6.6, at: [-3.2, 3.2], w: 0.6, h: 0.95 }, { on: 'town', kind: 'window', y: 10.2, at: [-3.2, 0, 3.2], w: 0.6, h: 0.95 },
+        { on: 'field', kind: 'port', y: 7.0, at: [-1.0, 0, 1.0], r: 0.36 },            // three round openings over the arch (1894)
+        { on: 'field', kind: 'window', y: 10.5, at: [-9.5, -6.5, -3.6, 3.6, 6.5, 9.5], w: 0.55, h: 0.85 },   // small windows (1897)
+        { on: 'field', kind: 'window', y: 7.0, at: [-9.5, -6.5, 6.5, 9.5], w: 0.55, h: 0.85 },
+        { on: 'sides', kind: 'window', y: 6.9, at: [3.6], w: 0.5, h: 1.0 },
+        { on: 'town', kind: 'window', y: 7.0, at: [-9.5, -6.5, -3.2, 3.2, 6.5, 9.5], w: 0.6, h: 0.95 },
+        { on: 'town', kind: 'window', y: 10.3, at: [-9.5, -6.5, -3.2, 0, 3.2, 6.5, 9.5], w: 0.6, h: 0.95 },
       ],
-      wall: { x: -11, walk: 6.2, max: 24 },
+      wall: { x: -6.5, walk: 6.2, max: 24 },
     },
   },
   {
