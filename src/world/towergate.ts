@@ -36,8 +36,11 @@ export interface GateSpec {
   /** The gate block: from x = -depth (the town face) to 0 (the field face), z = -hw..hw. */
   tower: {
     depth: number; hw: number; eave: number; roof: Roof; bands?: number[]; chimney?: boolean; pilasters?: number[]; cross?: boolean;
-    /** a weathervane on the gables' apexes: a crescent moon (the Tatar Gate, after Kamarauskas) */
-    vane?: 'crescent';
+    /** a weathervane on the gables' apexes: a crescent moon (the Tatar Gate, after Kamarauskas) or a flag (the Trakai
+     *  Gate, after Smuglevičius) */
+    vane?: 'crescent' | 'flag';
+    /** a heavy entablature across both fronts at this height, splitting them into two tall storeys */
+    entablature?: number;
   };
   /** The passage: half its width, its arches' springing; walled up, as the Wet Gate was. */
   passage: {
@@ -231,7 +234,18 @@ export function buildTowerGate(spec: GateSpec, o: {
         const [vx, vz] = on(0), x = vx - nX * 0.3, z = vz - nZ * 0.3, y = yT + gH + 0.1;
         P.iron.push(new THREE.CylinderGeometry(0.04, 0.05, 2.4, 6).translate(x, y + 1.2, z));
         P.iron.push(new THREE.SphereGeometry(0.16, 10, 8).translate(x, y + 1.1, z));
-        P.iron.push(new THREE.TorusGeometry(0.34, 0.055, 6, 18, Math.PI * 1.35).rotateZ(Math.PI * 0.825).rotateY(Math.atan2(nX, nZ)).translate(x, y + 2.75, z));
+        if (T.vane === 'crescent') P.iron.push(new THREE.TorusGeometry(0.34, 0.055, 6, 18, Math.PI * 1.35).rotateZ(Math.PI * 0.825).rotateY(Math.atan2(nX, nZ)).translate(x, y + 2.75, z));
+        else P.iron.push(faceBox(0.62, 0.4, 0.03, x - nZ * 0.33, y + 2.15, z + nX * 0.33, nX, nZ));   // a flag, to one side of the rod
+      }
+      if (!baroque && !gothic) {
+        // a moulded raking cornice up both edges of a plain gable
+        const n3 = new THREE.Vector3(nX, 0, nZ), apex = on(0);
+        for (const k of [-1, 1]) {
+          const foot = on(k * (hw + 0.15)), a = new THREE.Vector3(foot[0], yT - 0.05, foot[1]), b = new THREE.Vector3(apex[0], yT + gH + 0.12, apex[1]);
+          const dir = b.clone().sub(a), L = dir.length(), xAxis = dir.normalize(), yAxis = n3.clone().cross(xAxis);
+          const mid = a.clone().add(b).multiplyScalar(0.5).addScaledVector(n3, -0.2);
+          P.trim.push(new THREE.BoxGeometry(L, 0.3, 0.8).applyMatrix4(new THREE.Matrix4().makeBasis(xAxis, yAxis, n3).setPosition(mid)));
+        }
       }
       if (baroque) {
         // its coping, a round window, and finials on the steps and the crown
@@ -284,6 +298,10 @@ export function buildTowerGate(spec: GateSpec, o: {
   for (const [a, b, n] of T_FACES) {
     for (const y of T.bands ?? []) run(a, b, n, g0 + y, 0.28, 0.16, P.band);
     if (!(gabled(n) && R.kind === 'saddle' && R.gable === 'gothic')) run(a, b, n, yT - 0.42, 0.42, gabled(n) ? 0.2 : 0.3, P.trim);
+  }
+  if (T.entablature) for (const [a, b, n] of T_FACES.slice(0, 2)) {   // frieze and cornice, broad and deep
+    run(a, b, n, g0 + T.entablature, 0.55, 0.3, P.trim);
+    run(a, b, n, g0 + T.entablature + 0.55, 0.16, 0.44, P.trim);
   }
   for (const [a, b, n] of B_FACES) {
     for (const y of B!.bands ?? []) run(a, b, n, gB + y, 0.26, 0.15, P.band);

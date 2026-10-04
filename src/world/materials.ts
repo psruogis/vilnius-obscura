@@ -180,6 +180,9 @@ export function masonryMaterial(anisotropy: number, o: { brick: string; plaster:
           diffuseColor.rgb = c;
         }`);
   };
+  // the cover, colours and ground are baked into the shader, so each set needs its own program: three.js would
+  // otherwise key them all by this function's source and give every gate the first one compiled
+  m.customProgramCacheKey = () => `masonry|${t}|${o.plaster.map(f).join(',')}|${f(o.grime)}|${o.ground === undefined ? '-' : f(o.ground)}`;
   return m;
 }
 

@@ -237,11 +237,28 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
 **What the sources say** [V]:
 - **Trakai:** in the gap still left between Pylimo g. 22 and Trakų g. 2, where the Kačerga ran along the wall; adorned,
   like the Gate of Dawn, with saints' images; the Virgin's hung on the town side and went to the Franciscans in 1803 ⁷.
-  Two storeys, Baroque, a saddle roof, few gun ports, rich window surrounds ².
+  Two storeys, Baroque, a saddle roof, few gun ports, rich window surrounds ². Rebuilt in 1663 after the war with
+  Muscovy; in 1600 (T. Makowski's panorama) a tall four-storey Renaissance tower like the Gate of Dawn ²¹. The 1802
+  inventory gives it 8 paces wide and 12 long, about 9.4–9.7 × 14.0–14.5 m, standing some 10 m out from the wall's
+  plane (the west front of Trakų g. 2/24); its inner (east) wall, excavated, 1.5 m thick ²¹. Damaged in 1794, repaired;
+  pulled down 1803–04 ¹. **Pictures:** P. Smuglevičius drew it in 1785 ²² (known from J. Bułhak's photograph): a tall
+  tower standing well out in front of the wall, its saddle roof along the road and its gable over the gateway on the
+  field side; corner pilasters in two tall storeys split by a heavy entablature, a round window above it, a small
+  window in the gable, flag vanes on both gables, a chimney; small windows high on the long side; the wall running
+  off with its pitched roof and slit loopholes; a wooden bridge over the brook to the arch. J. Kamarauskas painted it in
+  1898 ²³, "composed after old drawings, plans, archaeological and historical research" (his note on the back): the
+  same tower, frontal, in cream render, with paired pilasters, the oculus, an arched gable window, a rusticated arch,
+  and the Franciscan church behind the wall.
 - **Vilija:** named from 1555; led to the Neris and on to Ukmergė; an image of the Virgin, moved in 1802 to the
   orphanage chapel on Subačiaus g. ⁷. Pulled down 24 Nov 1802 ¹.
 - **Tatar:** east of the Benediktinių × Totorių crossing; at the end of the 18th c. a tower of three storeys under a
-  tiled roof ⁷. No picture from its time survives; "how the Tatar gate looked is unknown" ²⁰. Juozapas Kamarauskas
+  tiled roof ⁷. First named in 1588. Excavated (Jučienė, Levandauskas 1979): a rectangular building **24 × 12 m**, long
+  in the south-east–north-west direction, so along the road; its gateway 3 m wide, its floor paved and later covered
+  with five courses of split logs (1672); perhaps two gateways at right angles ²¹. Built against the north-east corner
+  of the Jesuit novitiate; the arch low; a masonry bridge over the Kačerga; in 1794 86 soldiers were quartered on its
+  second and third floors ²⁴. One picture from its time: W. Iwaszkiewicz's view of 1791 (private collection, published
+  by R. Janonienė): "a ruined city wall with gun-ports and behind it a gate tower of laconic form with a tiled roof" ²⁴;
+  no image of it is online. No picture from its time survives; "how the Tatar gate looked is unknown" ²⁰. Juozapas Kamarauskas
   (1874–1946) painted it as he imagined it, some ninety years after it came down: in 1894, 1895 and 1897 (Lithuanian
   National Museum of Art, T-8248, T-7984/b, T-8278) ¹⁹. The 1894 and 1897 paintings agree on its form: a gatehouse
   with a very steep tiled saddle roof whose ridge runs along the wall, Gothic brick gables at the wall's ends full of
@@ -269,16 +286,22 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
   some 20 m from its map point, so that its tower falls on the south-west corner of the building at the register
   strip's end, read as the outbuilding where the tower was found. Which building that is, and so where the gate was,
   is a guess.
-- **Forms.** Trakai: a two-storey block 15 × 7 m, a steep saddle roof along the wall with plain gables, pilasters,
-  rich surrounds, the Virgin's niche on the town front and a saint's on the field front, a cross on the ridge for
-  the chapel ². Vilija: a tower 11 × 8.5 m, 14 m to the eaves, the Virgin's niche over the arch on the town side.
-  Tatar (rebuilt 2026-10-04, after Kamarauskas's 1894 painting, the 1897 one where they differ only in detail): a
-  gatehouse 12 m along the wall and 10 m deep, 12.5 m to the eaves, a saddle roof rising 7.2 m along the wall, red
-  tiles; Gothic gables in bare brick with a raised coping and three tiers of plastered blind niches, a crescent vane
-  on each; on the field front a brick frame 5.8 × 9.3 m round a plastered panel, the arch and three round openings
-  over it, two small windows high up (1897); the render a warm ochre, 55% left. Sizes read off the paintings,
-  which disagree on the front's width; the town front, not painted, has plain small windows. The viewer's first
-  view stands about where Kamarauskas stood in 1894, across the stream.
+- **Forms.** Trakai (rebuilt 2026-10-04, after Smuglevičius 1785, Kamarauskas 1898 and the 1802 inventory): a tower
+  9.5 m along the wall and 14.25 m along the road, 10 m of it outside the wall, 14 m to the eaves, a saddle roof along
+  the road rising 4.6 m with plain gables and raking cornices; on both fronts paired corner pilasters, a heavy
+  entablature at 9.4 m, a round window over it and a small one in the gable; flag vanes, a chimney; windows high on
+  the long sides; the Virgin's niche over the town arch (KVR 39); cream render, 88% left. Heights read off the two
+  pictures, which disagree (Smuglevičius's tower is taller); the bridge is not built. Two viewer views stand where
+  the two painters stood. Vilija: a tower 11 × 8.5 m, 14 m to the eaves, the Virgin's niche over the arch on the town side.
+  Tatar (rebuilt 2026-10-04 after Kamarauskas, then resized the same day to the excavated plan): a long gatehouse
+  24 m along the road and 12 m along the wall, against the novitiate's north-east corner, 12.5 m to the eaves, a
+  saddle roof along the road rising 8 m, red tiles; Gothic gables in bare brick at both ends with a raised coping
+  and three tiers of plastered blind niches, a crescent vane on each; on the field front, under the gable as in
+  Kamarauskas's 1895 sketch, a brick frame round a plastered panel, the arch 3 m wide and low, three round openings
+  over it (1894) and two small windows high up (1897); rows of small windows along the soldiers' floors; the render
+  a warm ochre, 55% left. Kamarauskas's 1894 and 1897 paintings put the gateway in the long side under the eaves, the
+  ridge along the wall; the excavated plan, long along the road, does not allow that, so the model follows the
+  plan, and his 1895 sketch, which has the gable over the gateway. The second gateway is not built.
   Wet: 9 × 6 m, 9.4 m to the eaves, a tall arch walled up in bare brick, two ports either side.
   Castle: a broad block of three floors, 18 × 11 m, rows of windows, a court house more than a tower. Bernardine: a
   small gate block with the found tower beside it on the field side, 12 m to its eaves. Saviour's: a block 12 × 9 m
@@ -316,5 +339,9 @@ of its own or sat under the court house's.
 18. [P. Smuglevičius, the Rūdninkai Gate, 1785 (reproduced by VSAA, vsaa.lt/sena/vaizdai/foto_html/1_rudininku_v.jpg; also Wikimedia Commons, File:Rūdininkai gate.Vilnius.Lithuania.jpg)](https://vsaa.lt/sena/rudninku_v.html)
 19. J. Kamarauskas, *Totorių vartai Vilniuje* (1894, T-8248), *Totorių vartai* (1895, T-7984/b) and *Totorių vartai* (1897, T-8278), watercolour, Lithuanian National Museum of Art; catalogued in [*Juozapas Kamarauskas*, LNDM, pp. 141–142](https://www.lndm.lt/wp-content/uploads/2016/07/Kamarauskas_knyga_141_142_psl.pdf); images on ePaveldas (records LIMIS-20000001711596, LIMIS-20000001631154, LIMIS-20000001511861). Kamarauskas also painted the Trakai (1898), Vilija (1895, 1898), Subačius and Saviour's gates
 20. [Tatar Gate (LDK istorija, Vilnius University)](https://www.ldkistorija.lt/tatar-gate/)
+21. [L. Girlevičius, *Gynybiniai įrenginiai XIV–XVIII a. Vilniuje*, doctoral dissertation, Vilnius University, 2009](https://epublications.vu.lt/object/elaba:1970181/1970181.pdf), pp. 73–79, citing V. Merkys (1959, the 1802 inventories), Jučienė & Levandauskas (1979, the excavations) and Gasparavičienė (1993)
+22. [P. Smuglevičius, *Trakų vartai*, 1785, photographed by J. Bułhak, early 20th c. (Lithuanian National Museum; ePaveldas LIMIS-489663736)](https://www.epaveldas.lt/); also Wikimedia Commons, File:Trakai gate.Vilnius.Lithuania.jpg. Bułhak photographed Smuglevičius's Rūdninkai Gate too (LIMIS-489639719)
+23. J. Kamarauskas, *Vilnius. Trakų vartai*, 1898, watercolour, Lithuanian National Museum of Art T-8222 (ePaveldas LIMIS-20000003972755), with his note on the back
+24. [R. Janonienė, "Apie oberbombardyro Vaitiekaus Ivaškevičiaus 1791 m. Vilniaus piešinį", *XVIII amžiaus studijos* 6 (2020), pp. 323–334, CC BY 4.0](https://doi.org/10.33918/23516968-006015)
 
 Map data: streets © OpenStreetMap contributors (ODbL).

@@ -27,7 +27,8 @@ Pastel / Dark / Glow switch (pastel is the default; or `?map=dark`, `?map=glow`)
 the walk on Subačiaus g. by the gate (`#ghost`: the same, with the ghost). `gate.html` (on the site: **vilnius.gg/gates**) shows the gates
 on their own, in clear daylight, to be turned round with the mouse or a finger: the Subačius Gate, or any of the nine lost
 gates by name (`#rudninkai`, `#saviour`, `#bernardine`, `#castle`, `#wet`, `#tatar`, `#vilija`, `#trakai`; `#field`,
-`#city`, `#passage`, `#above` pick a view, and `#trakai-field` and so on).
+`#city`, `#passage`, `#above` pick a view, and `#trakai-field` and so on; where a gate was painted, `#drawing` and
+`#painting` stand where the painters stood, e.g. `#trakai-painting`).
 
 Music: none, except klezmer that drifts in as you walk west towards the Jewish quarter (`docs/music.md`; the Music
 slider is in Options).

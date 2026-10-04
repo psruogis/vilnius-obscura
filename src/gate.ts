@@ -108,13 +108,14 @@ const GATES: Record<string, GateDef> = {
   },
 };
 // The lost gates, which no drawing shows: the same five views, framed from each gate's size
-const framed = (spec: GateSpec, painted?: { dir: XZ; pitch: number }): GateDef['views'] => {
+const framed = (spec: GateSpec, painted: { dir: XZ; pitch: number; far?: number }[] = []): GateDef['views'] => {
   const t = spec.tower, H = t.eave + t.roof.rise + (t.roof.kind === 'saddle' && t.roof.gable === 'baroque' ? 1.6 : 0);
   const f = spec.flank, len = (spec.barbican?.length ?? 0) + t.depth, c = ((spec.barbican?.length ?? 0) - t.depth) / 2;
   const span = Math.max(2 * t.hw + 10, len, f ? 2 * Math.max(-f.z0, f.z1) + 4 : 0);
   const d = Math.max(30, 1.5 * H + 1.1 * span), y = H * 0.48, side = f && f.z0 + f.z1 < 0 ? 1 : -1;   // from the side away from a flanking tower
   return {
-    drawing: painted ? { ...painted, dist: d * 0.85, at: [-2, y * 1.05, 0] } : { dir: [0.72, 0.7 * side], pitch: 0.1, dist: d * 1.05, at: [0, y, 0] },
+    drawing: painted[0] ? { dir: painted[0].dir, pitch: painted[0].pitch, dist: d * 0.85 * (painted[0].far ?? 1), at: [-2, y * 0.9, 0] } : { dir: [0.72, 0.7 * side], pitch: 0.1, dist: d * 1.05, at: [0, y, 0] },
+    ...(painted[1] ? { painting: { dir: painted[1].dir, pitch: painted[1].pitch, dist: d * 0.85 * (painted[1].far ?? 1), at: [-2, y * 0.9, 0] as [number, number, number] } } : {}),
     field: { dir: [1, 0.05], pitch: 0.07, dist: d * 0.9, at: [-c, y, 0] },
     city: { dir: [-1, -0.05], pitch: 0.1, dist: d * 0.9, at: [-c - t.depth / 2, y, 0] },
     ...(spec.passage.walled ? {} : { passage: { dir: [-1, 0] as XZ, pitch: 0.05, dist: 18 + t.depth, at: [-c + 1, spec.passage.spring, 0] as [number, number, number] } }),
@@ -122,11 +123,11 @@ const framed = (spec: GateSpec, painted?: { dir: XZ; pitch: number }): GateDef['
   };
 };
 for (const g of LOST_GATES) {
-  const plan = lostGatePlan(g), views = framed(g.spec, g.view);
+  const plan = lostGatePlan(g), views = framed(g.spec, g.views);
   GATES[g.key] = {
     name: g.spec.name, sub: g.sub, note: g.note, centre: [plan.x, plan.z], out: plan.out,
     group: buildLostGate(g, { ...opts, mats: matsFor(g.cover, g.plaster, g.roof) }).solid, views,
-    labels: { drawing: g.view?.label ?? 'Corner view', field: 'Field side', city: 'Town side', ...(views.passage ? { passage: 'Passage' } : {}), above: 'From above' },
+    labels: { drawing: g.views?.[0]?.label ?? 'Corner view', ...(g.views?.[1] ? { painting: g.views[1].label } : {}), field: 'Field side', city: 'Town side', ...(views.passage ? { passage: 'Passage' } : {}), above: 'From above' },
   };
 }
 // the switch runs round the wall: east, north, west
