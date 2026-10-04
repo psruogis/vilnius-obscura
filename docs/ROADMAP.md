@@ -66,7 +66,9 @@ reorder freely.
 4. **The other gates.** `docs/gates.md`. All nine lost gates are modelled (§8–10); the Subačius, Rūdninkai and
    Saviour's gates stand in the world. Next: roads to the Rūdninkai and Saviour's gates in `WALK_SHAPES`, the Gate of
    Dawn (the one gate still standing, a careful pass of its own), and the world grown to reach the northern gates.
-   The 1648 Getkant and 1740 Fürstenhoff plans would firm up the lost gates' footprints.
+   The 1648 Getkant and 1740 Fürstenhoff plans would firm up the lost gates' footprints. The Tatar Gate now follows
+   J. Kamarauskas's paintings of 1894–97 (`docs/gates.md` §10); he also painted the Trakai, Vilija and Saviour's
+   gates (1892–98), the next to refine the same way.
 5. **The Great Synagogue and the Shulhoyf.** No model exists to import; it would be built from
    archives (`docs/research/city-1900.md` §6). It sits inside the existing map frame.
 6. **The crowd, balanced to the 1897 census.** Mix in `docs/research/city-1900.md` §2.

@@ -15,7 +15,7 @@ import { faceBox, uvMetres, setGround, ghostMaterial, type Gate, type GateLook, 
 
 export type Roof =
   | { kind: 'hip'; rise: number }
-  | { kind: 'saddle'; rise: number; ridge: 'road' | 'wall'; gable?: 'plain' | 'baroque' };
+  | { kind: 'saddle'; rise: number; ridge: 'road' | 'wall'; gable?: 'plain' | 'baroque' | 'gothic' };
 
 /** Openings on a face: `n` spread evenly along it, or `at` offsets from its middle along it; `y` above that part's floor. */
 export interface Holes {
@@ -34,9 +34,17 @@ export interface GateSpec {
   /** The gate's own origin, moved along the road and along the wall from `site` (to clear a house, say). */
   shift?: [number, number];
   /** The gate block: from x = -depth (the town face) to 0 (the field face), z = -hw..hw. */
-  tower: { depth: number; hw: number; eave: number; roof: Roof; bands?: number[]; chimney?: boolean; pilasters?: number[]; cross?: boolean };
+  tower: {
+    depth: number; hw: number; eave: number; roof: Roof; bands?: number[]; chimney?: boolean; pilasters?: number[]; cross?: boolean;
+    /** a weathervane on the gables' apexes: a crescent moon (the Tatar Gate, after Kamarauskas) */
+    vane?: 'crescent';
+  };
   /** The passage: half its width, its arches' springing; walled up, as the Wet Gate was. */
-  passage: { aw: number; spring: number; walled?: boolean; leaves?: boolean };
+  passage: {
+    aw: number; spring: number; walled?: boolean; leaves?: boolean;
+    /** a tall brick frame round the gateway on the field front, `w` wide and `h` high */
+    bay?: { w: number; h: number };
+  };
   /** A barbican on the field side, from x = 0 to `length`. */
   barbican?: { length: number; hw: number; eave: number; rise: number; bands?: number[]; pilasters?: boolean };
   /** A tower beside the gate, in the local frame. */
@@ -140,7 +148,8 @@ export function buildTowerGate(spec: GateSpec, o: {
 
   const P = { render: [] as THREE.BufferGeometry[], band: [] as THREE.BufferGeometry[], trim: [] as THREE.BufferGeometry[], stone: [] as THREE.BufferGeometry[],
     roof: [] as THREE.BufferGeometry[], dark: [] as THREE.BufferGeometry[], wood: [] as THREE.BufferGeometry[], iron: [] as THREE.BufferGeometry[],
-    wall: [] as THREE.BufferGeometry[], wallRoof: [] as THREE.BufferGeometry[], infill: [] as THREE.BufferGeometry[], icon: [] as THREE.BufferGeometry[] };
+    wall: [] as THREE.BufferGeometry[], wallRoof: [] as THREE.BufferGeometry[], infill: [] as THREE.BufferGeometry[], icon: [] as THREE.BufferGeometry[],
+    brick: [] as THREE.BufferGeometry[] };
   const ink: number[] = [];
   const loop = (pts: THREE.Vector3[]) => pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; ink.push(p.x, p.y, p.z, q.x, q.y, q.z); });
   // a section in the (z, y) plane, extruded along x from x0
@@ -180,10 +189,11 @@ export function buildTowerGate(spec: GateSpec, o: {
     P.roof.push(roofGeo(TX0 - ov, TX1 + ov, -THW - ov, THW + ov, yT - 0.05, R.rise, alongX, true, true));
     eaveBoards(TX0, TX1, -THW, THW, yT, [true, true, true, true]);
   } else {
-    const alongX = R.ridge === 'road', hw = alongX ? THW : (TX1 - TX0) / 2, baroque = R.gable === 'baroque';
-    const gH = baroque ? R.rise + 1.6 : R.rise;
-    // past plain gables the roof runs on a little; behind Baroque ones it stops short
-    const ext = baroque ? -0.3 : 0.15, [ax0, ax1] = alongX ? [TX0 - ext, TX1 + ext] : [TX0 - ov, TX1 + ov], [az0, az1] = alongX ? [-THW - ov, THW + ov] : [-THW - ext, THW + ext];
+    const alongX = R.ridge === 'road', hw = alongX ? THW : (TX1 - TX0) / 2, baroque = R.gable === 'baroque', gothic = R.gable === 'gothic';
+    // a Baroque gable stands well above the roof, a Gothic one by its coping
+    const gH = baroque ? R.rise + 1.6 : gothic ? R.rise + 0.45 : R.rise;
+    // past plain gables the roof runs on a little; behind Baroque and Gothic ones it stops short
+    const ext = baroque || gothic ? -0.3 : 0.15, [ax0, ax1] = alongX ? [TX0 - ext, TX1 + ext] : [TX0 - ov, TX1 + ov], [az0, az1] = alongX ? [-THW - ov, THW + ov] : [-THW - ext, THW + ext];
     P.roof.push(roofGeo(ax0, ax1, az0, az1, yT - 0.05, R.rise, alongX, false, false));
     eaveBoards(TX0, TX1, -THW, THW, yT, alongX ? [true, true, false, false] : [false, false, true, true], ext);
     P.roof.push(new THREE.BoxGeometry(alongX ? ax1 - ax0 : 0.34, 0.2, alongX ? 0.34 : az1 - az0).translate((TX0 + TX1) / 2, yT + R.rise + 0.02, 0));   // ridge tiles
@@ -193,16 +203,43 @@ export function buildTowerGate(spec: GateSpec, o: {
     for (const [i, e] of (alongX ? [TX0, TX1 - 0.6] : [-THW, THW - 0.6]).entries()) {
       // the extrusion runs along z; turned a quarter about y it runs along x, from e to e + 0.6
       const m = alongX ? new THREE.Matrix4().makeRotationY(Math.PI / 2).setPosition(e, yT - 0.01, 0) : new THREE.Matrix4().setPosition((TX0 + TX1) / 2, yT - 0.01, e);
-      P.render.push(g.clone().applyMatrix4(m));
+      (gothic ? P.brick : P.render).push(g.clone().applyMatrix4(m));
+      const sg = i === 0 ? -1 : 1, face = i === 0 ? e : e + 0.6, nX = alongX ? sg : 0, nZ = alongX ? 0 : sg;
+      const on = (s: number): XZ => (alongX ? [face, s] : [(TX0 + TX1) / 2 + s, face]);
+      if (gothic) {
+        // bare brick, a raised coping up both rakes, and tiers of plastered blind niches, each with a small round hole
+        const n3 = new THREE.Vector3(nX, 0, nZ), apex = on(0);
+        for (const k of [-1, 1]) {
+          const foot = on(k * (hw + 0.1)), a = new THREE.Vector3(foot[0], yT - 0.1, foot[1]), b = new THREE.Vector3(apex[0], yT + gH + 0.15, apex[1]);
+          const dir = b.clone().sub(a), L = dir.length(), xAxis = dir.normalize(), yAxis = n3.clone().cross(xAxis);
+          const mid = a.clone().add(b).multiplyScalar(0.5).addScaledVector(n3, -0.18);
+          P.brick.push(new THREE.BoxGeometry(L, 0.42, 0.96).applyMatrix4(new THREE.Matrix4().makeBasis(xAxis, yAxis, n3).setPosition(mid)));
+        }
+        run(on(-hw), on(hw), [nX, nZ], yT - 0.34, 0.36, 0.18, P.brick);
+        const tier = gH * 0.22, gap = gH * 0.05;
+        for (let y0 = gap; y0 + tier < gH * 0.86; y0 += tier + gap) {
+          const room = 2 * hw * (1 - (y0 + tier) / gH) - 0.9, n = room >= 0.45 ? Math.max(1, Math.floor((room + 0.4) / 1.0)) : 0;
+          const w = Math.min(0.6, room);
+          for (let j = 0; j < n; j++) {
+            const s = (j - (n - 1) / 2) * 1.0, [px, pz] = on(s), yc = yT + y0 + tier / 2;
+            P.trim.push(faceBox(w, tier, 0.04, px, yc, pz, nX, nZ));
+            port(px + nX * 0.04, yc + tier * 0.22, pz + nZ * 0.04, nX, nZ, 0.11);
+          }
+        }
+      }
+      if (T.vane) {                                                  // an iron rod, a ball, and a crescent, horns up
+        const [vx, vz] = on(0), x = vx - nX * 0.3, z = vz - nZ * 0.3, y = yT + gH + 0.1;
+        P.iron.push(new THREE.CylinderGeometry(0.04, 0.05, 2.4, 6).translate(x, y + 1.2, z));
+        P.iron.push(new THREE.SphereGeometry(0.16, 10, 8).translate(x, y + 1.1, z));
+        P.iron.push(new THREE.TorusGeometry(0.34, 0.055, 6, 18, Math.PI * 1.35).rotateZ(Math.PI * 0.825).rotateY(Math.atan2(nX, nZ)).translate(x, y + 2.75, z));
+      }
       if (baroque) {
         // its coping, a round window, and finials on the steps and the crown
-        const sg = i === 0 ? -1 : 1, face = i === 0 ? e : e + 0.6, nX = alongX ? sg : 0, nZ = alongX ? 0 : sg;
-        const at = (s: number): XZ => (alongX ? [face, s] : [(TX0 + TX1) / 2 + s, face]);
-        run(at(-hw), at(hw), [nX, nZ], yT - 0.05, 0.3, 0.2, P.trim);
-        const [wx, wz] = at(0);
+        run(on(-hw), on(hw), [nX, nZ], yT - 0.05, 0.3, 0.2, P.trim);
+        const [wx, wz] = on(0);
         port(wx, yT + gH * 0.45, wz, nX, nZ, 0.45);
         for (const [s, y] of [[-0.62 * hw, 0.48 * gH], [0.62 * hw, 0.48 * gH], [0, 0.94 * gH]] as const) {
-          const [px, pz] = at(s);
+          const [px, pz] = on(s);
           P.trim.push(new THREE.BoxGeometry(0.34, 0.6, 0.34).translate(px - nX * 0.3, yT + y + 0.3, pz - nZ * 0.3));
           P.trim.push(new THREE.SphereGeometry(0.2, 8, 6).translate(px - nX * 0.3, yT + y + 0.75, pz - nZ * 0.3));
         }
@@ -213,9 +250,15 @@ export function buildTowerGate(spec: GateSpec, o: {
     P.iron.push(new THREE.BoxGeometry(0.08, 1.6, 0.08).translate((TX0 + TX1) / 2, yT + T.roof.rise + 0.8, 0));
     P.iron.push(new THREE.BoxGeometry(0.08, 0.08, 0.8).translate((TX0 + TX1) / 2, yT + T.roof.rise + 1.15, 0));
   }
-  if (T.chimney) {
+  if (T.chimney && R.kind === 'hip') {
     P.render.push(new THREE.BoxGeometry(0.9, 2.2, 0.9).translate(TX0 + 2.2, yT + T.roof.rise * 0.55 + 0.6, THW - 2.4));
     P.trim.push(new THREE.BoxGeometry(1.15, 0.2, 1.15).translate(TX0 + 2.2, yT + T.roof.rise * 0.55 + 1.75, THW - 2.4));
+  } else if (T.chimney && R.kind === 'saddle') {                    // on the town slope, by the ridge, rising past it
+    const [cx, cz] = R.ridge === 'road' ? [TX0 + 2.4, -0.8] : [(TX0 + TX1) / 2 - 0.8, THW - 2.6];
+    const slope = R.ridge === 'road' ? 1 - Math.abs(cz) / THW : 1 - Math.abs(cx - (TX0 + TX1) / 2) / ((TX1 - TX0) / 2);
+    const y0 = yT + R.rise * slope - 0.4, y1 = yT + R.rise + 1.1;
+    P.brick.push(new THREE.BoxGeometry(0.9, y1 - y0, 0.9).translate(cx, (y0 + y1) / 2, cz));
+    P.brick.push(new THREE.BoxGeometry(1.15, 0.2, 1.15).translate(cx, y1, cz));
   }
   if (B) {
     P.roof.push(roofGeo(TX1, B.length + ov, -B.hw - ov, B.hw + ov, yB - 0.05, B.rise, true, false, true));
@@ -240,7 +283,7 @@ export function buildTowerGate(spec: GateSpec, o: {
   const gabled = (n: [number, number]) => R.kind === 'saddle' && (R.ridge === 'road' ? n[0] !== 0 : n[0] === 0);
   for (const [a, b, n] of T_FACES) {
     for (const y of T.bands ?? []) run(a, b, n, g0 + y, 0.28, 0.16, P.band);
-    run(a, b, n, yT - 0.42, 0.42, gabled(n) ? 0.2 : 0.3, P.trim);
+    if (!(gabled(n) && R.kind === 'saddle' && R.gable === 'gothic')) run(a, b, n, yT - 0.42, 0.42, gabled(n) ? 0.2 : 0.3, P.trim);
   }
   for (const [a, b, n] of B_FACES) {
     for (const y of B!.bands ?? []) run(a, b, n, gB + y, 0.26, 0.15, P.band);
@@ -335,6 +378,19 @@ export function buildTowerGate(spec: GateSpec, o: {
       sec.moveTo(-AW, base); sec.lineTo(-AW, spring); sec.absarc(0, spring, AW, Math.PI, 0, true); sec.lineTo(AW, base); sec.closePath();
       P.infill.push(alongX(new THREE.ExtrudeGeometry(sec, { depth: 0.7, bevelEnabled: false, curveSegments: 14 }), s > 0 ? fx - 0.9 : fx + 0.2));
     }
+  }
+  if (spec.passage.bay) {
+    // a brick frame round the field gateway, two broad piers and a lintel, and inside it a plastered panel round the
+    // arch (the round ports and windows drawn on the face lie over it)
+    const { w, h } = spec.passage.bay, top = gField + h, pw = 0.9, R0 = AW + 0.38, spring = gField + springField;
+    for (const dz of [-1, 1]) P.brick.push(faceBox(pw, top - base, 0.3, fieldX, base + (top - base) / 2, dz * (w / 2 - pw / 2), 1, 0));
+    P.brick.push(faceBox(w, 0.6, 0.3, fieldX, top - 0.3, 0, 1, 0));
+    P.brick.push(faceBox(w + 0.3, 0.16, 0.36, fieldX, top + 0.08, 0, 1, 0));
+    const inner = w / 2 - pw, panel = new THREE.Shape([new THREE.Vector2(-inner, base), new THREE.Vector2(inner, base), new THREE.Vector2(inner, top - 0.6), new THREE.Vector2(-inner, top - 0.6)]);
+    const hole = new THREE.Path();
+    hole.moveTo(-R0, base); hole.lineTo(-R0, spring); hole.absarc(0, spring, R0, Math.PI, 0, true); hole.lineTo(R0, base); hole.closePath();
+    panel.holes.push(hole);
+    P.trim.push(alongX(new THREE.ShapeGeometry(panel, 16), fieldX + 0.015));
   }
   if (B?.pilasters) for (const dz of [-1, 1]) P.trim.push(faceBox(0.55, yB - 0.4 - base, 0.1, B.length, base + (yB - 0.4 - base) / 2, dz * (B.hw - 0.28), 1, 0));
   if (spec.passage.leaves !== false && !spec.passage.walled) for (const dz of [-1, 1]) {
@@ -439,7 +495,7 @@ export function buildTowerGate(spec: GateSpec, o: {
     const Mt = o.mats;
     mesh(P.render, Mt.render); mesh([...P.band, ...P.trim], Mt.trim); mesh(P.stone, Mt.stone);
     mesh([...P.roof, ...P.wallRoof], Mt.roof); mesh(P.dark, Mt.dark, false); mesh(P.wood, Mt.wood); mesh(P.iron, Mt.iron);
-    mesh(P.wall, Mt.wall); mesh(P.infill, Mt.remnant); mesh(P.icon, GILT, false);
+    mesh(P.wall, Mt.wall); mesh([...P.infill, ...P.brick], Mt.remnant); mesh(P.icon, GILT, false);
     // the gate stops the walker: its block either side of the passage (all of it, if walled up), the barbican, the
     // flanking tower and the wall
     if (spec.passage.walled) rect(TX0, -THW, TX1, THW);
@@ -449,7 +505,7 @@ export function buildTowerGate(spec: GateSpec, o: {
     for (const s of wallSegs) seg(...s);
   } else {
     ghost.name = `${spec.name} ghost`;
-    const faces = merged([...P.render, ...P.band, ...P.roof, ...P.wall, ...P.wallRoof, ...P.infill].map(place).map(g => { g.deleteAttribute('uv'); return g; }));
+    const faces = merged([...P.render, ...P.band, ...P.roof, ...P.wall, ...P.wallRoof, ...P.infill, ...P.brick].map(place).map(g => { g.deleteAttribute('uv'); return g; }));
     const edges = new THREE.EdgesGeometry(faces, 24);
     const inkPos = edges.getAttribute('position').array as Float32Array;
     const all = new Float32Array(inkPos.length + inkWorld.length);

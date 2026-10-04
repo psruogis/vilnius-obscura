@@ -241,7 +241,14 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
 - **Vilija:** named from 1555; led to the Neris and on to Ukmergė; an image of the Virgin, moved in 1802 to the
   orphanage chapel on Subačiaus g. ⁷. Pulled down 24 Nov 1802 ¹.
 - **Tatar:** east of the Benediktinių × Totorių crossing; at the end of the 18th c. a tower of three storeys under a
-  tiled roof ⁷.
+  tiled roof ⁷. No picture from its time survives; "how the Tatar gate looked is unknown" ²⁰. Juozapas Kamarauskas
+  (1874–1946) painted it as he imagined it, some ninety years after it came down: in 1894, 1895 and 1897 (Lithuanian
+  National Museum of Art, T-8248, T-7984/b, T-8278) ¹⁹. The 1894 and 1897 paintings agree on its form: a gatehouse
+  with a very steep tiled saddle roof whose ridge runs along the wall, Gothic brick gables at the wall's ends full of
+  plastered blind niches with small round holes, a crescent-moon vane on the gable, the city wall and its covered
+  walk running into the gables; on the field front, over a bridge across the stream, the gateway in a tall brick
+  frame with three round openings over the arch (1894) or a Baroque portal between two (1897); the render half
+  fallen from fieldstone and brick ¹⁹. These are reconstructions by a painter, not records.
 - **Wet:** small, one storey, a hipped roof, an arched gateway with two gun ports either side; served the Lukiškės
   and Puškarnė suburbs and the bridge over the Kačerga; walled up in 1677; its north side is in Smuglevičius's 1785
   panorama; its site never found ⁷ ¹.
@@ -265,8 +272,14 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
 - **Forms.** Trakai: a two-storey block 15 × 7 m, a steep saddle roof along the wall with plain gables, pilasters,
   rich surrounds, the Virgin's niche on the town front and a saint's on the field front, a cross on the ridge for
   the chapel ². Vilija: a tower 11 × 8.5 m, 14 m to the eaves, the Virgin's niche over the arch on the town side.
-  Tatar: a narrower tower, 13 m to the eaves, three storeys between string courses, slits on the field side, a
-  steeper tiled hip. Wet: 9 × 6 m, 9.4 m to the eaves, a tall arch walled up in bare brick, two ports either side.
+  Tatar (rebuilt 2026-10-04, after Kamarauskas's 1894 painting, the 1897 one where they differ only in detail): a
+  gatehouse 12 m along the wall and 10 m deep, 12.5 m to the eaves, a saddle roof rising 7.2 m along the wall, red
+  tiles; Gothic gables in bare brick with a raised coping and three tiers of plastered blind niches, a crescent vane
+  on each; on the field front a brick frame 5.8 × 9.3 m round a plastered panel, the arch and three round openings
+  over it, two small windows high up (1897); the render a warm ochre, 55% left. Sizes read off the paintings,
+  which disagree on the front's width; the town front, not painted, has plain small windows. The viewer's first
+  view stands about where Kamarauskas stood in 1894, across the stream.
+  Wet: 9 × 6 m, 9.4 m to the eaves, a tall arch walled up in bare brick, two ports either side.
   Castle: a broad block of three floors, 18 × 11 m, rows of windows, a court house more than a tower. Bernardine: a
   small gate block with the found tower beside it on the field side, 12 m to its eaves. Saviour's: a block 12 × 9 m
   under a saddle roof along the road, with Baroque gables front and back (volutes, finials, an oculus), pilasters,
@@ -301,5 +314,7 @@ of its own or sat under the court house's.
 16. [Church of St. Francis and St. Bernard, Vilnius (en.wikipedia)](https://en.wikipedia.org/wiki/Church_of_St._Francis_and_St._Bernard,_Vilnius)
 17. Vilniaus Šventųjų Pranciškaus Asyžiečio, Bernardino Sieniečio bei Šv. Onos bažnyčių ir bernardinų vienuolyno statinių ansamblis, KVR 766 (Kultūros vertybių registras; polygon in `shadows-of-vilnius-seed/kvr/`)
 18. [P. Smuglevičius, the Rūdninkai Gate, 1785 (reproduced by VSAA, vsaa.lt/sena/vaizdai/foto_html/1_rudininku_v.jpg; also Wikimedia Commons, File:Rūdininkai gate.Vilnius.Lithuania.jpg)](https://vsaa.lt/sena/rudninku_v.html)
+19. J. Kamarauskas, *Totorių vartai Vilniuje* (1894, T-8248), *Totorių vartai* (1895, T-7984/b) and *Totorių vartai* (1897, T-8278), watercolour, Lithuanian National Museum of Art; catalogued in [*Juozapas Kamarauskas*, LNDM, pp. 141–142](https://www.lndm.lt/wp-content/uploads/2016/07/Kamarauskas_knyga_141_142_psl.pdf); images on ePaveldas (records LIMIS-20000001711596, LIMIS-20000001631154, LIMIS-20000001511861). Kamarauskas also painted the Trakai (1898), Vilija (1895, 1898), Subačius and Saviour's gates
+20. [Tatar Gate (LDK istorija, Vilnius University)](https://www.ldkistorija.lt/tatar-gate/)
 
 Map data: streets © OpenStreetMap contributors (ODbL).

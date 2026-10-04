@@ -200,11 +200,11 @@ export function fieldstoneMaterial(anisotropy: number): THREE.MeshStandardMateri
 /**
  * The city gates' materials (world/subacius.ts, world/rudninkai.ts), UVs in metres: lime render over brick, worn
  * through more at the foot from `ground` (the passage floor), trim, a fieldstone footing, clay tile, plank leaves,
- * iron, and the wall either side. `cover` is how much of the gate's render is left.
+ * iron, and the wall either side. `cover` is how much of the gate's render is left, `plaster` its colour.
  */
-export function createGateMaterials(anisotropy: number, ground: number, cover = 0.97): GateMaterials {
+export function createGateMaterials(anisotropy: number, ground: number, cover = 0.97, plaster: [number, number, number] = [0.55, 0.52, 0.45]): GateMaterials {
   return {
-    render: masonryMaterial(anisotropy, { brick: '#5e4034', plaster: [0.55, 0.52, 0.45], cover, grime: 0.2, ground }),
+    render: masonryMaterial(anisotropy, { brick: '#5e4034', plaster, cover, grime: 0.2, ground }),
     trim: plasterMaterial('#b3ab9b', anisotropy),
     stone: fieldstoneMaterial(anisotropy),
     roof: new THREE.MeshStandardMaterial({ map: worldTex('clay_roof_tiles', 'diff', true, anisotropy, 1.6), normalMap: worldTex('clay_roof_tiles', 'nor', false, anisotropy, 1.6), color: '#7d6258', roughness: 0.95, side: THREE.DoubleSide }),

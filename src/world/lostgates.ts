@@ -2,10 +2,11 @@ import type { XZ } from './area';
 import { buildTowerGate, gatePlan, type GateSpec } from './towergate';
 
 /*
- * The seven lost gates of the city wall that no drawing shows whole, built from what the sources say of them
- * (docs/gates.md §10) on the tower-gate kit (world/towergate.ts): the Trakai, Vilija, Tatar, Wet, Castle, Bernardine
- * and Saviour's gates. Where a source gives a form, it is followed and cited in the docs [V]; the measurements, and
- * everything the sources leave open, are conjecture, kept in proportion with the Subačius and Rūdninkai gates [U].
+ * The seven lost gates of the city wall that no drawing of their time shows whole, built from what the sources say of
+ * them (docs/gates.md §10) on the tower-gate kit (world/towergate.ts): the Trakai, Vilija, Tatar, Wet, Castle,
+ * Bernardine and Saviour's gates. Where a source gives a form, it is followed and cited in the docs [V]; the
+ * measurements, and everything the sources leave open, are conjecture, kept in proportion with the Subačius and
+ * Rūdninkai gates [U]. The Tatar Gate follows J. Kamarauskas's paintings of 1894–97, themselves imagined [U].
  * Each stands square to the wall's line in the heritage register (KVR 39) where that line is clear, or to the street
  * that ran through it, and is moved off the houses that stand on its site today. Only the Saviour's Gate lies in the
  * walk's world yet; the others are seen at vilnius.gg/gates and drawn on the map.
@@ -16,8 +17,13 @@ const norm = (x: number, z: number): XZ => { const l = Math.hypot(x, z); return 
 export interface LostGate {
   /** the viewer's key (vilnius.gg/gates#trakai) */ key: string;
   spec: GateSpec;
-  /** how much of the brick the render still covers (world/materials.ts createGateMaterials) */ cover: number;
+  /** how much of the brick the render still covers, and the render's colour (world/materials.ts createGateMaterials) */
+  cover: number; plaster?: [number, number, number];
+  /** the roof tiles' tint, if not the usual weathered clay */ roof?: string;
   /** the viewer's caption */ sub: string; note: string;
+  /** a picture to stand where the painter stood, in place of the plain corner view: the camera's bearing in the
+   *  gate's frame (out along the road, along the wall), its pitch, and the button's label */
+  view?: { label: string; dir: XZ; pitch: number };
 }
 
 export const LOST_GATES: LostGate[] = [
@@ -91,19 +97,22 @@ export const LOST_GATES: LostGate[] = [
     },
   },
   {
-    key: 'tatar', cover: 0.9,
-    sub: 'Totorių vartai, Vilnius · as it may have stood before 1802',
-    note: 'The north gate east of where Benediktinių g. meets Totorių g., named, it is said, for the Tatar soldiers who kept it. At the end of the 18th century its tower still had three storeys under a tiled roof. The narrow slits and the window rhythm are conjecture.',
+    key: 'tatar', cover: 0.55, plaster: [0.76, 0.6, 0.36], roof: '#a65c48',   // Kamarauskas's flaking ochre, red tiles
+    sub: 'Totorių vartai, Vilnius · after Juozapas Kamarauskas, 1894–97',
+    note: 'The north gate east of where Benediktinių g. meets Totorių g., named, it is said, for the Tatar soldiers who kept it; at the end of the 18th century it still had three storeys under a tiled roof. No picture from its time survives. In 1894–97 Juozapas Kamarauskas painted it as he imagined it, and it is built after him: a Gothic gatehouse with a steep roof along the wall, brick gables full of blind niches under a crescent vane, and the gateway in a tall brick frame with three round openings over the arch.',
+    view: { label: 'The 1894 view', dir: [1, 0.9], pitch: 0.03 },
     spec: {
       name: 'Tatar Gate', site: [-284, -513], out: norm(-0.698, -0.716),
-      tower: { depth: 8.5, hw: 5, eave: 13, roof: { kind: 'hip', rise: 3.4 }, bands: [5.6, 9.2] },
-      passage: { aw: 1.7, spring: 3.0 },
+      // a gatehouse, its ridge along the wall and its Gothic gables at the wall's ends (Kamarauskas 1894, 1897)
+      tower: { depth: 10, hw: 6, eave: 12.5, roof: { kind: 'saddle', rise: 7.2, ridge: 'wall', gable: 'gothic' }, chimney: true, vane: 'crescent' },
+      passage: { aw: 1.6, spring: 3.4, bay: { w: 5.8, h: 9.3 } },
       holes: [
-        { on: 'field', kind: 'window', y: 7.4, n: 3, w: 0.25, h: 0.9 }, { on: 'field', kind: 'window', y: 11.0, n: 3, w: 0.25, h: 0.9 },
-        { on: 'sides', kind: 'window', y: 11.0, n: 2, w: 0.25, h: 0.9 },
-        { on: 'town', kind: 'window', y: 7.4, at: [-2.5, 2.5], w: 0.7, h: 1.1 }, { on: 'town', kind: 'window', y: 11.0, at: [-2.5, 2.5], w: 0.7, h: 1.1 },
+        { on: 'field', kind: 'port', y: 7.0, at: [-1.0, 0, 1.0], r: 0.36 },            // three round openings over the arch (1894)
+        { on: 'field', kind: 'window', y: 10.5, at: [-3.4, 3.4], w: 0.55, h: 0.85 },    // small windows high up (1897)
+        { on: 'sides', kind: 'window', y: 6.9, at: [3.4], w: 0.5, h: 1.0 },
+        { on: 'town', kind: 'window', y: 7.2, at: [-3.2, 3.2], w: 0.6, h: 0.95 }, { on: 'town', kind: 'window', y: 10.3, at: [-3.2, 0, 3.2], w: 0.6, h: 0.95 },
       ],
-      wall: { x: -2.5, walk: 6.2, max: 24 },
+      wall: { x: -4.0, walk: 6.2, max: 24 },
     },
   },
   {
