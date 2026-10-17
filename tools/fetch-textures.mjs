@@ -1,6 +1,10 @@
 // Downloads CC0 PBR textures from Poly Haven into public/assets/tex/<id>/.
 // Maps: diff (colour), nor (OpenGL normal), rough (roughness) or arm (AO, roughness, metal packed in R, G, B),
 // height (Poly Haven 'Displacement', for parallax occlusion mapping: src/render/pom.ts).
+// Poly Haven's JPEGs (quality 95-99) are converted to WebP with cwebp (q 85; normal and height maps q 90): a third
+// of the bytes, and alike side by side in the shot tool (2026-10-17). Without cwebp on the PATH the JPEGs stay,
+// and the walk (which asks for .webp) will not find them.
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,10 +30,13 @@ for (const [id, { res, maps }] of Object.entries(TEXTURES)) {
   for (const key of maps) {
     const url = files[key]?.[res]?.jpg?.url;
     if (!url) { console.warn(`${id}: no ${key} ${res} jpg`); continue; }
-    const dest = path.join(OUT, id, `${NAMES[key]}.jpg`);
-    if (fs.existsSync(dest)) continue;
+    const dest = path.join(OUT, id, `${NAMES[key]}.jpg`), webp = dest.replace(/\.jpg$/, '.webp');
+    if (fs.existsSync(webp)) continue;
     const buf = Buffer.from(await (await fetch(url)).arrayBuffer());
     fs.writeFileSync(dest, buf);
-    console.log(`${id}/${NAMES[key]}.jpg ${(buf.length / 1024).toFixed(0)} KB`);
+    const q = ['nor', 'height'].includes(NAMES[key]) ? '90' : '85';
+    const cw = spawnSync('cwebp', ['-quiet', '-metadata', 'none', '-q', q, '-sharp_yuv', dest, '-o', webp]);
+    if (cw.status === 0) fs.rmSync(dest); else console.warn(`cwebp failed or missing: ${dest} left as JPEG`);
+    console.log(`${id}/${NAMES[key]} ${(fs.statSync(cw.status === 0 ? webp : dest).size / 1024).toFixed(0)} KB`);
   }
 }

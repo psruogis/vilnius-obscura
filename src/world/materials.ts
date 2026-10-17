@@ -13,8 +13,8 @@ const cache = new Map<string, { base: THREE.Texture; loaded: boolean; clones: TH
 
 /** Every texture file the walk uses: main.ts starts them downloading before it builds anything. */
 export const WORLD_TEXTURES = [
-  ...['diff', 'nor', 'arm', 'height'].flatMap(m => [`assets/tex/cobblestone_floor_08/${m}.jpg`, `assets/tex/clay_roof_tiles/${m}.jpg`]),
-  ...['diff', 'nor', 'rough'].flatMap(m => [`assets/tex/plastered_wall_04/${m}.jpg`, `assets/tex/weathered_planks/${m}.jpg`]),
+  ...['diff', 'nor', 'arm', 'height'].flatMap(m => [`assets/tex/cobblestone_floor_08/${m}.webp`, `assets/tex/clay_roof_tiles/${m}.webp`]),
+  ...['diff', 'nor', 'rough'].flatMap(m => [`assets/tex/plastered_wall_04/${m}.webp`, `assets/tex/weathered_planks/${m}.webp`]),
 ];
 
 function tex(url: string, srgb: boolean, anisotropy: number): THREE.Texture {
@@ -41,21 +41,21 @@ function tex(url: string, srgb: boolean, anisotropy: number): THREE.Texture {
   return t;
 }
 
-/** Colour, normal and roughness maps; `packed` sets read roughness (G) and ambient occlusion (R) from one arm.jpg. */
+/** Colour, normal and roughness maps; `packed` sets read roughness (G) and ambient occlusion (R) from one arm.webp. */
 function pbrSet(id: string, anisotropy: number, packed = false) {
   const base = `assets/tex/${id}`;
-  const arm = packed ? tex(`${base}/arm.jpg`, false, anisotropy) : null;
+  const arm = packed ? tex(`${base}/arm.webp`, false, anisotropy) : null;
   return {
-    map: tex(`${base}/diff.jpg`, true, anisotropy),
-    normalMap: tex(`${base}/nor.jpg`, false, anisotropy),
-    roughnessMap: arm ?? tex(`${base}/rough.jpg`, false, anisotropy),
+    map: tex(`${base}/diff.webp`, true, anisotropy),
+    normalMap: tex(`${base}/nor.webp`, false, anisotropy),
+    roughnessMap: arm ?? tex(`${base}/rough.webp`, false, anisotropy),
     ...(arm ? { aoMap: arm } : {}),
   };
 }
 
 /** Poly Haven height ('Displacement') map for parallax, 0 = deepest joint … 1 = top. */
 function heightMap(id: string): THREE.Texture {
-  return tex(`assets/tex/${id}/height.jpg`, false, 1);
+  return tex(`assets/tex/${id}/height.webp`, false, 1);
 }
 
 /** Sets the tiling of every map of a material at once (parallax needs them to share one UV). */
@@ -110,7 +110,7 @@ export function createWoodMaterial(anisotropy: number): THREE.MeshStandardMateri
 }
 
 export function worldTex(id: string, map: string, srgb: boolean, anisotropy: number, tile: number): THREE.Texture {
-  const t = tex(`assets/tex/${id}/${map}.jpg`, srgb, anisotropy);
+  const t = tex(`assets/tex/${id}/${map}.webp`, srgb, anisotropy);
   t.repeat.set(1 / tile, 1 / tile);
   return t;
 }
