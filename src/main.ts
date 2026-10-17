@@ -350,6 +350,9 @@ async function main(force = false): Promise<void> {
     // travel: the places the walk reaches, picked on the full map (where you arrive, which way you face)
     { name: 'Town Hall Square', label: 'Town Hall', x: thx, z: thz, go: () => travel(thx + 4, thz - 42, Math.PI) },
     { name: SUBACIUS_GATE.name, label: SUBACIUS_GATE.name, x: SUBACIUS_GATE.x, z: SUBACIUS_GATE.z, go: () => travel(296, 241, -Math.PI / 2) },
+    // the other two gates, from 22 m inside the town, facing out along the street through them (build-area.mjs)
+    { name: RUDNINKAI_GATE.name, label: RUDNINKAI_GATE.name, x: RUDNINKAI_GATE.x, z: RUDNINKAI_GATE.z, go: () => travel(-224.6, 330.3, Math.atan2(0.6685, -0.7436)) },
+    { name: saviour.spec.name, label: saviour.spec.name, x: lostGatePlan(saviour).x, z: lostGatePlan(saviour).z, go: () => travel(300.6, -237.4, Math.atan2(-0.92, -0.392)) },
   ]);
   const streetTitle = new PlaceTitle(data); // the street you are on, as a title for a few seconds
   overlay.onVisibility(visible => { map.setWalking(!visible); streetTitle.setActive(!visible); });

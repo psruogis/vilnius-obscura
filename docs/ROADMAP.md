@@ -50,8 +50,11 @@ reorder freely.
   cabs, people, street props and landmarks, all merged (`docs/FIDELITY-PLAN.md`).
 - **Travel (B1, 2026-10-17):** on the full map (Tab) a "Travel here" button under Town Hall and the Subačius Gate;
   the screen fades to black, the walker is put down there (on the square facing the Town Hall, or on Subačiaus g.
-  facing the gate) and it fades back in (`TravelSpot` in `src/ui/map.ts`, `travel` in `main.ts`). Next (B2): walkable
-  pockets round the Rūdninkai and Saviour's gates, then they join the list.
+  facing the gate) and it fades back in (`TravelSpot` in `src/ui/map.ts`, `travel` in `main.ts`).
+- **Travel to the other two gates (B2, 2026-10-17):** the Rūdninkai and Saviour's gates get a walkable strip along
+  the street through each (30 m into town, a few steps out; `WALK_SHAPES` in `tools/build-area.mjs`), reached only by
+  travel; you arrive 22 m inside the town facing the gate and can walk through it. The map's title panel lists all four
+  places ("Travel to"); the buttons on the map show only from a medium zoom up, and not on phones.
 - **Shipping:** GitHub → Vercel. Every push to `main` goes live at https://vilnius.gg.
 - **Faster loading (A0–A4, 2026-10-17):** textures and models download on a worker from page open
   (`src/render/assets.ts`), not after the 9 s world build; textures as WebP (12.5 → 4.6 MB); sounds load after the

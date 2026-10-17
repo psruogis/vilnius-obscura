@@ -813,7 +813,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
   full.setAttribute('aria-label', 'Map of the walk');
   full.innerHTML = `
     <canvas></canvas>
-    <div class="mv-title"><h2>Town Hall Square</h2><p>c. 1900, on a plan of today</p><div class="mv-scale"><i></i><span></span></div></div>
+    <div class="mv-title"><h2>Town Hall Square</h2><p>c. 1900, on a plan of today</p><div class="mv-scale"><i></i><span></span></div>${travel.length ? `<nav class="mv-trips" aria-label="Travel"><span>Travel to</span>${travel.map((t, i) => `<button type="button" data-go="${i}">${t.name}</button>`).join('')}</nav>` : ''}</div>
     <button type="button" class="mv-btn mv-close"><span class="long">Back to the walk</span><span class="short">Back</span> <kbd>Tab</kbd></button>
     <div class="mv-zoom">
       <button type="button" class="mv-btn mv-icon" data-zoom="in" aria-label="Zoom in">${ICON.plus}</button>
@@ -833,6 +833,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
   const scaleLine = scaleBar.querySelector('i')!, scaleText = scaleBar.querySelector('span')!;
   const aboutHead = full.querySelector<HTMLButtonElement>('.mv-about-head')!;
   const goBtns = [...full.querySelectorAll<HTMLButtonElement>('.mv-go')];
+  const tripBtns = [...full.querySelectorAll<HTMLButtonElement>('.mv-trips [data-go]')];
   const goAt = travel.map(t => L.landmarks.find(m => t.label && m.text.startsWith(t.label)) ?? t);
   const closeBtn = full.querySelector<HTMLButtonElement>('.mv-close')!;
   const lookBtns = [...full.querySelectorAll<HTMLButtonElement>('[data-look]')];
@@ -922,7 +923,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
     // the travel buttons, just under each place's name (drawn 5 px below its point); hidden off the map's edge
     for (const [i, b] of goBtns.entries()) {
       const x = W / 2 + (goAt[i].x - view.cx) * view.s, y = H / 2 + (goAt[i].z - view.cz) * view.s + 14;
-      b.hidden = x < 40 || y < 20 || x > W - 40 || y > H - 20;
+      b.hidden = view.s < 0.6 || W < 600 || x < 40 || y < 20 || x > W - 40 || y > H - 20;   // far out, or on a phone, they crowd the names: the list in the title stays
       b.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, 0)`;
     }
   };
@@ -967,7 +968,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
   applyLook();
   mini.addEventListener('click', open);
   closeBtn.addEventListener('click', close);
-  for (const [i, b] of goBtns.entries()) b.addEventListener('click', () => { close(); travel[i].go(); });
+  for (const b of [...goBtns, ...tripBtns]) b.addEventListener('click', () => { close(); travel[Number(b.dataset.go)].go(); });
   aboutHead.addEventListener('click', () => setAbout(full.classList.contains('about-closed')));
   for (const b of lookBtns) b.addEventListener('click', () => {
     look = b.dataset.look as Look;

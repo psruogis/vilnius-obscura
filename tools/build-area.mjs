@@ -44,6 +44,12 @@ const WALK_SHAPES = [
   { line: [[74, 214], [92, 217], [109, 225], [116, 227], [126, 231], [152, 237], [176, 242], [230, 244], [276, 242], [300, 241], [324, 239], [342, 239]], w: 6.5, detail: 12, front: 8 },
   { circle: [333, 241], r: 22, detail: 12, front: 8 },                                // the gate site and the Bokšto corner
   { line: [[342, 239], [342, 243], [337, 265], [334, 276]], w: 7, detail: 12, front: 8 }, // Šv. Dvasios g., outside the wall
+  // Reached only by travel from the map (main.ts): the street through each of the other two gates that stand in the
+  // world, 30 m into town and a few steps out, along the gate's axis (world/rudninkai.ts, world/lostgates.ts)
+  { line: [[-219.2, 324.4], [-249.3, 357.9]], w: 5, detail: 12, front: 8 },     // Rūdninkų g. through the Rūdninkai Gate
+  { circle: [-239.3, 346.7], r: 9, detail: 12, front: 8 },
+  { line: [[293.2, -240.6], [330.0, -224.9]], w: 6, detail: 12, front: 8 },     // Išganytojo g. through the Saviour's Gate
+  { circle: [320.8, -228.8], r: 9, detail: 12, front: 8 },
 ];
 /** Signed distance (m) from local (x, z) to one walk shape: negative inside. */
 function shapeDist(s, x, z) {
