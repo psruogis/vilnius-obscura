@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { fetchBuffer } from '../render/assets';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { Building } from './area';
@@ -92,7 +93,7 @@ interface Model {
 }
 
 async function loadModel(url: string, size: (box: THREE.Box3) => number): Promise<Model> {
-  const gltf = await new GLTFLoader().loadAsync(url);
+  const gltf = await new GLTFLoader().parseAsync(await fetchBuffer(url), 'assets/char/');
   const scene = gltf.scene;
   scene.updateMatrixWorld(true);
   const meshes: THREE.SkinnedMesh[] = [];

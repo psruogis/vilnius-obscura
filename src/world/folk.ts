@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { fetchBuffer } from '../render/assets';
 import { WET } from '../render/weather';
 import { MeshoptSimplifier } from '../../vendor/meshoptimizer/meshopt_simplifier.js';
 
@@ -48,7 +49,7 @@ export function loadFolk(): Promise<{ m: FolkBody; f: FolkBody }> {
 }
 async function loadBodies(): Promise<{ m: FolkBody; f: FolkBody }> {
   await MeshoptSimplifier.ready;
-  const [gm, gf, ga] = await Promise.all(['assets/char/folk_male.glb', 'assets/char/folk_female.glb', 'assets/char/folk_anims.glb'].map(u => loader.loadAsync(u)));
+  const [gm, gf, ga] = await Promise.all(['assets/char/folk_male.glb', 'assets/char/folk_female.glb', 'assets/char/folk_anims.glb'].map(async u => loader.parseAsync(await fetchBuffer(u), 'assets/char/')));
   clothTex ??= new THREE.TextureLoader().load('assets/char/wool_disp.jpg', t => { t.needsUpdate = true; });
   clothTex.wrapS = clothTex.wrapT = THREE.RepeatWrapping;
   clothTex.anisotropy = 4;

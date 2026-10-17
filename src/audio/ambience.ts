@@ -38,6 +38,7 @@ export class Ambience {
   private readonly bellAnchor = new THREE.Object3D();
   private readonly horseAnchor = new THREE.Object3D();
   private started = false;
+  private loading = false;
   private muted = false;
   private mix: Mix = { master: 1, street: 1, bells: 1, steps: 1, music: 1 };
   private nextBells = 40 + Math.random() * 60;
@@ -50,10 +51,16 @@ export class Ambience {
     world.add(this.bellAnchor, this.horseAnchor);
     this.zones = new Zones(this.listener, world, sites.townHall, sites.ground, this.manifest);
     if (sites.bells) this.bellAnchor.position.copy(sites.bells).setY(sites.bells.y + 30);
+  }
+
+  /** Fetches the sound files. main.ts calls it once the world is ready, so they don't compete with it for the line. */
+  load(): void {
+    if (this.loading) return;
+    this.loading = true;
     const loader = new THREE.AudioLoader(new THREE.LoadingManager()); // don't hold up the loading bar
     for (const [k, url] of Object.entries(FILES) as [Key, string][]) {
-      if (k === 'rain' && !raining) continue;
-      if (k === 'sparrows' && raining) continue; // birds fall quiet in the rain
+      if (k === 'rain' && !this.raining) continue;
+      if (k === 'sparrows' && this.raining) continue; // birds fall quiet in the rain
       loader.load(url, buf => { this.buffers.set(k, buf); if (this.started) this.wire(k); }, undefined, () => console.warn('audio', url));
     }
   }

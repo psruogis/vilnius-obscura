@@ -3,18 +3,33 @@ import { age } from './ageing';
 import { parallax } from '../render/pom';
 import { createTreeMaterials } from './trees';
 import type { GateMaterials } from './subacius';
-
-const loader = new THREE.TextureLoader();
+import { fetchImage } from '../render/assets';
 
 // One image load (and one GPU upload) per file: materials get clones that share the image source but
-// keep their own tiling. Clones made before the image arrives are flagged for upload when it does.
+// keep their own tiling. Clones made before the image arrives are flagged for upload when it does. The file
+// comes from render/assets.ts (downloaded and decoded off the page's thread), counted by the default loading
+// manager so the loading bar waits for it.
 const cache = new Map<string, { base: THREE.Texture; loaded: boolean; clones: THREE.Texture[] }>();
+
+/** Every texture file the walk uses: main.ts starts them downloading before it builds anything. */
+export const WORLD_TEXTURES = [
+  ...['diff', 'nor', 'arm', 'height'].flatMap(m => [`assets/tex/cobblestone_floor_08/${m}.jpg`, `assets/tex/clay_roof_tiles/${m}.jpg`]),
+  ...['diff', 'nor', 'rough'].flatMap(m => [`assets/tex/plastered_wall_04/${m}.jpg`, `assets/tex/weathered_planks/${m}.jpg`]),
+];
 
 function tex(url: string, srgb: boolean, anisotropy: number): THREE.Texture {
   let entry = cache.get(url);
   if (!entry) {
-    const e = { base: null as unknown as THREE.Texture, loaded: false, clones: [] as THREE.Texture[] };
-    e.base = loader.load(url, () => { e.loaded = true; for (const c of e.clones) c.needsUpdate = true; });
+    const e = { base: new THREE.Texture(), loaded: false, clones: [] as THREE.Texture[] };
+    const manager = THREE.DefaultLoadingManager;
+    manager.itemStart(url);
+    fetchImage(url).then(img => {
+      e.base.image = img;                                 // shared by the clones (one Source)
+      const flip = !(typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap);   // a bitmap comes flipped
+      e.base.flipY = flip;
+      e.loaded = true;
+      for (const c of e.clones) { c.flipY = flip; c.needsUpdate = true; }
+    }).catch(err => { console.warn('texture', url, err); manager.itemError(url); }).finally(() => manager.itemEnd(url));
     cache.set(url, (entry = e));
   }
   const t = entry.base.clone();

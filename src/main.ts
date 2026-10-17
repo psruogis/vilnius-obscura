@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { loadArea } from './world/area';
 import { buildWalls, buildRoofs, buildSoffits, hasTileRoof } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, createGateMaterials } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, createGateMaterials, WORLD_TEXTURES } from './world/materials';
+import { fetchBuffer, fetchImage } from './render/assets';
 import { buildBarriers } from './world/props';
 import { buildStreetProps, createStreetPropMaterials } from './world/streetprops';
 import { buildTownHall } from './world/townhall';
@@ -81,7 +82,11 @@ async function main(force = false): Promise<void> {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 5000);
 
+  // Start every texture and model downloading now, on a worker, while the world is built (render/assets.ts)
+  for (const url of WORLD_TEXTURES) void fetchImage(url).catch(() => {});
+  for (const url of ['assets/char/folk_male.glb', 'assets/char/folk_female.glb', 'assets/char/folk_anims.glb', 'assets/char/horse.glb', 'assets/char/man.glb']) void fetchBuffer(url).catch(() => {});
   const data = await loadArea();
+  performance.mark('vo:area');                               // load phases, timed by tools/load-profile.mjs
   const [thx, thz] = data.meta.townHall;
   // The walk: the square and the road out to the Subačius Gate site (world/zone.ts)
   const zone = new WalkZone(data);
@@ -322,7 +327,8 @@ async function main(force = false): Promise<void> {
 
   document.addEventListener('pointerlockchange', () => { if (!map.isOpen) overlay.setVisible(!input.locked); });
   // Ready once every texture queued above has arrived.
-  THREE.DefaultLoadingManager.onLoad = () => overlay.ready();
+  performance.mark('vo:built');
+  THREE.DefaultLoadingManager.onLoad = () => { performance.mark('vo:ready'); overlay.ready(); ambience?.load(); };
   const stats = createStats(renderer);
   window.addEventListener('keydown', e => { if (e.code === 'Backquote') stats.toggle(); });
 
@@ -352,7 +358,9 @@ async function main(force = false): Promise<void> {
   });
 
   const timer = new THREE.Timer();
+  let frames = 0;
   renderer.setAnimationLoop((time: number) => {
+    if (frames < 2) performance.mark(`vo:frame${++frames}`);   // the first frame compiles every shader
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     if (map.isOpen) { map.update(); return; } // the world holds still under the full map
