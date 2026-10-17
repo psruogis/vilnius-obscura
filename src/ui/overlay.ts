@@ -32,6 +32,8 @@ export interface Overlay {
   /** Called whenever the title or pause screen appears (true) or goes (false). */
   onVisibility(fn: (visible: boolean) => void): void;
   setProgress(p: number): void;
+  /** How far the load has got (0-1) and what it is doing, under the Walk button. */
+  setStage(p: number, text: string): void;
   ready(): void;
 }
 
@@ -57,10 +59,11 @@ export function createOverlay(onStart: () => void, store: SettingsStore, mute: {
         <p class="place">Town Hall Square</p>
       </div>
       <nav class="buttons" aria-label="Menu">
-        <button type="button" class="mbtn on" data-start disabled aria-busy="true"><b class="rim"></b><b class="rim2"></b><b class="plate"><b class="prog"></b></b><span class="lbl">Loading</span></button>
+        <button type="button" class="mbtn on" data-start disabled aria-busy="true"><b class="rim"></b><b class="rim2"></b><b class="plate"><b class="prog"></b><b class="sheen"></b></b><span class="lbl">Loading</span></button>
         <button type="button" class="mbtn" data-open="options"><b class="rim"></b><b class="rim2"></b><b class="plate"></b><span class="lbl">Options</span></button>
         <button type="button" class="mbtn" data-open="credits"><b class="rim"></b><b class="rim2"></b><b class="plate"></b><span class="lbl">Credits</span></button>
       </nav>
+      <p class="loadnote" aria-live="polite">Reading the map</p>
       ${RAILS}${TRACERY}
     </div>
     <section class="stage stage-main">
@@ -78,6 +81,7 @@ export function createOverlay(onStart: () => void, store: SettingsStore, mute: {
     <section class="stage stage-credits" hidden><div class="credits">${CREDITS_HTML}</div></section>`;
   const startBtn = el.querySelector<HTMLButtonElement>('[data-start]')!;
   const startLbl = startBtn.querySelector<HTMLElement>('.lbl')!;
+  const loadNote = el.querySelector<HTMLElement>('.loadnote')!;
   const optionsBtn = el.querySelector<HTMLButtonElement>('[data-open="options"]')!;
   const creditsBtn = el.querySelector<HTMLButtonElement>('[data-open="credits"]')!;
   const stageOptions = el.querySelector<HTMLElement>('.stage-options')!;
@@ -165,13 +169,15 @@ export function createOverlay(onStart: () => void, store: SettingsStore, mute: {
   return {
     setVisible,
     onVisibility: fn => { listeners.push(fn); },
-    setProgress: p => { startBtn.style.setProperty('--p', `${Math.round(Math.min(1, Math.max(0, p)) * 100)}%`); },
+    setProgress: p => { startBtn.style.setProperty('--p', String(Math.min(1, Math.max(0, p)))); },
+    setStage: (p, text) => { startBtn.style.setProperty('--p', String(Math.min(1, Math.max(0, p)))); loadNote.textContent = text; },
     ready: () => {
       isReady = true;
       startBtn.disabled = false;
       startBtn.removeAttribute('aria-busy');
       startBtn.dataset.ready = '';
       startLbl.textContent = started ? 'Continue' : 'Walk';
+      loadNote.hidden = true;
     },
   };
 }

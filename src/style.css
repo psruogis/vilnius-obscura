@@ -88,8 +88,15 @@ body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none
 .mbtn[aria-busy] { filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55)); }
 .mbtn[aria-busy] .rim { background: linear-gradient(180deg, #9a918d 0%, #4a4342 48%, #2c2726 100%); }
 .mbtn[aria-busy] .plate { background: linear-gradient(180deg, #4b4342 0%, #372f2e 55%, #2d2625 100%); }
-.mbtn .prog { position: absolute; left: 0; top: 0; bottom: 0; width: var(--p, 0%); background: linear-gradient(180deg, #8a3232, #5a1e20); transition: width 0.2s ease; }
-.mbtn:not([aria-busy]) .prog { display: none; }
+/* Loading: the bar grows by transform and a sheen sweeps across it, both run by the compositor, so they keep moving
+   while the page's own thread is busy building the world */
+.mbtn .prog { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; transform-origin: left; transform: scaleX(var(--p, 0)); background: linear-gradient(180deg, #8a3232, #5a1e20); transition: transform 0.6s ease-out; }
+.mbtn .sheen { position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: linear-gradient(100deg, transparent 0%, rgba(255, 228, 200, 0.16) 45%, rgba(255, 228, 200, 0.28) 50%, rgba(255, 228, 200, 0.16) 55%, transparent 100%); transform: translateX(-110%); animation: sheen 1.6s ease-in-out infinite; will-change: transform; }
+@keyframes sheen { to { transform: translateX(260%); } }
+.mbtn:not([aria-busy]) .prog, .mbtn:not([aria-busy]) .sheen { display: none; }
+.loadnote { margin: 0.9em 0 0; width: 19.5em; text-align: center; font: italic 500 1.05em/1.3 'Cormorant Garamond', Georgia, serif; color: rgba(236, 222, 200, 0.72); animation: breathe 2.4s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .mbtn .sheen, .loadnote { animation: none; } }
 
 /* the right-hand stages */
 .stage { position: absolute; left: 25.25em; right: 0; top: 0; bottom: 0; box-sizing: border-box; overflow: auto; overscroll-behavior: contain; transition: opacity 0.2s ease; }

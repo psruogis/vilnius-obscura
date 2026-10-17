@@ -69,7 +69,13 @@ async function main(force = false): Promise<void> {
     get: () => ambience?.isMuted ?? false,
     toggle: () => { const m = ambience?.toggleMute() ?? false; touch.setMuted(m); return m; },
   });
-  THREE.DefaultLoadingManager.onProgress = (_url, loaded, total) => overlay.setProgress(loaded / total);
+  // The loading bar follows the stages below. Between stages the page gets a moment to paint the bar and caption;
+  // within one it is busy, and only the bar's sheen (run by the compositor) keeps moving.
+  const stage = (p: number, text: string) => {
+    overlay.setStage(p, text);
+    // after the next paint (a hidden tab paints nothing: then after 100 ms)
+    return Promise.race([new Promise<void>(r => requestAnimationFrame(() => setTimeout(r, 0))), new Promise<void>(r => setTimeout(r, 100))]);
+  };
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -86,12 +92,14 @@ async function main(force = false): Promise<void> {
   // Start every texture and model downloading now, on a worker, while the world is built (render/assets.ts)
   for (const url of WORLD_TEXTURES) void fetchImage(url).catch(() => {});
   for (const url of ['assets/char/folk_male.glb', 'assets/char/folk_female.glb', 'assets/char/folk_anims.glb', 'assets/char/horse.glb', 'assets/char/man.glb']) void fetchBuffer(url).catch(() => {});
+  await stage(0.04, 'Reading the map');
   const data = await loadArea();
   performance.mark('vo:area');                               // load phases, timed by tools/load-profile.mjs
   const [thx, thz] = data.meta.townHall;
   // The walk: the square and the road out to the Subačius Gate site (world/zone.ts)
   const zone = new WalkZone(data);
   const around = (m: number): [number, number, number, number] => [zone.box[0] - m, zone.box[1] - m, zone.box[2] + m, zone.box[3] + m];
+  await stage(0.1, 'Measuring the streets');
   // Open ground: a 1 m raster of the building outlines over the walk and its surroundings
   const free = openGround(data, around(120));
 
@@ -118,6 +126,7 @@ async function main(force = false): Promise<void> {
   // Warm bounce from sunlit cobbles and façades into the shade.
   scene.add(new THREE.HemisphereLight(LIGHT.hemi[0], LIGHT.hemi[1], LIGHT.hemi[2]));
 
+  await stage(0.18, 'Laying the cobbles');
   // Ground: LiDAR terrain with fieldstone cobbles
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const terrain = new Terrain(data);
@@ -129,6 +138,7 @@ async function main(force = false): Promise<void> {
   wet(groundMat, 'ground');
   scene.add(terrain.buildMesh(groundMat, thx, thz, 1000, 4, 3.4));
 
+  await stage(0.28, 'Raising the walls and roofs');
   // Buildings: plastered walls with period windows, and skeleton roofs in clay tile
   const wallMat = age(createFacadeMaterial(aniso), { strength: 0.8, seed: 4 });
   if (RAIN) wet(wallMat, 'wall', 0, 'vFacade.y');
@@ -138,6 +148,7 @@ async function main(force = false): Promise<void> {
   metalRoofMesh.castShadow = true; metalRoofMesh.receiveShadow = true;
   scene.add(metalRoofMesh);
   for (const m of [wallMesh, roofMesh]) { m.castShadow = true; m.receiveShadow = true; scene.add(m); }
+  await stage(0.38, 'Fronting the houses');
   // Houses near the walk: real façade geometry (openings, reveals, sills, cornices, chimneys)
   const houseMats = createHouseMaterials(aniso);
   houseMats.glass.envMap = scene.environment; // full-strength sky reflections in the glass (scene env is dimmed)
@@ -151,6 +162,7 @@ async function main(force = false): Promise<void> {
   }
   const facades = buildFacades(data, terrain, houseMats, free);
   scene.add(facades.group);
+  await stage(0.6, "The Town Hall and St Casimir's");
   // Eave soffits: the limewashed undersides of the overhanging roofs (buildings.ts)
   const soffits = new THREE.Mesh(buildSoffits(data), houseMats.trim);
   soffits.receiveShadow = true;
@@ -185,6 +197,7 @@ async function main(force = false): Promise<void> {
     scene.add(buildStCasimir(stCasimirData, m, churchForm));
   }
   const walls = new WallGrid(data);
+  await stage(0.68, 'The city gates');
   // The city gates the walk shows (docs/gates.md §8-10): the Subačius Gate at the end of the road, the Rūdninkai Gate
   // at the end of Rūdninkų g. and, at the world's edge, the Saviour's Gate by the Užupis bridge, each standing as it
   // stood before it came down, with the wall either side: a deliberate anachronism in 1900. ?gate=ghost (or #ghost)
@@ -222,6 +235,7 @@ async function main(force = false): Promise<void> {
     promenadeRef = promenade;
     lampSpots.push(...promenade.lamps);
   }
+  await stage(0.74, 'Street furniture and lamps');
   // Street furniture c.1900: pavements and kerbs, guard stones, drain grates, the advertising column,
   // the cab stand with its pump and trough, garden benches, goods at a few shop doors
   const propMats = createStreetPropMaterials(aniso);
@@ -285,6 +299,7 @@ async function main(force = false): Promise<void> {
   const barriers = buildBarriers(data, terrain, zone, barrierWood, propMats.iron);
   if (barriers) scene.add(barriers);
 
+  await stage(0.8, 'The walker');
   // Walker: start on the square, north of the Town Hall, facing it
   const input = new Input(renderer.domElement);
   // Phones and tablets: the stick in the corner, look anywhere else, pinch to zoom, pause and mute buttons
@@ -390,11 +405,13 @@ async function main(force = false): Promise<void> {
   // Where the browser compiles shaders in parallel (KHR_parallel_shader_compile; real GPUs), the world's compile
   // first, off the page's thread, so the first frame does not freeze the page while the loading bar is up.
   // Elsewhere (software WebGL) that only adds work: the first frame compiles what it draws.
+  await stage(0.88, 'Lighting the square');
   if (parallelCompile) void settle(renderer.compileAsync(scene, camera)).then(() => renderer.setAnimationLoop(frame));
   else renderer.setAnimationLoop(frame);
   // Ready to walk once the world's textures are in, the walker is dressed and the first frame is drawn; the
   // townsfolk and carriages fade in when they are ready, and the sounds start downloading only now
-  Promise.all([texturesReady(), dressed, firstFrame]).then(() => { performance.mark('vo:ready'); overlay.ready(); ambience?.load(); });
+  void firstFrame.then(() => overlay.setStage(0.96, 'Dressing the walker'));
+  Promise.all([texturesReady(), dressed, firstFrame]).then(() => { overlay.setStage(1, ''); performance.mark('vo:ready'); overlay.ready(); ambience?.load(); });
 
   if (import.meta.env.DEV) {
     // Test hooks for screenshots and debugging.
