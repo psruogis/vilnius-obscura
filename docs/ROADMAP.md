@@ -56,10 +56,11 @@ reorder freely.
   travel; you arrive 22 m inside the town facing the gate and can walk through it. The map's title panel lists all four
   places ("Travel to"); the buttons on the map show only from a medium zoom up, and not on phones.
 - **Travel to the gates further out (2026-10-17):** the Bernardine, Castle, Wet, Tatar and Vilija gates stand in the
-  world too, each with a walkable strip through it, reached by travel (eight gates in all). The LiDAR grid was grown to
-  reach them (`tools/lidar/README.md`). Not yet: the **Trakai Gate** (its modelled site lies under today's houses, 50 m
-  south of today's Trakų g.: where it stood needs settling first) and the **Gate of Dawn** (no model yet). The Wet
-  Gate's leaves are shut, so its strip ends at the gate.
+  world too, each with a walkable strip through it, reached by travel. The LiDAR grid was grown to reach them
+  (`tools/lidar/README.md`). The **Trakai Gate** followed (2026-10-17), moved 49 m north to where Girlevičius (2009,
+  p. 75) puts it: across the west end of Trakų g., 10 m out from the west front of Trakų g. 2/24, the wall's plane; the
+  register's "gap between Pylimo g. 22 and Trakų g. 2" is where the wall ran on north of it. Nine gates in all. Not yet:
+  the **Gate of Dawn** (no model). The Wet Gate's leaves are shut, so its strip ends at the gate.
 - **Shipping:** GitHub → Vercel. Every push to `main` goes live at https://vilnius.gg.
 - **Faster loading (A0–A4, 2026-10-17):** textures and models download on a worker from page open
   (`src/render/assets.ts`), not after the 9 s world build; textures as WebP (12.5 → 4.6 MB); sounds load after the

@@ -29,7 +29,7 @@ never been found ⁷, the map draws a dotted ring of that size round it, not a p
 |---|---|---|---|---|
 | 1 | **Aušros (Medininkų) vartai**: Gate of Dawn, Aštrieji (Sharp), Krėvos | Aušros Vartų g.: the gatehouse stands (OSM way 112746030) [V] | **Standing**, saved by the chapel over it ¹ ⁷ | (170.9, 468.9), exact. Filled |
 | 2 | **Rūdninkų vartai** | Rūdninkų × Pylimo ¹; its lower part survives under the street ¹³ [V] | Pulled down 1800 ¹ ¹³ | (−239.3, 346.7), 10 m. **Built, standing (§9)**: drawn as its plan |
-| 3 | **Trakų vartai** (the main gate ²) | In the gap still left between Pylimo g. 22 and Trakų g. 2, where the wall ran and the Kačerga stream flowed ⁷ [V]. Near Trakų × Pylimo ¹ | 1803–04: its icon was moved in 1803 ⁷; the tower was pulled down in 1804 ¹ | (−575, −181), 10 m. Modelled (§10) |
+| 3 | **Trakų vartai** (the main gate ²) | In the gap still left between Pylimo g. 22 and Trakų g. 2, where the wall ran and the Kačerga stream flowed ⁷ [V]. Near Trakų × Pylimo ¹ | 1803–04: its icon was moved in 1803 ⁷; the tower was pulled down in 1804 ¹ | (−578, −132.5), 5 m: across the west end of Trakų g., in front of Trakų g. 2/24 ²¹ (moved 2026-10-17 from (−575, −181), the register's gap, which is where the wall ran north of it). Modelled (§10) |
 | 4 | **Vilijos (Vilniaus) vartai** | Benediktinių × Šv. Ignoto ¹. The English article ² says "Vilnius and Bernardinai", a street pair that doesn't meet; read as a slip [U]. The wall stretches Totorių–Vilijos and Vilijos–Trakų are registered ⁷ | Pulled down 24 Nov 1802 ¹; its icon went to the Subačius g. orphanage chapel ⁷ | (−381, −462), 15 m. Modelled (§10) |
 | 5 | **Totorių vartai** (Tatar) | East side of the Benediktinių × Totorių crossing ¹ ⁷ [V]. ² says Liejyklos × Totorių, 30 m away | Ordered down 1802 ¹ | (−284, −513), 10 m. Modelled (§10) |
 | 6 | **Šv. Marijos Magdalenos (Šlapieji) vartai**: the Wet Gate | L. Stuokos-Gucevičiaus × Universiteto ¹, by Cathedral Square ²; **never located on the ground** ⁷ [U]. Small, one storey, hipped roof; served Lukiškės and Puškarnė and the bridge over the Kačerga ⁷ | **Walled up 1677** ¹ ⁷; gone with the wall | (−87, −714), 40 m ring. The register's strip along the wall ends here. Modelled (§10) |
@@ -283,7 +283,7 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
 **What is a design choice** [U]:
 - **Sites.** Each stands at its point in §2, square to the register's strip along the wall where that runs straight
   there (Vilija, Tatar), or to the street through it (Trakai, Wet, Castle, Saviour's), and moved where a house stands
-  on the point today: the Trakai Gate 13 m east and 4 m south, into the gap between the two houses; the Vilija Gate
+  on the point today: the Trakai Gate across the west end of Trakų g., its middle 10.9 m west of the west front of Trakų g. 2/24 (x = −574), on the street's line [V for the plane and the 10 m, Girlevičius 2009 p. 75 ²¹; U for where across the street]; the Vilija Gate
   5.5 m along the wall, off the house south-east of Šv. Ignoto g.; the Bernardine Gate onto Šv. Brunono Bonifaco g.,
   some 20 m from its map point, so that its tower falls on the south-west corner of the building at the register
   strip's end, read as the outbuilding where the tower was found. Which building that is, and so where the gate was,

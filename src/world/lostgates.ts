@@ -145,9 +145,11 @@ export const LOST_GATES: LostGate[] = [
     note: 'The west gate on the road to Trakai, Grodno and Kyiv, rebuilt in 1663 after the war with Muscovy and pulled down in 1803–04. Smuglevičius drew it in 1785: a tall tower standing well out in front of the wall, its gable over the gateway on the field side, two storeys of pilasters split by a heavy entablature, a round window, flags on the gables. The 1802 inventory gives it about 9.5 by 14 m, some 10 m of it outside the wall. Kamarauskas painted it after old drawings in 1898. The Virgin’s image hung on the town side.',
     views: [{ label: 'The 1785 view', dir: [0.85, -1], pitch: 0.03, far: 1.25 }, { label: 'The 1898 view', dir: [1, 0.3], pitch: 0.04, far: 1.2 }],
     spec: {
-      name: 'Trakai Gate', site: [-575, -181], out: [-1, 0],
-      // its field face 10 m outside the wall's plane, the west front of Trakų g. 2/24 (1802 inventory, Girlevičius 2009)
-      shift: [-10, -4],
+      // at the west end of Trakų g., across the road, in front of the corner house Trakų g. 2/24: the wall ran along its
+      // west front, and the tower stood out ~10 m from that plane (Girlevičius 2009, p. 75: the 1802 inventory, and its
+      // inner east wall excavated in that plot), so its middle is 10.9 m west of the front (x = -574), on the street
+      name: 'Trakai Gate', site: [-575, -132], out: [-1, 0],
+      shift: [9.9, 0.5],
       tower: {
         depth: 14.25, hw: 4.75, eave: 14, roof: { kind: 'saddle', rise: 4.6, ridge: 'road', gable: 'plain' },
         entablature: 9.4, pilasters: [-4.45, -3.7, 3.7, 4.45], chimney: true, vane: 'flag',

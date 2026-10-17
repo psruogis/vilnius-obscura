@@ -303,7 +303,7 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
 /** The Saviour's Gate, the one lost gate in the walk's world besides the Subačius and Rūdninkai gates (world/lostgates.ts). */
 const SAVIOUR_GATE = lostGatePlan(LOST_GATES.find(g => g.key === 'saviour')!);
 /** The lost gates further out that stand in the world too, reached by travel (main.ts). */
-const OUTER_GATES = ['bernardine', 'castle', 'wet', 'tatar', 'vilija'].map(k => lostGatePlan(LOST_GATES.find(g => g.key === k)!));
+const OUTER_GATES = ['bernardine', 'castle', 'wet', 'tatar', 'vilija', 'trakai'].map(k => lostGatePlan(LOST_GATES.find(g => g.key === k)!));
 
 /** The castles the city wall met at the Castle Gate, and the Bernardine monastery that joined them on the east (OSM), named with the gates. */
 const CASTLES = [{ name: 'Upper Castle', x: 241, z: -926 }, { name: 'Lower Castle', x: 110, z: -800 }, { name: 'Bernardines', x: 440, z: -572 }];
@@ -755,9 +755,9 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
   <ul class="mv-legend">
     <li><i class="sw today"></i>Today's houses</li>
     <li><i class="sw plan"></i>1842 plan houses</li>
-    <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', and the eight gates you can travel to' : ''}</li>
+    <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', and the nine gates you can travel to' : ''}</li>
     <li><i class="sw you"></i>You</li>
-    ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>The eight gates you can travel to, gone</li>'}
+    ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>The nine gates you can travel to, gone</li>'}
     <li><i class="sw gate"></i>City gates: open if gone by 1900</li>
     <li><i class="sw wall"></i>Line of the city wall</li>
     <li><i class="sw castle"></i>Castles; dashed, the Bernardines</li>

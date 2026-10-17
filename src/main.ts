@@ -206,12 +206,12 @@ async function main(force = false): Promise<void> {
   await stage(0.68, 'The city gates');
   // The city gates the walk shows (docs/gates.md §8-10): the Subačius Gate at the end of the road, the Rūdninkai Gate
   // at the end of Rūdninkų g., the Saviour's Gate by the Užupis bridge, and further out the Bernardine, Castle, Wet,
-  // Tatar and Vilija gates (reached by travel from the map), each standing as it stood before it came down, with the
-  // wall either side: a deliberate anachronism in 1900. ?gate=ghost (or #ghost) shows them as ghosts over the street
-  // instead. Not the Trakai Gate: its modelled site lies under today's houses (to settle first).
+  // Tatar, Vilija and Trakai gates (reached by travel from the map), each standing as it stood before it came down,
+  // with the wall either side: a deliberate anachronism in 1900. ?gate=ghost (or #ghost) shows them as ghosts over the
+  // street instead.
   const ghostGate = new URLSearchParams(location.search).get('gate') === 'ghost' || location.hash === '#ghost';
   const saviour = LOST_GATES.find(g => g.key === 'saviour')!;
-  const outer = ['bernardine', 'castle', 'wet', 'tatar', 'vilija'].map(k => LOST_GATES.find(g => g.key === k)!);
+  const outer = ['bernardine', 'castle', 'wet', 'tatar', 'vilija', 'trakai'].map(k => LOST_GATES.find(g => g.key === k)!);
   type GateBuild = (o: Parameters<typeof buildSubaciusGate>[0]) => ReturnType<typeof buildSubaciusGate>;
   const gateList: [GateBuild, { x: number; z: number }, number, ([number, number, number] | undefined)?, string?][] = [
     [buildSubaciusGate, SUBACIUS_GATE, 0.97], [buildRudninkaiGate, RUDNINKAI_GATE, 0.92],
@@ -359,7 +359,7 @@ async function main(force = false): Promise<void> {
     { name: RUDNINKAI_GATE.name, label: RUDNINKAI_GATE.name, x: RUDNINKAI_GATE.x, z: RUDNINKAI_GATE.z, go: () => travel(-224.6, 330.3, Math.atan2(0.6685, -0.7436)) },
     { name: saviour.spec.name, label: saviour.spec.name, x: lostGatePlan(saviour).x, z: lostGatePlan(saviour).z, go: () => travel(300.6, -237.4, Math.atan2(-0.92, -0.392)) },
     // further out (build-area.mjs): 22 m inside the town facing out; the Vilija Gate from outside, facing it
-    ...([['bernardine', 418.3, -443.3, 1], ['castle', 145.7, -670.1, 1], ['wet', -84.2, -692.2, 1], ['tatar', -268.6, -497.2, 1], ['vilija', -394.3, -474.6, 0]] as const).map(([k, x, z, sense]) => {
+    ...([['bernardine', 418.3, -443.3, 1], ['castle', 145.7, -670.1, 1], ['wet', -84.2, -692.2, 1], ['tatar', -268.6, -497.2, 1], ['trakai', -555.8, -132.5, 1], ['vilija', -394.3, -474.6, 0]] as const).map(([k, x, z, sense]) => {
       const g = outer.find(o => o.key === k)!, at = lostGatePlan(g), [ux, uz] = g.spec.out;
       // sense 0: face the gate's middle from where you stand (the Vilija Gate's street veers outside)
       const yaw = sense ? Math.atan2(-ux * sense, -uz * sense) : Math.atan2(-(at.x - x), -(at.z - z));
