@@ -7,7 +7,7 @@ import { fetchImage } from '../render/assets';
 
 // One image load (and one GPU upload) per file: materials get clones that share the image source but
 // keep their own tiling. Clones made before the image arrives are flagged for upload when it does. The file
-// comes from render/assets.ts (downloaded and decoded off the page's thread), counted by the default loading
+// comes from render/assets.ts (downloaded on a worker, decoded off the page's thread), counted by the default loading
 // manager so the loading bar waits for it.
 const cache = new Map<string, { base: THREE.Texture; loaded: boolean; clones: THREE.Texture[] }>();
 
@@ -17,6 +17,11 @@ export const WORLD_TEXTURES = [
   ...['diff', 'nor', 'rough'].flatMap(m => [`assets/tex/plastered_wall_04/${m}.webp`, `assets/tex/weathered_planks/${m}.webp`]),
 ];
 
+/** Resolves once every texture asked for so far has arrived (or failed). */
+export function texturesReady(): Promise<void> {
+  return Promise.all([...cache.keys()].map(u => fetchImage(u).catch(() => {}))).then(() => {});
+}
+
 function tex(url: string, srgb: boolean, anisotropy: number): THREE.Texture {
   let entry = cache.get(url);
   if (!entry) {
@@ -25,10 +30,8 @@ function tex(url: string, srgb: boolean, anisotropy: number): THREE.Texture {
     manager.itemStart(url);
     fetchImage(url).then(img => {
       e.base.image = img;                                 // shared by the clones (one Source)
-      const flip = !(typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap);   // a bitmap comes flipped
-      e.base.flipY = flip;
       e.loaded = true;
-      for (const c of e.clones) { c.flipY = flip; c.needsUpdate = true; }
+      for (const c of e.clones) c.needsUpdate = true;
     }).catch(err => { console.warn('texture', url, err); manager.itemError(url); }).finally(() => manager.itemEnd(url));
     cache.set(url, (entry = e));
   }

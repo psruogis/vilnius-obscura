@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { loadArea } from './world/area';
 import { buildWalls, buildRoofs, buildSoffits, hasTileRoof } from './world/buildings';
 import { Terrain } from './world/terrain';
-import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, createGateMaterials, WORLD_TEXTURES } from './world/materials';
+import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, createGateMaterials, WORLD_TEXTURES, texturesReady } from './world/materials';
 import { fetchBuffer, fetchImage } from './render/assets';
+import { FadeIns } from './render/fadein';
 import { buildBarriers } from './world/props';
 import { buildStreetProps, createStreetPropMaterials } from './world/streetprops';
 import { buildTownHall } from './world/townhall';
@@ -232,6 +233,9 @@ async function main(force = false): Promise<void> {
   // Market stalls, carts and townsfolk stream in after the first frame
   let market: Market | null = null;
   let crowd: Crowd | null = null, traffic: Traffic | null = null;
+  const parallelCompile = renderer.extensions.has('KHR_parallel_shader_compile');
+  const settle = (p: Promise<unknown>) => Promise.race([p.catch(() => {}), new Promise(r => setTimeout(r, 8000))]);   // never wait for ever
+  const fades = new FadeIns();   // the townsfolk and carriages arrive after the walk can start: they fade in
   if (townHallData) {
     buildMarket(data, townHallData, terrain, createMarketMaterials(aniso), false).then(async mk => { // c.1900: no stalls on the square
       market = mk;
@@ -241,7 +245,7 @@ async function main(force = false): Promise<void> {
       // Droshkies, a closed carriage and a farm cart on a loop fitted round the square (hoods up in the rain)
       buildTraffic({
         th: townHallData, walls, terrain, free, wood: createWoodMaterial(aniso), rain: RAIN, wet: RAIN ? wet : undefined,
-      }).then(tr => { traffic = tr; scene.add(tr.group); shadows.apply(tr.group); }).catch(err => console.warn('traffic', err));
+      }).then(async tr => { if (parallelCompile) await settle(renderer.compileAsync(tr.group, camera, scene)); traffic = tr; scene.add(tr.group); shadows.apply(tr.group); fades.add(tr.group); }).catch(err => console.warn('traffic', err));
       // Townsfolk: knots of people talking (on the square, and a few along the road to the gate), and strollers
       const groups: THREE.Vector2[] = [];
       const roomy = (x: number, z: number) => free(x, z) && free(x + 1.5, z) && free(x - 1.5, z) && free(x, z + 1.5) && free(x, z - 1.5);
@@ -261,8 +265,9 @@ async function main(force = false): Promise<void> {
         material: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }),
         accessories: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }),
         umbrellas: RAIN,
-      }).then(c => {
-        crowd = c; scene.add(c.group);
+      }).then(async c => {
+        if (parallelCompile) await settle(renderer.compileAsync(c.group, camera, scene));
+        crowd = c; scene.add(c.group); fades.add(c.group);
         c.addLamplighter({
           start: new THREE.Vector2(thx + 10, thz - 40), ground: lampSpots.map(l => l.ground),
           needs: i => (RAIN ? !lamps.isLit(i) : lamps.isLit(i)),
@@ -309,7 +314,7 @@ async function main(force = false): Promise<void> {
   // The character model streams in; the placeholder capsule stands in until then.
   let character: Character | null = null;
   const spec = new URLSearchParams(location.search).get('char') === 'townsman' ? TOWNSMAN : TRAVELLER;
-  Character.load(spec).then(c => {
+  const dressed = Character.load(spec).then(c => {
     character = c; walker.setBody(c.object); shadows.apply(c.object);
     c.onStep = (_foot, sp) => ambience?.step(sp);
   }).catch(err => console.warn('character', err));
@@ -328,7 +333,6 @@ async function main(force = false): Promise<void> {
   document.addEventListener('pointerlockchange', () => { if (!map.isOpen) overlay.setVisible(!input.locked); });
   // Ready once every texture queued above has arrived.
   performance.mark('vo:built');
-  THREE.DefaultLoadingManager.onLoad = () => { performance.mark('vo:ready'); overlay.ready(); ambience?.load(); };
   const stats = createStats(renderer);
   window.addEventListener('keydown', e => { if (e.code === 'Backquote') stats.toggle(); });
 
@@ -358,12 +362,13 @@ async function main(force = false): Promise<void> {
   });
 
   const timer = new THREE.Timer();
-  let frames = 0;
-  renderer.setAnimationLoop((time: number) => {
-    if (frames < 2) performance.mark(`vo:frame${++frames}`);   // the first frame compiles every shader
+  let frames = 0, shown = () => {};
+  const firstFrame = new Promise<void>(r => { shown = r; });
+  const frame = (time: number) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     if (map.isOpen) { map.update(); return; } // the world holds still under the full map
+    fades.update();
     walker.update(dt, camera);
     RAIN_TIME.value += dt;
     rain?.update(dt, camera.position);
@@ -380,7 +385,16 @@ async function main(force = false): Promise<void> {
     post.render(dt);
     map.update();
     stats.update(dt);
-  });
+    if (frames < 2) { performance.mark(`vo:frame${++frames}`, { detail: { programs: renderer.info.programs?.length, parallelCompile } }); shown(); }
+  };
+  // Where the browser compiles shaders in parallel (KHR_parallel_shader_compile; real GPUs), the world's compile
+  // first, off the page's thread, so the first frame does not freeze the page while the loading bar is up.
+  // Elsewhere (software WebGL) that only adds work: the first frame compiles what it draws.
+  if (parallelCompile) void settle(renderer.compileAsync(scene, camera)).then(() => renderer.setAnimationLoop(frame));
+  else renderer.setAnimationLoop(frame);
+  // Ready to walk once the world's textures are in, the walker is dressed and the first frame is drawn; the
+  // townsfolk and carriages fade in when they are ready, and the sounds start downloading only now
+  Promise.all([texturesReady(), dressed, firstFrame]).then(() => { performance.mark('vo:ready'); overlay.ready(); ambience?.load(); });
 
   if (import.meta.env.DEV) {
     // Test hooks for screenshots and debugging.

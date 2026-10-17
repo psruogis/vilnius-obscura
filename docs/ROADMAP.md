@@ -49,6 +49,12 @@ reorder freely.
 - **Fidelity pass:** seven parallel streams covering surfaces, house geometry, wet reflections,
   cabs, people, street props and landmarks, all merged (`docs/FIDELITY-PLAN.md`).
 - **Shipping:** GitHub → Vercel. Every push to `main` goes live at https://vilnius.gg.
+- **Faster loading (A0–A4, 2026-10-17):** textures and models download on a worker from page open
+  (`src/render/assets.ts`), not after the 9 s world build; textures as WebP (12.5 → 4.6 MB); sounds load after the
+  walk is ready; Walk unlocks once the world is drawn and the walker dressed, and the townsfolk and carriages fade
+  in after (`src/render/fadein.ts`); shaders compile in the background where the browser can. Measured with
+  `tools/load-profile.mjs` in a container (software WebGL): 22.2 → 16.9 s at 25 Mbit/s, 29.7 → 21.8 s at 10.
+  Next: pre-build the city at publish time, in tiles (A5), then stream tiles while walking (C1).
 
 ## Next (proposed order)
 

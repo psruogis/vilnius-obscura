@@ -6,8 +6,8 @@
 //   node tools/build-static.mjs && node tools/load-profile.mjs [--mbps 25] [--runs 3] [--query weather=clear]
 //                                                             [--size 1600x900] [--json out.json]
 //
-// --mbps throttles the download (with 40 ms latency) to stand in for a home connection; without it the files come
-// from this machine. Chrome comes from $CHROME (default: Google Chrome on macOS, `chromium` elsewhere). On a
+// --mbps throttles the download (one shared line, 40 ms latency; the server paces it) to stand in for a home
+// connection; without it the files come from this machine. Chrome comes from $CHROME (default: Google Chrome on macOS, `chromium` elsewhere). On a
 // machine without a GPU (a Linux container) WebGL runs in software, so the first-frame time there is far longer
 // than on a real graphics card; the other phases are not affected.
 import { spawn } from 'node:child_process';
@@ -24,7 +24,6 @@ const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(`--${k}`); return i >= 0 ? args[i + 1] : d; };
 const MBPS = Number(opt('mbps', 0));
 const RUNS = Number(opt('runs', 1));
-const THROTTLE = { offline: false, latency: 40, downloadThroughput: MBPS * 125000, uploadThroughput: 1.25e6 };
 const QUERY = opt('query', '');
 const [W, H] = opt('size', '1600x900').split('x').map(Number);
 const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -54,8 +53,24 @@ const server = http.createServer((req, res) => {
     body = packed.get(file); headers['Content-Encoding'] = 'br';
   }
   headers['Content-Length'] = body.length;
-  res.writeHead(200, headers); res.end(body);
+  if (!MBPS) { res.writeHead(200, headers); res.end(body); return; }
+  // --mbps: one shared line, 40 ms away. Each 16 KB goes out at the line's next free moment, whoever asked for it
+  // (Chrome's own throttling skips a worker's fetches, so the server does it)
+  setTimeout(() => {
+    res.writeHead(200, headers);
+    let at = 0;
+    const next = () => {
+      if (at >= body.length) { res.end(); return; }
+      const chunk = body.subarray(at, at + 16384);
+      at += chunk.length;
+      const now = performance.now();
+      line = Math.max(line, now) + (chunk.length * 8) / (MBPS * 1000);
+      setTimeout(() => { res.write(chunk); next(); }, line - now);
+    };
+    next();
+  }, 40);
 });
+let line = 0;   // when the throttled line is next free (ms)
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const URL_ = `http://127.0.0.1:${server.address().port}/${QUERY ? `?${QUERY}` : ''}`;
 
@@ -95,7 +110,6 @@ async function run() {
       // workers (render/assets.ts downloads on one): watch their network too
       if (m.method === 'Target.attachedToTarget') {
         send('Network.enable', {}, p.sessionId).catch(() => {});
-        if (MBPS) send('Network.emulateNetworkConditions', THROTTLE, p.sessionId).catch(() => {});
       }
       if (m.method === 'Runtime.exceptionThrown') errors.push(p.exceptionDetails.exception?.description ?? p.exceptionDetails.text);
     };
@@ -103,7 +117,6 @@ async function run() {
     const evaluate = async expr => { const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true }); return r.result.value; };
     await send('Runtime.enable'); await send('Network.enable'); await send('Page.enable');
     await send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
-    if (MBPS) await send('Network.emulateNetworkConditions', THROTTLE);
     await send('Profiler.enable'); await send('Profiler.setSamplingInterval', { interval: 1000 }); await send('Profiler.start');
     await send('Page.navigate', { url: URL_ });
     let marks = null;
@@ -111,7 +124,8 @@ async function run() {
       await sleep(100);
       try { marks = await evaluate(`Object.fromEntries(performance.getEntriesByType('mark').filter(m => m.name.startsWith('vo:')).map(m => [m.name, m.startTime]))`); } catch {}
     }
-    const programs = await evaluate('window.__walk?.renderer?.info.programs?.length ?? null').catch(() => null);
+    const detail = await evaluate(`performance.getEntriesByName('vo:frame1')[0]?.detail ?? null`).catch(() => null);
+    const programs = detail ? `${detail.programs} shader programs, parallel compile ${detail.parallelCompile ? 'on' : 'off'}` : null;
     const { profile } = await send('Profiler.stop');
     ws.close();
     // main-thread self time per script, from the sampled profile
@@ -137,7 +151,7 @@ for (let r = 0; r < RUNS; r++) {
   console.log(`\nrun ${r + 1}${MBPS ? ` at ${MBPS} Mbit/s` : ''}${m['vo:ready'] ? '' : '  (never became ready: timed out)'}`);
   console.log(`  area data loaded  ${s(m['vo:area'] ?? NaN)}`);
   console.log(`  world built       ${s(m['vo:built'] ?? NaN)}`);
-  console.log(`  first frame       ${s(m['vo:frame1'] ?? NaN)}   second frame ${s(m['vo:frame2'] ?? NaN).trim()}${res.programs ? `   (${res.programs} shader programs)` : ''}`);
+  console.log(`  first frame       ${s(m['vo:frame1'] ?? NaN)}   second frame ${s(m['vo:frame2'] ?? NaN).trim()}${res.programs ? `   (${res.programs})` : ''}`);
   console.log(`  ready to walk     ${s(m['vo:ready'] ?? NaN)}`);
   if (r === 0) {
     const net = res.files.filter(f => !f.kind.startsWith('embedded')), ready = (m['vo:ready'] ?? Infinity) / 1000, before = net.filter(f => f.end <= ready);

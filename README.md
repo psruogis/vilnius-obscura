@@ -18,6 +18,7 @@ node tools/dev-server.mjs  # http://localhost:5173
 
 Needs Node.js 22.18 or newer (for `stripTypeScriptTypes`) and nothing else; runs on macOS,
 Windows and Linux. A static copy for any web server: `node tools/build-static.mjs` → `dist/`.
+How long that copy takes to load, and where the time goes: `node tools/load-profile.mjs [--mbps 25]`.
 
 Controls: W A S D to walk, Shift to jog, mouse (or click-drag) to look, mouse wheel to
 zoom the camera in and out, Tab opens the full-screen map (Tab or Esc closes it), M to mute,

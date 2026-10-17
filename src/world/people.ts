@@ -148,6 +148,10 @@ export async function buildCrowd(opts: {
     return person;
   };
 
+  // Dressing the crowd takes a while: hand the page back every few figures, so the first frames are drawn and the
+  // walk can start meanwhile (main.ts fades the crowd in when it is done)
+  let slice = performance.now();
+  const breathe = async () => { if (performance.now() - slice > 12) { await new Promise(r => setTimeout(r, 0)); slice = performance.now(); } };
   // Knots of 2-4 people facing each other
   for (const g of opts.groups) {
     const n = 2 + Math.floor(rnd() * 3);
@@ -156,6 +160,7 @@ export async function buildCrowd(opts: {
       const x = g.x + Math.cos(a) * r, z = g.y + Math.sin(a) * r;
       if (!opts.free(x, z)) continue;
       spawn(x, z, 'stand', Math.atan2(g.x - x, g.y - z));
+      await breathe();
     }
   }
   // Strollers at random open points
@@ -164,6 +169,7 @@ export async function buildCrowd(opts: {
     const [x, z] = opts.zone.sample(rnd);
     if (!opts.free(x, z)) continue;
     spawn(x, z, 'pause', rnd() * Math.PI * 2);
+    await breathe();
   }
 
   const pickTarget = (p: Person): boolean => {

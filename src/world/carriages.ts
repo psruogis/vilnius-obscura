@@ -93,7 +93,7 @@ interface Model {
 }
 
 async function loadModel(url: string, size: (box: THREE.Box3) => number): Promise<Model> {
-  const gltf = await new GLTFLoader().parseAsync(await fetchBuffer(url), 'assets/char/');
+  const gltf = await new GLTFLoader(new THREE.LoadingManager()).parseAsync(await fetchBuffer(url), 'assets/char/');
   const scene = gltf.scene;
   scene.updateMatrixWorld(true);
   const meshes: THREE.SkinnedMesh[] = [];

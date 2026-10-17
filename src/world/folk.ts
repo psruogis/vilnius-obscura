@@ -39,7 +39,7 @@ interface Marks {
   waistY: number; hipY: number; kneeY: number; ankleY: number; zc: number;
 }
 
-const loader = new GLTFLoader();
+const loader = new GLTFLoader(new THREE.LoadingManager());   // not the default manager: the walk does not wait for the townsfolk
 let clothTex: THREE.Texture | null = null;
 
 /** Loads both bodies and the shared animation set (once); clips are fitted to each body (pelvis height). */
@@ -50,7 +50,7 @@ export function loadFolk(): Promise<{ m: FolkBody; f: FolkBody }> {
 async function loadBodies(): Promise<{ m: FolkBody; f: FolkBody }> {
   await MeshoptSimplifier.ready;
   const [gm, gf, ga] = await Promise.all(['assets/char/folk_male.glb', 'assets/char/folk_female.glb', 'assets/char/folk_anims.glb'].map(async u => loader.parseAsync(await fetchBuffer(u), 'assets/char/')));
-  clothTex ??= new THREE.TextureLoader().load('assets/char/wool_disp.jpg', t => { t.needsUpdate = true; });
+  clothTex ??= new THREE.TextureLoader(new THREE.LoadingManager()).load('assets/char/wool_disp.jpg', t => { t.needsUpdate = true; });
   clothTex.wrapS = clothTex.wrapT = THREE.RepeatWrapping;
   clothTex.anisotropy = 4;
   return { m: body(gm, 'm', ga.animations, ga.scene), f: body(gf, 'f', ga.animations, ga.scene) };
