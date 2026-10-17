@@ -16,7 +16,7 @@ export interface CityGate {
 
 export const CITY_GATES: CityGate[] = [
   // the gatehouse itself (OSM way 112746030); the chapel over it saved it [V]
-  { name: 'Gate of Dawn', lt: 'Aušros (Medininkų) vartai', x: 170.9, z: 468.9, state: 'standing', within: 0 },
+  { name: 'Gate of Dawn', lt: 'Aušros (Medininkų) vartai', x: 170.9, z: 468.9, state: 'built', within: 0 },
   // Rūdninkų x Pylimo; the gate's lower part lies under the street (VSAA) [V]. Modelled, standing (world/rudninkai.ts)
   { name: 'Rūdninkai Gate', lt: 'Rūdninkų vartai', x: -239.3, z: 346.7, state: 'built', within: 10 },
   // in the gap still left between Pylimo g. 22 and Trakų g. 2 (KVR 39) [V]

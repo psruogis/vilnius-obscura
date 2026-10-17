@@ -51,7 +51,7 @@ const WALK_SHAPES = [
   { line: [[293.2, -240.6], [330.0, -224.9]], w: 6, detail: 12, front: 8 },     // Išganytojo g. through the Saviour's Gate
   { circle: [320.8, -228.8], r: 9, detail: 12, front: 8 },
   // and the lost gates further out (2026-10-17, with the LiDAR grid grown to reach them: tools/lidar/README.md); the
-  // Vilija Gate's street bends 12 m inside town, so its strip runs mostly outside. Not the Gate of Dawn (no model yet)
+  // Vilija Gate's street bends 12 m inside town, so its strip runs mostly outside.
   { line: [[410.4, -441.9], [442.9, -447.5]], w: 5, detail: 12, front: 8 },    // through the Bernardine Gate
   { circle: [439.9, -447.0], r: 8, detail: 12, front: 8 },
   { line: [[146.3, -662.1], [142.9, -706.0]], w: 5, detail: 12, front: 8 },    // through the Castle Gate
@@ -65,6 +65,8 @@ const WALK_SHAPES = [
   { line: [[-388.4, -464.2], [-402.6, -474.7]], w: 4, detail: 12, front: 8 },    // and out along the street as it veers
   { line: [[-545.8, -132.5], [-591.8, -132.5]], w: 5, detail: 12, front: 8 },    // through the Trakai Gate, Trakų g.
   { circle: [-577.8, -132.5], r: 8, detail: 12, front: 8 },
+  // and the Gate of Dawn, which still stands: Aušros Vartų g. from 34 m inside town, under the chapel and through
+  { line: [[163.9, 442.6], [173.5, 493.7]], w: 5, detail: 12, front: 8 },       // the tower, to 18 m outside
 ];
 /** Signed distance (m) from local (x, z) to one walk shape: negative inside. */
 function shapeDist(s, x, z) {
@@ -202,6 +204,15 @@ function normGrid(g) {
   return (_norm = { origin, cell, nx, ny, z });
 }
 
+// The Gate of Dawn and its chapel (src/world/dawn.ts DAWN_SPEC: middle of the tower, the street's direction out of
+// town), from 7.5 m outside the tower's outer face to 2 m past the chapel's front, from 6.2 m east of the street's line
+// to 8.2 m west (the street's west houses start there); EPSG:3346
+const DAWN_BOX = (() => {
+  const O = [E0 + 170.2, N0 - 476], U = [0.184, -0.983], W = [-0.983, -0.184];   // U: out (south), W: along the wall
+  const p = (t, w) => [O[0] + U[0] * t + W[0] * w, O[1] + U[1] * t + W[1] * w];
+  return [p(-12.5, -6.2), p(7.5, -6.2), p(7.5, 8.2), p(-12.5, 8.2)];   // and the sliver GRPK runs across the street north of it
+})();
+
 // --- GRPK footprints ----------------------------------------------------
 const grpk = JSON.parse(fs.readFileSync(path.join(SEED, 'grpk', 'grpk_pastat_oldtown_epsg3346.geojson'), 'utf8'));
 const buildings = [];
@@ -220,6 +231,25 @@ for (const f of grpk.features) {
   if (!inContext(c)) continue;
   const id = f.properties.TOP_ID;
   if (removeIds.has(id)) { stats.removedModern = (stats.removedModern || 0) + 1; continue; }
+
+  // The Gate of Dawn stands today, so GRPK has it, joined to the monastery north of it along the street: cut the
+  // gate and its chapel out (main.ts builds them, world/dawn.ts) and keep the rest as it is.
+  const dawnCut = polygonClipping.difference([rings.map(r => [...r, r[0]])], [[...DAWN_BOX, DAWN_BOX[0]]]);
+  if (dawnCut.length !== 1 || Math.abs(ringArea(dropClosing(dawnCut[0][0])) - area) > 0.5) {
+    const h = lidar?.[id];
+    dawnCut.forEach((poly, i) => {
+      const rr = poly.map(dropClosing), a = ringArea(rr[0]);
+      if (a < 15) return;
+      const cap = a > LARGE_FOOTPRINT ? CAP_LARGE : CAP_ORDINARY, e = h ? Math.min(h.eave - h.ground, cap) : DEFAULT_EAVE;
+      buildings.push({
+        id: `${id}-dawn${i}`, role: 'ordinary', area: Math.round(a), dist: Math.round(dist(ringCentroid(rr[0]), TOWN_HALL)),
+        eave: round(e), heightSource: h ? 'lidar' : 'default', capped: !!h && h.eave - h.ground > cap, ground: h ? round(h.ground) : 0,
+        rings: rr.map(r => r.map(local)),
+      });
+    });
+    stats.cutForDawn = (stats.cutForDawn || 0) + 1;
+    continue;
+  }
 
   let role = 'ordinary';
   const th = { E: ringCentroid(townHallRing || [[0, 0]]).E, N: ringCentroid(townHallRing || [[0, 0]]).N };

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { buildSubaciusGate, SUBACIUS_GATE } from './world/subacius';
 import { buildRudninkaiGate, RUDNINKAI_GATE } from './world/rudninkai';
 import { LOST_GATES, buildLostGate, lostGatePlan } from './world/lostgates';
+import { buildDawnGate, DAWN_GATE } from './world/dawn';
 import type { GateSpec } from './world/towergate';
 import { createGateMaterials, worldTex } from './world/materials';
 import { age } from './world/ageing';
@@ -130,8 +131,24 @@ for (const g of LOST_GATES) {
     labels: { drawing: g.views?.[0]?.label ?? 'Corner view', ...(g.views?.[1] ? { painting: g.views[1].label } : {}), field: 'Field side', city: 'Town side', ...(views.passage ? { passage: 'Passage' } : {}), above: 'From above' },
   };
 }
-// the switch runs round the wall: east, north, west
-const ORDER = ['subacius', 'saviour', 'bernardine', 'castle', 'wet', 'tatar', 'vilija', 'trakai', 'rudninkai'];
+// The Gate of Dawn, standing: framed as the three photographs that show it about 1900
+GATES.dawn = {
+  name: 'Gate of Dawn', sub: 'Aušros vartai, Vilnius · as it stood about 1900',
+  note: 'The city wall’s south gate, on the road to Medininkai; built with the wall in 1503–22, given its Renaissance attic after the fire of 1610 and the chapel of the Virgin over the street on the town side (wooden 1671, brick 1712–15, its classical front 1828–30); the one gate left standing when the wall came down. Modelled after photographs by J. Čechavičius (c. 1873), S. F. Fleury (c. 1896) and J. Bułhak (1912): the plan from the sources, the heights read off the photographs.',
+  centre: [DAWN_GATE.x, DAWN_GATE.z], out: DAWN_GATE.out,
+  group: buildDawnGate({ ...opts, mats: matsFor(1, [0.86, 0.84, 0.78]), chapel: matsFor(1, [0.74, 0.6, 0.42]) }).solid,
+  views: {
+    drawing: { dir: [-1, 0.12], pitch: 0.1, dist: 62, at: [-10, 10, 0] },       // down Aušros Vartų g., as Čechavičius
+    fleury: { dir: [0.72, 0.7], pitch: 0.06, dist: 58, at: [-2, 9, -6] },      // from the south-west, the wall going east
+    field: { dir: [1, 0.04], pitch: 0.12, dist: 34, at: [0, 9.5, 0] },          // the field front, as Bułhak
+    chapel: { dir: [-1, 0.03], pitch: 0.12, dist: 32, at: [-14, 10, 0] },      // the chapel's front, close to
+    passage: { dir: [-1, 0], pitch: 0.05, dist: 26, at: [-4, 3.6, 0] },        // through the gate into town
+    above: { dir: [0.55, -0.85], pitch: 0.7, dist: 70, at: [-6, 6, 0] },
+  },
+  labels: { drawing: 'The 1873 view', fleury: 'The 1896 view', field: 'The 1912 view', chapel: 'The chapel', passage: 'Passage', above: 'From above' },
+};
+// the switch runs round the wall: east, north, west, and the Gate of Dawn on its own (standing)
+const ORDER = ['subacius', 'saviour', 'bernardine', 'castle', 'wet', 'tatar', 'vilija', 'trakai', 'rudninkai', 'dawn'];
 for (const d of Object.values(GATES)) { d.group.visible = false; scene.add(d.group); }
 
 // ---- turning it round: yaw and pitch about a target, at a distance; eased toward the goal ----

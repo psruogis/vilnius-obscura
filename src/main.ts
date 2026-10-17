@@ -13,6 +13,7 @@ import { buildStCasimir } from './world/stcasimir';
 import { buildSubaciusGate, SUBACIUS_GATE } from './world/subacius';
 import { buildRudninkaiGate, RUDNINKAI_GATE } from './world/rudninkai';
 import { LOST_GATES, buildLostGate, lostGatePlan } from './world/lostgates';
+import { buildDawnGate, DAWN_GATE } from './world/dawn';
 import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
 import { assembleFacades, buildFacades, facadeChunkOrder } from './world/facades';
@@ -216,6 +217,8 @@ async function main(force = false): Promise<void> {
   const gateList: [GateBuild, { x: number; z: number }, number, ([number, number, number] | undefined)?, string?][] = [
     [buildSubaciusGate, SUBACIUS_GATE, 0.97], [buildRudninkaiGate, RUDNINKAI_GATE, 0.92],
     ...[saviour, ...outer].map(g => [(o: Parameters<GateBuild>[0]) => buildLostGate(g, o), lostGatePlan(g), g.cover, g.plaster, g.roof] as [GateBuild, { x: number; z: number }, number, [number, number, number] | undefined, string | undefined]),
+    // the Gate of Dawn, standing in 1900 (world/dawn.ts): always solid, its chapel in its own warmer render
+    [o => buildDawnGate({ ...o, chapel: createGateMaterials(aniso, terrain.heightAt(DAWN_GATE.x, DAWN_GATE.z), 1, [0.74, 0.6, 0.42]) }), DAWN_GATE, 1, [0.86, 0.84, 0.78]],
   ];
   const gates = gateList.map(([build, at, cover, plaster, roof]) => {
     const mats = createGateMaterials(aniso, terrain.heightAt(at.x, at.z), cover, plaster);
@@ -358,6 +361,8 @@ async function main(force = false): Promise<void> {
     // the other two gates, from 22 m inside the town, facing out along the street through them (build-area.mjs)
     { name: RUDNINKAI_GATE.name, label: RUDNINKAI_GATE.name, x: RUDNINKAI_GATE.x, z: RUDNINKAI_GATE.z, go: () => travel(-224.6, 330.3, Math.atan2(0.6685, -0.7436)) },
     { name: saviour.spec.name, label: saviour.spec.name, x: lostGatePlan(saviour).x, z: lostGatePlan(saviour).z, go: () => travel(300.6, -237.4, Math.atan2(-0.92, -0.392)) },
+    // the Gate of Dawn from Aušros Vartų g., 20 m north of its chapel, looking at it (build-area.mjs)
+    { name: DAWN_GATE.name, label: DAWN_GATE.name, x: DAWN_GATE.x, z: DAWN_GATE.z, go: () => travel(164.6, 446.0, Math.atan2(-0.184, -0.983)) },
     // further out (build-area.mjs): 22 m inside the town facing out; the Vilija Gate from outside, facing it
     ...([['bernardine', 418.3, -443.3, 1], ['castle', 145.7, -670.1, 1], ['wet', -84.2, -692.2, 1], ['tatar', -268.6, -497.2, 1], ['trakai', -555.8, -132.5, 1], ['vilija', -394.3, -474.6, 0]] as const).map(([k, x, z, sense]) => {
       const g = outer.find(o => o.key === k)!, at = lostGatePlan(g), [ux, uz] = g.spec.out;

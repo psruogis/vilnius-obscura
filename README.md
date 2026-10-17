@@ -29,7 +29,8 @@ the walk on Subačiaus g. by the gate (`#ghost`: the same, with the ghost). `gat
 on their own, in clear daylight, to be turned round with the mouse or a finger: the Subačius Gate, or any of the nine lost
 gates by name (`#rudninkai`, `#saviour`, `#bernardine`, `#castle`, `#wet`, `#tatar`, `#vilija`, `#trakai`; `#field`,
 `#city`, `#passage`, `#above` pick a view, and `#trakai-field` and so on; where a gate was painted, `#drawing` and
-`#painting` stand where the painters stood, e.g. `#trakai-painting`).
+`#painting` stand where the painters stood, e.g. `#trakai-painting`), and the Gate of Dawn, standing (`#dawn`; `#dawn-fleury`,
+`#dawn-field` and `#dawn-chapel` as the 1896 and 1912 photographs and the chapel close to).
 
 Music: none, except klezmer that drifts in as you walk west towards the Jewish quarter (`docs/music.md`; the Music
 slider is in Options).

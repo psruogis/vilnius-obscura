@@ -27,7 +27,7 @@ never been found ⁷, the map draws a dotted ring of that size round it, not a p
 
 | # | Gate | Where it stood | Fate | On the map (x, z), within |
 |---|---|---|---|---|
-| 1 | **Aušros (Medininkų) vartai**: Gate of Dawn, Aštrieji (Sharp), Krėvos | Aušros Vartų g.: the gatehouse stands (OSM way 112746030) [V] | **Standing**, saved by the chapel over it ¹ ⁷ | (170.9, 468.9), exact. Filled |
+| 1 | **Aušros (Medininkų) vartai**: Gate of Dawn, Aštrieji (Sharp), Krėvos | Aušros Vartų g.: the gatehouse stands (OSM way 112746030) [V] | **Standing**, saved by the chapel over it ¹ ⁷ | (170.9, 468.9), exact. Filled; modelled and standing in the walk (§11) |
 | 2 | **Rūdninkų vartai** | Rūdninkų × Pylimo ¹; its lower part survives under the street ¹³ [V] | Pulled down 1800 ¹ ¹³ | (−239.3, 346.7), 10 m. **Built, standing (§9)**: drawn as its plan |
 | 3 | **Trakų vartai** (the main gate ²) | In the gap still left between Pylimo g. 22 and Trakų g. 2, where the wall ran and the Kačerga stream flowed ⁷ [V]. Near Trakų × Pylimo ¹ | 1803–04: its icon was moved in 1803 ⁷; the tower was pulled down in 1804 ¹ | (−578, −132.5), 5 m: across the west end of Trakų g., in front of Trakų g. 2/24 ²¹ (moved 2026-10-17 from (−575, −181), the register's gap, which is where the wall ran north of it). Modelled (§10) |
 | 4 | **Vilijos (Vilniaus) vartai** | Benediktinių × Šv. Ignoto ¹. The English article ² says "Vilnius and Bernardinai", a street pair that doesn't meet; read as a slip [U]. The wall stretches Totorių–Vilijos and Vilijos–Trakų are registered ⁷ | Pulled down 24 Nov 1802 ¹; its icon went to the Subačius g. orphanage chapel ⁷ | (−381, −462), 15 m. Modelled (§10) |
@@ -327,6 +327,43 @@ far more here is a design choice than at the Subačius and Rūdninkai gates.
 Gate's road (east over the Vilnia, as here, or north to the monastery); whether the Castle Gate's tower kept a roof
 of its own or sat under the court house's.
 
+## 11. The Gate of Dawn as built (2026-10-17)
+
+The one gate still standing in 1900, and today: `src/world/dawn.ts`, in the walk at the south end of Aušros Vartų g.
+(reached by travel from the map) and at `vilnius.gg/gates#dawn`. Built on the gate kit (§10) for the tower, with the
+attic, the chapel and the wall added on top.
+
+**What the sources say** [V]:
+- Built with the wall, 1503–22 (first mentioned 1514) ²⁵ ²⁶. Its walls are 2 m thick, 2.6 m on the outside ²⁵. The
+  early gatehouse measures 11.2 × 10.8 m in plan ²¹. Three storeys, square, with firing niches of five openings on the
+  second and third ²⁵. Gothic up to the upper firing openings, Renaissance above, the attic rebuilt after the fire of
+  1610. Two griffins on it hold the Vytis, and arches joined by "anchors" run round three sides ²⁵.
+- The chapel of the Virgin over the street on the town side: wooden 1671–72, burnt 1711, brick 1712–15; its front
+  rebuilt in 1828–30, a gallery with stairs added just before ²⁶. It was the one gate left standing when the wall came
+  down in 1799–1805 ²⁶.
+- **Pictures, c. 1900:** J. Čechavičius, c. 1873, the town side down Aušros Vartų g. ²⁷; S. F. Fleury, c. 1896, the
+  field side from the south-west, with the high wall running east and a lower block between ²⁸; J. Bułhak, 1912, the
+  field front, and its attic close to ²⁹. Drawings: J. Oziębłowski 1834 and 1841, V. Slendzinskis 1889 (not used).
+
+**What was read off the pictures** [U] (against the 11.2 m width):
+- The tower: an entablature of 1.4 m at 12.8 m, the attic 4.1 m over it, 18.3 m to the attic's cornice. On the field
+  front the gateway, 3.4 m wide and springing at 3.9 m; a blind arched niche over it, from 6.3 to 9.0 m; round gun ports
+  with thick moulded rims, three across at 11.6 m and two either side of the niche at 8.2 m; one on each side.
+- The attic's field front: two aedicules (an arched niche between pilasters, a little pediment with balls) 3.74 m either
+  side of the middle; between them the oval cartouche with the Vytis, a fleur-de-lis over it, and the two griffins;
+  obelisk finials and scrolls. The relief is drawn flat, its figures simplified. The sides: two aedicules each. The town
+  side: two aedicules and a little belfry with its bell and a cross.
+- The chapel: 9.6 m wide and 5 m deep (the GRPK footprint gives the whole block, 17 m along the street); a wide, low
+  arch over the street (7.7 m, rising 2.5 m from 2.8 m), a ledge with two lanterns, four pilasters, three arched windows
+  (the middle one 3 m wide, with a fanlight and the icon's gilt behind it), an entablature to 12.2 m and a pediment
+  rising 3.9 m; a sheet-metal roof back to the tower. The walls warmer than the pilasters, as the 1873 photograph shows
+  them darker; the colours are a guess.
+- The wall east of it: plain and plastered, about 7.5 m high, until a house stands on its line today. The lower block
+  between the tower and the wall in the 1896 and 1912 photographs is not modelled (GRPK's outline east of the tower
+  stands in for it); nor is the gallery to St Theresa's.
+- The street through it follows OSM; the cadastre's footprint of the gate and chapel is cut out of the monastery's
+  (`tools/build-area.mjs` DAWN_BOX) so that the generic house builder doesn't draw over them.
+
 ## Sources
 
 1. [Vilniaus gynybinė siena (lt.wikipedia)](https://lt.wikipedia.org/wiki/Vilniaus_gynybin%C4%97_siena)
@@ -353,5 +390,10 @@ of its own or sat under the court house's.
 22. [P. Smuglevičius, *Trakų vartai*, 1785, photographed by J. Bułhak, early 20th c. (Lithuanian National Museum; ePaveldas LIMIS-489663736)](https://www.epaveldas.lt/); also Wikimedia Commons, File:Trakai gate.Vilnius.Lithuania.jpg. Bułhak photographed Smuglevičius's Rūdninkai Gate too (LIMIS-489639719)
 23. J. Kamarauskas, *Vilnius. Trakų vartai*, 1898, watercolour, Lithuanian National Museum of Art T-8222 (ePaveldas LIMIS-20000003972755), with his note on the back
 24. [R. Janonienė, "Apie oberbombardyro Vaitiekaus Ivaškevičiaus 1791 m. Vilniaus piešinį", *XVIII amžiaus studijos* 6 (2020), pp. 323–334, CC BY 4.0](https://doi.org/10.33918/23516968-006015)
+25. [Aušros vartai (lt.wikipedia)](https://lt.wikipedia.org/wiki/Au%C5%A1ros_vartai)
+26. [Gate of Dawn (en.wikipedia)](https://en.wikipedia.org/wiki/Gate_of_Dawn)
+27. J. Čechavičius, *Aušros Vartai. Vilnius*, photograph, c. 1873 (ePaveldas LIMIS-708452445, CC BY-NC-ND)
+28. S. F. Fleury, *Aušros Vartai ir miesto gynybinė siena*, photograph, c. 1896 (ePaveldas LIMIS-601718767, CC BY-NC-ND)
+29. J. Bułhak, *Aušros Vartai*, two photographs in his album *Fotografijos archyvas* t. 1, 1912 (ePaveldas LIMIS-20000002689718 and LIMIS-20000003440163, CC BY-NC-ND)
 
 Map data: streets © OpenStreetMap contributors (ODbL).

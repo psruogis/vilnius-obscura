@@ -3,6 +3,7 @@ import { WalkZone } from '../world/zone';
 import { SUBACIUS_GATE, type GateLook } from '../world/subacius';
 import { RUDNINKAI_GATE } from '../world/rudninkai';
 import { LOST_GATES, lostGatePlan } from '../world/lostgates';
+import { DAWN_GATE } from '../world/dawn';
 import { CITY_GATES, type CityGate } from '../world/citygates';
 import { loadFonts } from './fonts';
 
@@ -282,6 +283,7 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
     } else { today.push(s); todayRings.push(b.rings); }
   }
   for (const [g, dz] of [[SUBACIUS_GATE, 16], [RUDNINKAI_GATE, 18], [SAVIOUR_GATE, 16], ...OUTER_GATES.map(o => [o, 16] as const)] as const) landmarks.push({ text: gateLook === 'solid' ? g.name : `${g.name} site`, x: g.x, z: g.z + dz });
+  landmarks.push({ text: DAWN_GATE.name, x: DAWN_GATE.x, z: DAWN_GATE.z + 16 });   // standing in 1900: never a site
   // the walk's edge: the square and the road out to the gate (world/zone.ts)
   const zone = new WalkZone(data);
   const veil = new Path2D();
@@ -293,7 +295,7 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
   return {
     areas: data.areas.map(a => plotOf([a.ring], false)),
     foot, today, plan, hall, todayRings, planRings, labels, landmarks, veil, edge,
-    gate: [...SUBACIUS_GATE.plan, ...RUDNINKAI_GATE.plan, ...SAVIOUR_GATE.plan, ...OUTER_GATES.flatMap(o => o.plan)].map(r => plotOf([r], false)), gateLook,
+    gate: [...SUBACIUS_GATE.plan, ...RUDNINKAI_GATE.plan, ...SAVIOUR_GATE.plan, ...OUTER_GATES.flatMap(o => o.plan), ...DAWN_GATE.plan].map(r => plotOf([r], false)), gateLook,
     gates: CITY_GATES, old: null, reach: reachOf(data, CITY_GATES),
     square: named ? { text: named.name!, x: centroid(named.ring)[0], z: centroid(named.ring)[1] } : null,
     centre: [thx, thz], radius, walkBox: zone.box, hats: {},
@@ -755,9 +757,9 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
   <ul class="mv-legend">
     <li><i class="sw today"></i>Today's houses</li>
     <li><i class="sw plan"></i>1842 plan houses</li>
-    <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', and the nine gates you can travel to' : ''}</li>
+    <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', and the ten gates you can travel to' : ''}</li>
     <li><i class="sw you"></i>You</li>
-    ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>The nine gates you can travel to, gone</li>'}
+    ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>The lost gates you can travel to, gone</li>'}
     <li><i class="sw gate"></i>City gates: open if gone by 1900</li>
     <li><i class="sw wall"></i>Line of the city wall</li>
     <li><i class="sw castle"></i>Castles; dashed, the Bernardines</li>
