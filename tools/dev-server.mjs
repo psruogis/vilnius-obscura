@@ -43,6 +43,9 @@ function serveTs(file, res) {
   const src = fs.readFileSync(file, 'utf8');
   let js = stripTypeScriptTypes(src, { mode: 'transform', sourceUrl: file });
   js = js.replaceAll('import.meta.env.DEV', 'true');
+  // bare specifiers to URLs: workers get no import map (world/facades.worker.ts loads three.js too)
+  js = js.replace(/(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])(three(?:\/examples\/jsm\/[^'"]*)?|suncalc)\2/g, (_, pre, q, spec) =>
+    `${pre}${q}${spec === 'three' ? IMPORT_MAP.imports.three : spec === 'suncalc' ? IMPORT_MAP.imports.suncalc : spec.replace('three/examples/jsm/', IMPORT_MAP.imports['three/examples/jsm/'])}${q}`);
   send(res, 200, MIME['.js'], js);
 }
 
@@ -79,7 +82,7 @@ const server = http.createServer((req, res) => {
       const base = path.join(ROOT, p);
       if (!base.startsWith(path.join(ROOT, 'src'))) return send(res, 403, 'text/plain', 'Forbidden');
       if (p.endsWith('.css')) return send(res, 200, MIME['.css'], fs.readFileSync(base));
-      const ts = base.endsWith('.ts') ? base : `${base}.ts`;
+      const ts = base.endsWith('.ts') ? base : base.endsWith('.js') ? `${base.slice(0, -3)}.ts` : `${base}.ts`;   // a worker is asked for as .js
       if (fs.existsSync(ts)) return serveTs(ts, res);
       if (fs.existsSync(path.join(base, 'index.ts'))) return serveTs(path.join(base, 'index.ts'), res);
       return send(res, 404, 'text/plain', `Not found: ${p}`);

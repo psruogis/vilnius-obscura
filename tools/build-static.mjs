@@ -33,6 +33,10 @@ function build(dir) {
       js = js.replaceAll('import.meta.env.DEV', 'false');
       js = js.replace(/(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])(\.{1,2}\/[^'"]+)\2/g, (_, pre, q, spec) => `${pre}${q}${withExt(spec)}${q}`);
       js = js.replace(/assets\/char\/([\w-]+)\.glb/g, 'assets/char/$1.gltf.json'); // see the model conversion below
+      // bare specifiers to relative URLs: workers get no import map (world/facades.worker.ts loads three.js too)
+      const up = path.relative(path.dirname(rel), '.').split(path.sep).join('/') || '.';
+      js = js.replace(/(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])(three(?:\/examples\/jsm\/[^'"]*)?|suncalc)\2/g, (_, pre, q, spec) =>
+        `${pre}${q}${up}/${(spec === 'three' ? IMPORT_MAP.imports.three : spec === 'suncalc' ? IMPORT_MAP.imports.suncalc : spec.replace('three/examples/jsm/', IMPORT_MAP.imports['three/examples/jsm/'])).replace(/^\.\//, '')}${q}`);
       fs.writeFileSync(out.replace(/\.ts$/, '.js'), js);
     } else {
       fs.copyFileSync(src, out);

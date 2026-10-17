@@ -4,6 +4,7 @@ import { buildWalls, buildRoofs, buildSoffits, hasTileRoof } from './world/build
 import { Terrain } from './world/terrain';
 import { createFacadeMaterial, createGroundMaterial, createRoofMaterial, createTownHallMaterials, createChurchMaterials, createPromenadeMaterials, createMarketMaterials, createMetalRoofMaterial, createWoodMaterial, createGateMaterials, WORLD_TEXTURES, texturesReady } from './world/materials';
 import { fetchBuffer, fetchImage } from './render/assets';
+import { groundRaster, groundTest } from './world/ground';
 import { FadeIns } from './render/fadein';
 import { buildBarriers } from './world/props';
 import { buildStreetProps, createStreetPropMaterials } from './world/streetprops';
@@ -14,7 +15,8 @@ import { buildRudninkaiGate, RUDNINKAI_GATE } from './world/rudninkai';
 import { LOST_GATES, buildLostGate, lostGatePlan } from './world/lostgates';
 import { buildPromenade } from './world/promenade';
 import { buildMarket, type Market } from './world/market';
-import { buildFacades } from './world/facades';
+import { assembleFacades, buildFacades, facadeChunkOrder } from './world/facades';
+import { facadesOnWorkers, warmFacadeWorkers } from './world/facadeworkers';
 import { buildCrowd, type Crowd } from './world/people';
 import { buildTraffic, type Traffic } from './world/carriages';
 import { createHouseMaterials } from './world/houseMaterials';
@@ -73,6 +75,7 @@ async function main(force = false): Promise<void> {
   // within one it is busy, and only the bar's sheen (run by the compositor) keeps moving.
   const stage = (p: number, text: string) => {
     overlay.setStage(p, text);
+    performance.mark(`vo:stage:${text}`);
     // after the next paint (a hidden tab paints nothing: then after 100 ms)
     return Promise.race([new Promise<void>(r => requestAnimationFrame(() => setTimeout(r, 0))), new Promise<void>(r => setTimeout(r, 100))]);
   };
@@ -89,6 +92,7 @@ async function main(force = false): Promise<void> {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 5000);
 
+  warmFacadeWorkers();   // their code loads now, while the page waits for the map
   // Start every texture and model downloading now, on a worker, while the world is built (render/assets.ts)
   for (const url of WORLD_TEXTURES) void fetchImage(url).catch(() => {});
   for (const url of ['assets/char/folk_male.glb', 'assets/char/folk_female.glb', 'assets/char/folk_anims.glb', 'assets/char/horse.glb', 'assets/char/man.glb']) void fetchBuffer(url).catch(() => {});
@@ -101,7 +105,9 @@ async function main(force = false): Promise<void> {
   const around = (m: number): [number, number, number, number] => [zone.box[0] - m, zone.box[1] - m, zone.box[2] + m, zone.box[3] + m];
   await stage(0.1, 'Measuring the streets');
   // Open ground: a 1 m raster of the building outlines over the walk and its surroundings
-  const free = openGround(data, around(120));
+  const ground = groundRaster(data, around(120)), free = groundTest(ground);
+  // the house fronts take longest: built on workers meanwhile, and collected before the street furniture needs them
+  const facadeWork = facadesOnWorkers(data, ground);
 
   // Sky and sun
   const sunDir = sunDirection(SCENE_TIME);
@@ -160,8 +166,6 @@ async function main(force = false): Promise<void> {
     wet(houseMats.metal, 'roof');
     houseMats.glass.emissiveIntensity = 1.6; // a few rooms lit against the gloom
   }
-  const facades = buildFacades(data, terrain, houseMats, free);
-  scene.add(facades.group);
   await stage(0.6, "The Town Hall and St Casimir's");
   // Eave soffits: the limewashed undersides of the overhanging roofs (buildings.ts)
   const soffits = new THREE.Mesh(buildSoffits(data), houseMats.trim);
@@ -225,6 +229,11 @@ async function main(force = false): Promise<void> {
   });
   let promenadeRef: { update(dt: number): void } | null = null;
   // gas lamps: the garden's lamp posts and the lanterns on the house fronts
+  const facades = await (facadeWork?.then(parts => assembleFacades(parts, houseMats, facadeChunkOrder(data))).catch(err => {
+    console.warn(err);
+    return buildFacades(data, terrain, houseMats, free);
+  }) ?? buildFacades(data, terrain, houseMats, free));
+  scene.add(facades.group);
   const lampSpots: LampSpot[] = [...facades.lamps];
   if (townHallData) {
     const promMats = createPromenadeMaterials(aniso);
@@ -437,26 +446,6 @@ async function main(force = false): Promise<void> {
 }
 
 /** Open ground test from a 1 m raster of the building outlines over the box [x0, z0, x1, z1]; outside it, nothing is open. */
-function openGround(data: Awaited<ReturnType<typeof loadArea>>, box: [number, number, number, number]): (x: number, z: number) => boolean {
-  const x0 = Math.floor(box[0]), z0 = Math.floor(box[1]), W = Math.ceil(box[2]) - x0, H = Math.ceil(box[3]) - z0;
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const g = c.getContext('2d', { willReadFrequently: true })!;
-  g.fillStyle = '#fff';
-  for (const b of data.buildings) {
-    if (b.rings[0].every(([x, z]) => x < x0 || z < z0 || x > x0 + W || z > z0 + H)) continue;
-    g.beginPath();
-    for (const ring of b.rings) ring.forEach(([x, z], i) => (i ? g.lineTo : g.moveTo).call(g, x - x0, z - z0));
-    g.fill('evenodd');
-  }
-  const px = g.getImageData(0, 0, W, H).data;
-  return (x, z) => {
-    const i = Math.floor(x - x0), j = Math.floor(z - z0);
-    if (i < 0 || j < 0 || i >= W || j >= H) return false;
-    return px[(j * W + i) * 4] < 64;
-  };
-}
-
 function fail(err: unknown): void {
   console.error(err);
   document.body.insertAdjacentHTML('beforeend', `<pre style="color:#f88;padding:16px">${String(err)}</pre>`);

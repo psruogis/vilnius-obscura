@@ -54,7 +54,12 @@ reorder freely.
   walk is ready; Walk unlocks once the world is drawn and the walker dressed, and the townsfolk and carriages fade
   in after (`src/render/fadein.ts`); shaders compile in the background where the browser can. Measured with
   `tools/load-profile.mjs` in a container (software WebGL): 22.2 → 16.9 s at 25 Mbit/s, 29.7 → 21.8 s at 10.
-  Next: pre-build the city at publish time, in tiles (A5), then stream tiles while walking (C1).
+  Next: stream tiles while walking (C1).
+- **Façades on workers (A5, 2026-10-17):** the house fronts (half the world build) are built on up to three
+  workers, a share of the 150 m squares each, while the page builds the rest (`world/facadeworkers.ts`,
+  `facades.worker.ts`; `facadeParts` / `assembleFacades` in `facades.ts`). Pre-building them at publish time was
+  dropped: they are 257 MB of geometry in memory (1.9 M triangles), several MB to download even compressed, slower
+  than building them. World build 13.5 → 8 s in the container. The same squares are the tiles to stream (C1).
 
 ## Next (proposed order)
 

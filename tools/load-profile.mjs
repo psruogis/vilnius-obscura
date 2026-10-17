@@ -153,6 +153,8 @@ for (let r = 0; r < RUNS; r++) {
   console.log(`  world built       ${s(m['vo:built'] ?? NaN)}`);
   console.log(`  first frame       ${s(m['vo:frame1'] ?? NaN)}   second frame ${s(m['vo:frame2'] ?? NaN).trim()}${res.programs ? `   (${res.programs})` : ''}`);
   console.log(`  ready to walk     ${s(m['vo:ready'] ?? NaN)}`);
+  const st = Object.entries(m).filter(([k]) => k.startsWith('vo:stage:')).sort((a, b) => a[1] - b[1]);
+  if (r === 0 && st.length) console.log('  stages (time from each to the next):\n' + st.map(([k, t], i) => `    ${s((st[i + 1]?.[1] ?? m['vo:frame1'] ?? t) - t)}  ${k.slice(9)}`).join('\n'));
   if (r === 0) {
     const net = res.files.filter(f => !f.kind.startsWith('embedded')), ready = (m['vo:ready'] ?? Infinity) / 1000, before = net.filter(f => f.end <= ready);
     console.log(`  downloaded before ready: ${mb(before.reduce((a, f) => a + f.bytes, 0)).trim()} in ${before.length} files; in all ${mb(net.reduce((a, f) => a + f.bytes, 0)).trim()} (embedded data is decoded, not downloaded)`);

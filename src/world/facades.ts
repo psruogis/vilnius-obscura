@@ -60,6 +60,13 @@ class GeoBuilder {
     this.tri(a, c, d, n, uvs[0], uvs[2], uvs[3], color);
   }
 
+  /** The attributes as typed arrays (name, data, item size), to hand to another thread; null when empty. */
+  arrays(): [string, Float32Array, number][] | null {
+    if (!this.pos.length) return null;
+    return [['position', new Float32Array(this.pos), 3], ['normal', new Float32Array(this.nor), 3], ['uv', new Float32Array(this.uv), 2],
+      ['color', new Float32Array(this.col), 3], ...[...this.extra].map(([k, v]) => [k, new Float32Array(v), 4] as [string, Float32Array, number])];
+  }
+
   geometry(): THREE.BufferGeometry | null {
     if (!this.pos.length) return null;
     const g = new THREE.BufferGeometry();
@@ -700,7 +707,75 @@ export interface FacadeStats { houses: number; windows: number; doors: number; s
 const FASCIA = ['#3f5a48', '#6e2e26', '#34425c', '#5a4632', '#8a6a34', '#cfc2a4', '#4a5e4a', '#7a5a3c'];
 const AWNING = ['#e8dcc0', '#c8b48a', '#7a3b2c', '#3e5a44', '#d6c8a4', '#8a6a3a'];
 
+export type FacadePart = 'wall' | 'trim' | 'flat' | 'glass' | 'wood' | 'canvas' | 'iron' | 'metal' | 'shop' | 'sign';
+/** The façades as plain data: per CHUNK square, per part, the attribute arrays; lamps, anchors and signs tagged with
+ * the index of their house (`hi`), so that pieces built apart (on workers, a few squares each) merge in order. */
+export interface FacadeParts {
+  chunks: { key: string; parts: { name: FacadePart; attrs: [string, Float32Array, number][] }[] }[];
+  lamps: { hi: number; x: number; y: number; z: number; gx: number; gz: number }[];
+  anchors: { hi: number; a: FacadeAnchor }[];
+  signs: { hi: number; w: number; h: number; p: number[]; q: number[] }[];
+  stats: FacadeStats;
+}
+
+/** The order the CHUNK squares are first met in, house by house: the order their meshes are added (`perHouse`:
+ * every house's square, in house order). */
+export function facadeChunkOrder(data: AreaData, perHouse = false): string[] {
+  const order: string[] = [];
+  for (const b of data.buildings) if (b.detail) { const k = chunkOf(b); if (perHouse || !order.includes(k)) order.push(k); }
+  return order;
+}
+function chunkOf(b: Building): string {
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+  for (const [x, z] of b.rings[0]) { x0 = Math.min(x0, x); z0 = Math.min(z0, z); x1 = Math.max(x1, x); z1 = Math.max(z1, z); }
+  return `${Math.floor((x0 + x1) / 2 / CHUNK)},${Math.floor((z0 + z1) / 2 / CHUNK)}`;
+}
+
 export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMaterials, free?: (x: number, z: number) => boolean): { group: THREE.Group; stats: FacadeStats; lamps: LampSpot[]; anchors: FacadeAnchor[] } {
+  return assembleFacades([facadeParts(data, terrain, free)], mats);
+}
+
+/** Meshes from façade parts (from one call of facadeParts or several, each over some of the squares). */
+export function assembleFacades(pieces: FacadeParts[], mats: HouseMaterials, order?: string[]): { group: THREE.Group; stats: FacadeStats; lamps: LampSpot[]; anchors: FacadeAnchor[] } {
+  const stats: FacadeStats = { houses: pieces[0]?.stats.houses ?? 0, windows: 0, doors: 0, shops: 0, triangles: 0 };
+  for (const p of pieces) { stats.windows += p.stats.windows; stats.doors += p.stats.doors; stats.shops += p.stats.shops; }
+  const chunks = pieces.flatMap(p => p.chunks);
+  if (order) chunks.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  const MAT: Record<FacadePart, [THREE.Material, boolean]> = {
+    wall: [mats.wall, true], trim: [mats.trim, true], flat: [mats.trim, false], glass: [mats.glass, false], wood: [mats.wood, true],
+    canvas: [mats.canvas, true], iron: [mats.iron, false], metal: [mats.metal, true], shop: [mats.shopGlass, false], sign: [mats.signs, false],
+  };
+  const group = new THREE.Group();
+  group.name = 'facades';
+  for (const c of chunks) for (const part of c.parts) {
+    const g = new THREE.BufferGeometry();
+    for (const [k, a, n] of part.attrs) g.setAttribute(k, new THREE.BufferAttribute(a, n));
+    g.computeBoundingSphere();
+    stats.triangles += g.getAttribute('position').count / 3;
+    const [mat, cast] = MAT[part.name];
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.castShadow = cast;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+  const byHouse = <T extends { hi: number }>(xs: T[]) => xs.map((x, i) => [x, i] as const).sort((a, b) => a[0].hi - b[0].hi || a[1] - b[1]).map(([x]) => x);
+  const signs = byHouse(pieces.flatMap(p => p.signs));
+  if (signs.length) {
+    const signMat = hotelSign();
+    for (const s of signs) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), signMat);
+      m.position.fromArray(s.p); m.quaternion.fromArray(s.q); m.castShadow = true;
+      group.add(m);
+    }
+  }
+  const lamps = byHouse(pieces.flatMap(p => p.lamps)).map(l => ({ pos: new THREE.Vector3(l.x, l.y, l.z), ground: new THREE.Vector2(l.gx, l.gz) }));
+  const anchors = byHouse(pieces.flatMap(p => p.anchors)).map(a => a.a);
+  return { group, stats, lamps, anchors };
+}
+
+/** The façades of the houses near the walk, as plain data; `only` limits them to some CHUNK squares. No DOM: it
+ * runs on a worker too (facades.worker.ts). */
+export function facadeParts(data: AreaData, terrain: Terrain, free?: (x: number, z: number) => boolean, only?: (chunk: string) => boolean): FacadeParts {
   const houses = data.buildings.filter(b => b.detail);
   // Neighbours for party-wall tests: every building whose bounding box is near
   const boxes = data.buildings.map(b => {
@@ -722,7 +797,7 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
   const lamps: LampSpot[] = [];
   const anchors: FacadeAnchor[] = [];
   const anchor = (kind: FacadeAnchor['kind'], e: Edge, u: number, h: number, w: number, more?: Partial<FacadeAnchor>) => { const p = P(e, u, h, 0); anchors.push({ kind, x: p.x, y: p.y, z: p.z, nx: e.nx, nz: e.nz, tx: e.tx, tz: e.tz, w, ...more }); };
-  const signMat = houses.some(h => h.style === 'hotel') ? hotelSign() : null;
+  const signMat = houses.some(h => h.style === 'hotel') ? SIGN_STANDIN : null;   // the painted sign is made on the page
   const stats: FacadeStats = { houses: houses.length, windows: 0, doors: 0, shops: 0, triangles: 0 };
   // open ground ahead of a wall: how far the street or square reaches (m, up to 30)
   const frontage = (e: Edge): number => {
@@ -733,8 +808,15 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
   };
   const cWhite = new THREE.Color();
 
-  for (const b of houses) {
+  // which house each lamp, anchor and sign came from: tagged when the next house starts (houses `continue` early)
+  const lampHi: number[] = [], anchorHi: number[] = [], extraHi: number[] = [];
+  let lastHi = -1;
+  const tag = () => { while (lampHi.length < lamps.length) lampHi.push(lastHi); while (anchorHi.length < anchors.length) anchorHi.push(lastHi); while (extraHi.length < extras.length) extraHi.push(lastHi); };
+  for (const [hi, b] of houses.entries()) {
+    tag();
+    lastHi = hi;
     const me0 = boxes.find(o => o.b === b)!, ck = `${Math.floor((me0.x0 + me0.x1) / 2 / CHUNK)},${Math.floor((me0.z0 + me0.z1) / 2 / CHUNK)}`;
+    if (only && !only(ck)) continue;
     if (!chunks.has(ck)) chunks.set(ck, builders());
     ({ wall, trim, flat, glass, wood, canvas, iron, metal, shop, sign } = chunks.get(ck)!);
     const seed = hashString(b.id);
@@ -1298,19 +1380,18 @@ export function buildFacades(data: AreaData, terrain: Terrain, mats: HouseMateri
     }
   }
 
-  const group = new THREE.Group();
-  group.name = 'facades';
-  for (const c of chunks.values()) {
-    for (const [builder, mat, cast] of [[c.wall, mats.wall, true], [c.trim, mats.trim, true], [c.flat, mats.trim, false], [c.glass, mats.glass, false], [c.wood, mats.wood, true], [c.canvas, mats.canvas, true], [c.iron, mats.iron, false], [c.metal, mats.metal, true], [c.shop, mats.shopGlass, false], [c.sign, mats.signs, false]] as const) {
-      const g = builder.geometry();
-      if (!g) continue;
-      stats.triangles += g.getAttribute('position').count / 3;
-      const mesh = new THREE.Mesh(g, mat);
-      mesh.castShadow = cast;
-      mesh.receiveShadow = true;
-      group.add(mesh);
-    }
-  }
-  for (const x of extras) group.add(x);
-  return { group, stats, lamps, anchors };
+  tag();
+  const NAMES: FacadePart[] = ['wall', 'trim', 'flat', 'glass', 'wood', 'canvas', 'iron', 'metal', 'shop', 'sign'];
+  return {
+    chunks: [...chunks].map(([key, c]) => ({ key, parts: NAMES.flatMap(name => { const attrs = c[name].arrays(); return attrs ? [{ name, attrs }] : []; }) })),
+    lamps: lamps.map((l, i) => ({ hi: lampHi[i], x: l.pos.x, y: l.pos.y, z: l.pos.z, gx: l.ground.x, gz: l.ground.y })),
+    anchors: anchors.map((a, i) => ({ hi: anchorHi[i], a })),
+    signs: extras.map((x, i) => {
+      const m = x as THREE.Mesh<THREE.PlaneGeometry>;
+      return { hi: extraHi[i], w: m.geometry.parameters.width, h: m.geometry.parameters.height, p: m.position.toArray(), q: m.quaternion.toArray() };
+    }),
+    stats,
+  };
 }
+
+const SIGN_STANDIN = new THREE.MeshBasicMaterial();
