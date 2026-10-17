@@ -142,7 +142,9 @@ async function main(force = false): Promise<void> {
   FLOW.box.value.copy(flow.box);
   const groundMat = createGroundMaterial(aniso);
   wet(groundMat, 'ground');
-  scene.add(terrain.buildMesh(groundMat, thx, thz, 1000, 4, 3.4));
+  // the ground: a square round the whole walk, out to the farthest gate, and the backdrop beyond it
+  const groundSq = { cx: (zone.box[0] + zone.box[2]) / 2, cz: (zone.box[1] + zone.box[3]) / 2, size: Math.ceil((Math.max(zone.box[2] - zone.box[0], zone.box[3] - zone.box[1]) + 400) / 4) * 4, step: 4 };
+  scene.add(terrain.buildMesh(groundMat, groundSq.cx, groundSq.cz, groundSq.size, groundSq.step, 3.4));
 
   await stage(0.28, 'Raising the walls and roofs');
   // Buildings: plastered walls with period windows, and skeleton roofs in clay tile
@@ -203,18 +205,21 @@ async function main(force = false): Promise<void> {
   const walls = new WallGrid(data);
   await stage(0.68, 'The city gates');
   // The city gates the walk shows (docs/gates.md §8-10): the Subačius Gate at the end of the road, the Rūdninkai Gate
-  // at the end of Rūdninkų g. and, at the world's edge, the Saviour's Gate by the Užupis bridge, each standing as it
-  // stood before it came down, with the wall either side: a deliberate anachronism in 1900. ?gate=ghost (or #ghost)
-  // shows them as ghosts over the street instead. The other lost gates lie beyond the world (vilnius.gg/gates).
+  // at the end of Rūdninkų g., the Saviour's Gate by the Užupis bridge, and further out the Bernardine, Castle, Wet,
+  // Tatar and Vilija gates (reached by travel from the map), each standing as it stood before it came down, with the
+  // wall either side: a deliberate anachronism in 1900. ?gate=ghost (or #ghost) shows them as ghosts over the street
+  // instead. Not the Trakai Gate: its modelled site lies under today's houses (to settle first).
   const ghostGate = new URLSearchParams(location.search).get('gate') === 'ghost' || location.hash === '#ghost';
   const saviour = LOST_GATES.find(g => g.key === 'saviour')!;
+  const outer = ['bernardine', 'castle', 'wet', 'tatar', 'vilija'].map(k => LOST_GATES.find(g => g.key === k)!);
   type GateBuild = (o: Parameters<typeof buildSubaciusGate>[0]) => ReturnType<typeof buildSubaciusGate>;
-  const gateList: [GateBuild, { x: number; z: number }, number][] = [
+  const gateList: [GateBuild, { x: number; z: number }, number, ([number, number, number] | undefined)?, string?][] = [
     [buildSubaciusGate, SUBACIUS_GATE, 0.97], [buildRudninkaiGate, RUDNINKAI_GATE, 0.92],
-    [o => buildLostGate(saviour, o), lostGatePlan(saviour), saviour.cover],
+    ...[saviour, ...outer].map(g => [(o: Parameters<GateBuild>[0]) => buildLostGate(g, o), lostGatePlan(g), g.cover, g.plaster, g.roof] as [GateBuild, { x: number; z: number }, number, [number, number, number] | undefined, string | undefined]),
   ];
-  const gates = gateList.map(([build, at, cover]) => {
-    const mats = createGateMaterials(aniso, terrain.heightAt(at.x, at.z), cover);
+  const gates = gateList.map(([build, at, cover, plaster, roof]) => {
+    const mats = createGateMaterials(aniso, terrain.heightAt(at.x, at.z), cover, plaster);
+    if (roof) (mats.roof as THREE.MeshStandardMaterial).color.set(roof);   // as the gate viewer (gate.ts) tints it
     const gate = build({ data, terrain, mats, look: ghostGate ? 'ghost' : 'solid', fog: RAIN ? { density: 0.0072 } : { near: 70, far: 800 } });
     for (const m of [mats.render, mats.trim, mats.wall]) age(m, { ground: gate.floor, strength: 1, seed: 5 });
     age(mats.roof, { roof: true, strength: 0.8 });
@@ -250,7 +255,7 @@ async function main(force = false): Promise<void> {
   const propMats = createStreetPropMaterials(aniso);
   if (RAIN) for (const m of Object.values(propMats)) wet(m, 'roof');
   propMats.gutter.envMap = propMats.water.envMap = scene.environment; // standing water mirrors the full sky, as the glass does
-  const streetProps = buildStreetProps({ data, terrain, anchors: facades.anchors, flow, mats: propMats, th: townHallData, zone, ground: { cx: thx, cz: thz, size: 1000, step: 4 }, rain: RAIN }); // ground: the terrain mesh's grid
+  const streetProps = buildStreetProps({ data, terrain, anchors: facades.anchors, flow, mats: propMats, th: townHallData, zone, ground: groundSq, rain: RAIN }); // ground: the terrain mesh's grid
   scene.add(streetProps.group);
   for (const [ax, az, bx, bz, low] of streetProps.segments) walls.addSegment(ax, az, bx, bz, low);
   // Market stalls, carts and townsfolk stream in after the first frame
@@ -353,6 +358,13 @@ async function main(force = false): Promise<void> {
     // the other two gates, from 22 m inside the town, facing out along the street through them (build-area.mjs)
     { name: RUDNINKAI_GATE.name, label: RUDNINKAI_GATE.name, x: RUDNINKAI_GATE.x, z: RUDNINKAI_GATE.z, go: () => travel(-224.6, 330.3, Math.atan2(0.6685, -0.7436)) },
     { name: saviour.spec.name, label: saviour.spec.name, x: lostGatePlan(saviour).x, z: lostGatePlan(saviour).z, go: () => travel(300.6, -237.4, Math.atan2(-0.92, -0.392)) },
+    // further out (build-area.mjs): 22 m inside the town facing out; the Vilija Gate from outside, facing it
+    ...([['bernardine', 418.3, -443.3, 1], ['castle', 145.7, -670.1, 1], ['wet', -84.2, -692.2, 1], ['tatar', -268.6, -497.2, 1], ['vilija', -394.3, -474.6, 0]] as const).map(([k, x, z, sense]) => {
+      const g = outer.find(o => o.key === k)!, at = lostGatePlan(g), [ux, uz] = g.spec.out;
+      // sense 0: face the gate's middle from where you stand (the Vilija Gate's street veers outside)
+      const yaw = sense ? Math.atan2(-ux * sense, -uz * sense) : Math.atan2(-(at.x - x), -(at.z - z));
+      return { name: g.spec.name, label: g.spec.name, x: at.x, z: at.z, go: () => travel(x, z, yaw) };
+    }),
   ]);
   const streetTitle = new PlaceTitle(data); // the street you are on, as a title for a few seconds
   overlay.onVisibility(visible => { map.setWalking(!visible); streetTitle.setActive(!visible); });

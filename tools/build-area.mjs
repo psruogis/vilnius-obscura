@@ -50,6 +50,20 @@ const WALK_SHAPES = [
   { circle: [-239.3, 346.7], r: 9, detail: 12, front: 8 },
   { line: [[293.2, -240.6], [330.0, -224.9]], w: 6, detail: 12, front: 8 },     // Išganytojo g. through the Saviour's Gate
   { circle: [320.8, -228.8], r: 9, detail: 12, front: 8 },
+  // and the lost gates further out (2026-10-17, with the LiDAR grid grown to reach them: tools/lidar/README.md); the
+  // Vilija Gate's street bends 12 m inside town, so its strip runs mostly outside. Not the Trakai Gate: its modelled
+  // site lies under today's houses, 50 m south of today's Trakų g. (to settle first), nor the Gate of Dawn (no model yet)
+  { line: [[410.4, -441.9], [442.9, -447.5]], w: 5, detail: 12, front: 8 },    // through the Bernardine Gate
+  { circle: [439.9, -447.0], r: 8, detail: 12, front: 8 },
+  { line: [[146.3, -662.1], [142.9, -706.0]], w: 5, detail: 12, front: 8 },    // through the Castle Gate
+  { circle: [144.0, -692.0], r: 8, detail: 12, front: 8 },
+  { line: [[-83.2, -684.2], [-88.8, -727.9]], w: 5, detail: 12, front: 8 },    // through the Wet Gate
+  { circle: [-87.0, -714.0], r: 8, detail: 12, front: 8 },
+  { line: [[-263.1, -491.5], [-291.0, -520.2]], w: 5, detail: 12, front: 8 },    // through the Tatar Gate
+  { circle: [-284.0, -513.0], r: 8, detail: 12, front: 8 },
+  { line: [[-382.7, -453.7], [-393.2, -473.0]], w: 5, detail: 12, front: 8 },    // through the Vilija Gate
+  { circle: [-386.5, -460.7], r: 8, detail: 12, front: 8 },
+  { line: [[-388.4, -464.2], [-402.6, -474.7]], w: 4, detail: 12, front: 8 },    // and out along the street as it veers
 ];
 /** Signed distance (m) from local (x, z) to one walk shape: negative inside. */
 function shapeDist(s, x, z) {

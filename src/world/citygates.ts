@@ -22,18 +22,18 @@ export const CITY_GATES: CityGate[] = [
   // in the gap still left between Pylimo g. 22 and Trakų g. 2 (KVR 39) [V]
   { name: 'Trakai Gate', lt: 'Trakų vartai', x: -575, z: -181, state: 'gone', within: 10 },
   // Benediktinių x Šv. Ignoto (lt.wikipedia); the English article has it elsewhere [U]
-  { name: 'Vilija Gate', lt: 'Vilijos (Vilniaus) vartai', x: -381, z: -462, state: 'gone', within: 15 },
+  { name: 'Vilija Gate', lt: 'Vilijos (Vilniaus) vartai', x: -381, z: -462, state: 'built', within: 15 },
   // east of the Benediktinių x Totorių crossing (KVR 39, lt.wikipedia) [V]
-  { name: 'Tatar Gate', lt: 'Totorių vartai', x: -284, z: -513, state: 'gone', within: 10 },
+  { name: 'Tatar Gate', lt: 'Totorių vartai', x: -284, z: -513, state: 'built', within: 10 },
   // by L. Stuokos-Gucevičiaus x Universiteto (lt.wikipedia); never found on the ground (KVR 39). Walled up 1677
-  { name: 'Wet Gate', lt: 'Šv. Marijos Magdalenos (Šlapieji) vartai', x: -87, z: -714, state: 'gone', within: 40 },
+  { name: 'Wet Gate', lt: 'Šv. Marijos Magdalenos (Šlapieji) vartai', x: -87, z: -714, state: 'built', within: 40 },
   // the head of Pilies g., at the bridge over the Vilnia's channel, where the wall met the Lower Castle's; granite
   // blocks mark it (LNDM, KVR 642) [V]. Pulled down c. 1837, with the courts building beside it (KVR 642, LNDM)
-  { name: 'Castle Gate', lt: 'Pilies vartai', x: 144, z: -692, state: 'gone', within: 10 },
+  { name: 'Castle Gate', lt: 'Pilies vartai', x: 144, z: -692, state: 'built', within: 10 },
   // by the bridge over the Vilnia south of the Bernardine church: where Mickiewicz's monument is now (Drėma, via
   // lt.wikipedia), or some 60 m east, where the register's strip along the wall ends (KVR 39); never found, though
   // a tower that guarded its east side was dug up in 2004 (KVR 39). The ring takes in both [U]
-  { name: 'Bernardine Gate', lt: 'Bernardinų vartai', x: 425, z: -463, state: 'gone', within: 40 },
+  { name: 'Bernardine Gate', lt: 'Bernardinų vartai', x: 425, z: -463, state: 'built', within: 40 },
   // by the Užupis bridge, at the end of Išganytojo g. (lt.wikipedia; Wikidata Q97215086, unsourced); not
   // investigated (KVR 39) [U]. Modelled, standing at the world's edge (world/lostgates.ts)
   { name: "Saviour's Gate", lt: 'Išganytojo (Spaso) vartai', x: 320.8, z: -228.8, state: 'built', within: 30 },

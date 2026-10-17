@@ -281,7 +281,7 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
       landmarks.push({ text: b.role === 'townhall' ? 'Town Hall' : "St Casimir's", x, z });
     } else { today.push(s); todayRings.push(b.rings); }
   }
-  for (const [g, dz] of [[SUBACIUS_GATE, 16], [RUDNINKAI_GATE, 18], [SAVIOUR_GATE, 16]] as const) landmarks.push({ text: gateLook === 'solid' ? g.name : `${g.name} site`, x: g.x, z: g.z + dz });
+  for (const [g, dz] of [[SUBACIUS_GATE, 16], [RUDNINKAI_GATE, 18], [SAVIOUR_GATE, 16], ...OUTER_GATES.map(o => [o, 16] as const)] as const) landmarks.push({ text: gateLook === 'solid' ? g.name : `${g.name} site`, x: g.x, z: g.z + dz });
   // the walk's edge: the square and the road out to the gate (world/zone.ts)
   const zone = new WalkZone(data);
   const veil = new Path2D();
@@ -293,7 +293,7 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
   return {
     areas: data.areas.map(a => plotOf([a.ring], false)),
     foot, today, plan, hall, todayRings, planRings, labels, landmarks, veil, edge,
-    gate: [...SUBACIUS_GATE.plan, ...RUDNINKAI_GATE.plan, ...SAVIOUR_GATE.plan].map(r => plotOf([r], false)), gateLook,
+    gate: [...SUBACIUS_GATE.plan, ...RUDNINKAI_GATE.plan, ...SAVIOUR_GATE.plan, ...OUTER_GATES.flatMap(o => o.plan)].map(r => plotOf([r], false)), gateLook,
     gates: CITY_GATES, old: null, reach: reachOf(data, CITY_GATES),
     square: named ? { text: named.name!, x: centroid(named.ring)[0], z: centroid(named.ring)[1] } : null,
     centre: [thx, thz], radius, walkBox: zone.box, hats: {},
@@ -302,6 +302,8 @@ function prepare(data: AreaData, gateLook: GateLook): Layers {
 
 /** The Saviour's Gate, the one lost gate in the walk's world besides the Subačius and Rūdninkai gates (world/lostgates.ts). */
 const SAVIOUR_GATE = lostGatePlan(LOST_GATES.find(g => g.key === 'saviour')!);
+/** The lost gates further out that stand in the world too, reached by travel (main.ts). */
+const OUTER_GATES = ['bernardine', 'castle', 'wet', 'tatar', 'vilija'].map(k => lostGatePlan(LOST_GATES.find(g => g.key === k)!));
 
 /** The castles the city wall met at the Castle Gate, and the Bernardine monastery that joined them on the east (OSM), named with the gates. */
 const CASTLES = [{ name: 'Upper Castle', x: 241, z: -926 }, { name: 'Lower Castle', x: 110, z: -800 }, { name: 'Bernardines', x: 440, z: -572 }];
@@ -753,9 +755,9 @@ const ABOUT_HTML = (walk: number, gate: GateLook) => `
   <ul class="mv-legend">
     <li><i class="sw today"></i>Today's houses</li>
     <li><i class="sw plan"></i>1842 plan houses</li>
-    <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', the Subačius, Rūdninkai and Saviour’s gates' : ''}</li>
+    <li><i class="sw hall"></i>Town Hall, St Casimir's${gate === 'solid' ? ', and the eight gates you can travel to' : ''}</li>
     <li><i class="sw you"></i>You</li>
-    ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>Subačius, Rūdninkai and Saviour’s gates, gone</li>'}
+    ${gate === 'solid' ? '' : '<li><i class="sw gone"></i>The eight gates you can travel to, gone</li>'}
     <li><i class="sw gate"></i>City gates: open if gone by 1900</li>
     <li><i class="sw wall"></i>Line of the city wall</li>
     <li><i class="sw castle"></i>Castles; dashed, the Bernardines</li>

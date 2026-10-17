@@ -14,6 +14,21 @@ holds 407 footprints (66 added, 17 that ran past the old box's edge redone). To 
 .venv/bin/python extend_heights.py cache/points_east.npz 583250,6060550,583450,6061250 582900,6060550,583250,6060650
 ```
 
+**Extended 2026-10-17** to the Bernardine, Castle, Wet, Tatar, Vilija and Trakai gate sites, for travel from the map.
+The lidar-lt mirror now refuses requests from outside Vilnius University ("Direct use of this resource by applications
+hosted outside VU servers is not permitted"), so this used the fallback below: 18 of the city's 250 m LAS tiles
+(the national 2019 survey; the "Nomenklatura" feature service of the dashboard gives each tile's NOM_DOWNL),
+fetched and reduced to ground and roof points by `fetch_las_tiles.py`, about 1.7 GB streamed and discarded. The 2019
+tiles have no class 6: roofs are class 5 with the trees, and are read as roofs only inside GRPK footprints. Where the
+new tiles overlap the 2025 grid, the ground medians differ by +0.07 m (1,776 cells; 95 % within 0.47 m). The grid now
+covers E 582000–583750, N 6060550–6062000 (875 × 725 cells, 45.5 % measured, the rest filled), and `heights.json`
+holds 1,004 footprints (597 added). To repeat it (tile names in the commit that added this):
+
+```
+SSL_CERT_FILE=... .venv/bin/python fetch_las_tiles.py --out cache/points_gates.npz 76_32-0251 76_32-0252 ...
+.venv/bin/python extend_heights.py cache/points_gates.npz <each tile's box: E0,N0,E1,N1> ...
+```
+
 ## Outputs
 
 | File | What it holds |
