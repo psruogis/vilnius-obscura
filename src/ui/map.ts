@@ -17,6 +17,9 @@ import { loadFonts } from './fonts';
  */
 export interface MapPose { x: number; z: number; yaw: number }
 export interface MapHooks { onOpen(): void; onClose(): void; /** The player picked a look with the switch on the full map. */ onLook?(look: Look): void }
+/** A place the full map offers to travel to: a button under the map's name for it (the landmark whose name starts
+ * with `label`), else at (x, z); `go` moves the walker there. */
+export interface TravelSpot { name: string; label?: string; x: number; z: number; go(): void }
 export interface MapUI {
   readonly isOpen: boolean;
   /** The corner map shows while walking and hides on the title and pause screens. */
@@ -787,7 +790,7 @@ const ICON = {
 };
 
 const LOOK_NAMES: Record<Look, string> = { pastel: 'Pastel', dark: 'Dark', glow: 'Glow' };
-export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, initialLook: Look = 'pastel', gateLook: GateLook = 'solid'): MapUI {
+export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, initialLook: Look = 'pastel', gateLook: GateLook = 'solid', travel: TravelSpot[] = []): MapUI {
   const L = prepare(data, gateLook);
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -818,6 +821,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
       <button type="button" class="mv-btn mv-icon" data-here aria-label="Show where I am">${ICON.here}</button>
       <div class="mv-looks" role="group" aria-label="Look of the map">${LOOKS.map(k => `<button type="button" data-look="${k}" aria-pressed="false">${LOOK_NAMES[k]}</button>`).join('')}</div>
     </div>
+    <div class="mv-travel">${travel.map((t, i) => `<button type="button" class="mv-go" data-go="${i}" aria-label="Travel to ${t.name}"><span>Travel here</span></button>`).join('')}</div>
     <aside class="mv-about">
       <button type="button" class="mv-about-head" aria-expanded="true"><span>About this map</span><i aria-hidden="true"></i></button>
       <div class="mv-about-body">${ABOUT_HTML(L.radius, gateLook)}</div>
@@ -828,6 +832,8 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
   const scaleBar = full.querySelector<HTMLElement>('.mv-scale')!;
   const scaleLine = scaleBar.querySelector('i')!, scaleText = scaleBar.querySelector('span')!;
   const aboutHead = full.querySelector<HTMLButtonElement>('.mv-about-head')!;
+  const goBtns = [...full.querySelectorAll<HTMLButtonElement>('.mv-go')];
+  const goAt = travel.map(t => L.landmarks.find(m => t.label && m.text.startsWith(t.label)) ?? t);
   const closeBtn = full.querySelector<HTMLButtonElement>('.mv-close')!;
   const lookBtns = [...full.querySelectorAll<HTMLButtonElement>('[data-look]')];
   document.body.append(mini, full);
@@ -913,6 +919,12 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
     const metres = [5, 10, 20, 25, 50, 100, 200, 250, 500].reduce((b, m) => (m <= want ? m : b), 5);
     scaleLine.style.width = `${Math.round(metres * view.s)}px`;
     scaleText.textContent = `${metres} m`;
+    // the travel buttons, just under each place's name (drawn 5 px below its point); hidden off the map's edge
+    for (const [i, b] of goBtns.entries()) {
+      const x = W / 2 + (goAt[i].x - view.cx) * view.s, y = H / 2 + (goAt[i].z - view.cz) * view.s + 14;
+      b.hidden = x < 40 || y < 20 || x > W - 40 || y > H - 20;
+      b.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, 0)`;
+    }
   };
   const drawMini = () => {
     const p = pose();
@@ -955,6 +967,7 @@ export function createMap(data: AreaData, pose: () => MapPose, hooks: MapHooks, 
   applyLook();
   mini.addEventListener('click', open);
   closeBtn.addEventListener('click', close);
+  for (const [i, b] of goBtns.entries()) b.addEventListener('click', () => { close(); travel[i].go(); });
   aboutHead.addEventListener('click', () => setAbout(full.classList.contains('about-closed')));
   for (const b of lookBtns) b.addEventListener('click', () => {
     look = b.dataset.look as Look;

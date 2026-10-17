@@ -48,6 +48,10 @@ reorder freely.
   map" note on what each layer is and from when. Three looks: pastel (default), dark, glow. `src/ui/map.ts`, `docs/map-sources.md`.
 - **Fidelity pass:** seven parallel streams covering surfaces, house geometry, wet reflections,
   cabs, people, street props and landmarks, all merged (`docs/FIDELITY-PLAN.md`).
+- **Travel (B1, 2026-10-17):** on the full map (Tab) a "Travel here" button under Town Hall and the Subačius Gate;
+  the screen fades to black, the walker is put down there (on the square facing the Town Hall, or on Subačiaus g.
+  facing the gate) and it fades back in (`TravelSpot` in `src/ui/map.ts`, `travel` in `main.ts`). Next (B2): walkable
+  pockets round the Rūdninkai and Saviour's gates, then they join the list.
 - **Shipping:** GitHub → Vercel. Every push to `main` goes live at https://vilnius.gg.
 - **Faster loading (A0–A4, 2026-10-17):** textures and models download on a worker from page open
   (`src/render/assets.ts`), not after the 9 s world build; textures as WebP (12.5 → 4.6 MB); sounds load after the

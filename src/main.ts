@@ -321,6 +321,20 @@ async function main(force = false): Promise<void> {
   // gate. A bare #anchor, because a claude.ai artifact passes that to the page and never the ?query
   if (['#gate', '#ghost', '#solid'].includes(location.hash)) walker.place(296, 241, -Math.PI / 2);
   scene.add(walker.object);
+  // Travel: the screen fades to black, the walker is put down at the place, and it fades back in
+  const veil = document.createElement('div');
+  veil.className = 'travel-veil';
+  document.body.append(veil);
+  let travelling = false;
+  const travel = (x: number, z: number, yaw: number) => {
+    if (travelling) return;
+    travelling = true;
+    veil.classList.add('on');
+    setTimeout(() => {
+      walker.place(x, z, yaw);
+      setTimeout(() => { veil.classList.remove('on'); travelling = false; }, 300);   // a few frames to settle the camera
+    }, 500);
+  };
   // The map: a round plan in the corner while walking; Tab (or a tap on it) opens it full-screen and holds the walk still
   let hadLock = false; // embedded pages (claude.ai artifacts) never get the lock: nothing to give back, no pause screen
   const map = createMap(data, () => ({ x: walker.position.x, z: walker.position.z, yaw: walker.yaw }), {
@@ -332,7 +346,11 @@ async function main(force = false): Promise<void> {
       input.requestLock().then(ok => { if (!ok && !touch.isActive) overlay.setVisible(true); });
     },
     onLook: look => settings.keep('mapLook', look),
-  }, settings.current.mapLook, ghostGate ? 'ghost' : 'solid');
+  }, settings.current.mapLook, ghostGate ? 'ghost' : 'solid', [
+    // travel: the places the walk reaches, picked on the full map (where you arrive, which way you face)
+    { name: 'Town Hall Square', label: 'Town Hall', x: thx, z: thz, go: () => travel(thx + 4, thz - 42, Math.PI) },
+    { name: SUBACIUS_GATE.name, label: SUBACIUS_GATE.name, x: SUBACIUS_GATE.x, z: SUBACIUS_GATE.z, go: () => travel(296, 241, -Math.PI / 2) },
+  ]);
   const streetTitle = new PlaceTitle(data); // the street you are on, as a title for a few seconds
   overlay.onVisibility(visible => { map.setWalking(!visible); streetTitle.setActive(!visible); });
   // The character model streams in; the placeholder capsule stands in until then.
