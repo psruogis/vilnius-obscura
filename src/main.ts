@@ -426,7 +426,7 @@ async function main(force = false): Promise<void> {
   const timer = new THREE.Timer();
   let frames = 0, shown = () => {};
   const firstFrame = new Promise<void>(r => { shown = r; });
-  const frame = (time: number) => {
+  const step = (time: number) => {
     timer.update(time);
     const dt = Math.min(timer.getDelta(), 0.05);
     if (map.isOpen) { map.update(); return; } // the world holds still under the full map
@@ -449,6 +449,9 @@ async function main(force = false): Promise<void> {
     stats.update(dt);
     if (frames < 2) { performance.mark(`vo:frame${++frames}`, { detail: { programs: renderer.info.programs?.length, parallelCompile } }); shown(); }
   };
+  // One frame's error must not stop the walk: three.js asks for the next frame only after this one returns, so an
+  // exception would freeze the picture and every tap for good. Say what it was, on screen, and carry on.
+  const frame = (time: number) => { try { step(time); } catch (err) { report(err); } };
   // Where the browser compiles shaders in parallel (KHR_parallel_shader_compile; real GPUs), the world's compile
   // first, off the page's thread, so the first frame does not freeze the page while the loading bar is up.
   // Elsewhere (software WebGL) that only adds work: the first frame compiles what it draws.
@@ -484,6 +487,23 @@ async function main(force = false): Promise<void> {
 }
 
 /** Open ground test from a 1 m raster of the building outlines over the box [x0, z0, x1, z1]; outside it, nothing is open. */
+/** A small panel at the top with what went wrong (once per message), for a phone where there is no console to see. */
+const reported = new Set<string>();
+function report(err: unknown): void {
+  const msg = err instanceof Error ? `${err.message}\n${(err.stack ?? '').split('\n').slice(1, 4).join('\n')}` : String(err);
+  if (reported.has(msg) || reported.size > 4) return;
+  reported.add(msg);
+  console.error(err);
+  const el = document.createElement('div');
+  el.className = 'error-note';
+  el.setAttribute('role', 'alert');
+  el.textContent = `Something went wrong (tap to close). Please send a screenshot of this:\n${msg}`;
+  el.addEventListener('click', () => el.remove());
+  document.body.append(el);
+}
+window.addEventListener('error', e => report(e.error ?? e.message));
+window.addEventListener('unhandledrejection', e => report(e.reason));
+
 function fail(err: unknown): void {
   console.error(err);
   document.body.insertAdjacentHTML('beforeend', `<pre style="color:#f88;padding:16px">${String(err)}</pre>`);

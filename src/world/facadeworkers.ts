@@ -9,12 +9,14 @@ import type { GroundRaster } from './ground';
  * them on the page).
  */
 let spare: Worker[] = [];
+// each worker holds its own copy of the area data and of three.js: on a phone (touch screen), where memory is short, two
+const MAX_WORKERS = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches ? 2 : 4;
 
 /** Starts the workers early (main.ts, before anything else): loading their code needs the page's thread, which is
  * free only until the world build starts. */
 export function warmFacadeWorkers(): void {
   if (typeof Worker === 'undefined') return;
-  const n = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+  const n = Math.max(1, Math.min(MAX_WORKERS, (navigator.hardwareConcurrency || 2) - 1));
   try {
     spare = Array.from({ length: n }, () => {
       const w = new Worker(new URL('./facades.worker.js', import.meta.url), { type: 'module' });
@@ -29,7 +31,7 @@ export function facadesOnWorkers(data: AreaData, ground: GroundRaster): Promise<
   const order = facadeChunkOrder(data);
   const houses = new Map<string, number>();
   for (const k of facadeChunkOrder(data, true)) houses.set(k, (houses.get(k) ?? 0) + 1);
-  const n = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1, order.length));
+  const n = Math.max(1, Math.min(MAX_WORKERS, (navigator.hardwareConcurrency || 2) - 1, order.length));
   const shares = Array.from({ length: n }, () => ({ load: 0, only: [] as string[] }));
   for (const k of [...order].sort((a, b) => houses.get(b)! - houses.get(a)!)) {
     const s = shares.reduce((a, b) => (b.load < a.load ? b : a));
