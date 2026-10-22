@@ -37,6 +37,7 @@ import { Walker } from './player/walker';
 import { TouchControls } from './player/touch';
 import { createOverlay, createStats, showUnsupported, unsupportedReason } from './ui/overlay';
 import { createMap } from './ui/map';
+import { startDebugPanel } from './ui/debug';
 import { PlaceTitle } from './ui/place';
 import { SettingsStore, weatherNow } from './ui/settings';
 
@@ -83,6 +84,7 @@ async function main(force = false): Promise<void> {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  if (new URLSearchParams(location.search).has('debug')) startDebugPanel(renderer);   // vilnius.gg/?debug: ui/debug.ts
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.AgXToneMapping; // softer, filmic highlight roll-off
   renderer.toneMappingExposure = LIGHT.exposure;
